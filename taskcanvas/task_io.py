@@ -20,6 +20,13 @@ def run_quiet(cmd, timeout=30):
         return 1, "", str(e)
 
 
+def _split_filter(filter_str: str):
+    try:
+        return shlex.split(filter_str)
+    except ValueError as e:
+        raise ValueError(f"Invalid --filter expression: {e}") from e
+
+
 def _parse_task_export(raw: str):
     if not raw:
         return []
@@ -70,7 +77,7 @@ def fetch_tasks(filter_str=None, timeout=30, log_fn: Callable[[str], None] | Non
     ]
 
     if filter_str:
-        base += shlex.split(filter_str)
+        base += _split_filter(filter_str)
     else:
         base += ["status:pending"]
 
@@ -79,9 +86,21 @@ def fetch_tasks(filter_str=None, timeout=30, log_fn: Callable[[str], None] | Non
     rc, out, err = run_quiet(base, timeout)
     rows = _parse_task_export(out)
     if not rows:
-        # fallback to default task export (older Taskwarrior / rc mismatch)
-        rc2, out2, err2 = run_quiet(["task", "export"], timeout)
+        # Fallback drops rc flags only, but preserves scope/filter semantics.
+        fallback = ["task"]
+        if filter_str:
+            fallback += _split_filter(filter_str)
+        else:
+            fallback += ["status:pending"]
+        fallback += ["export"]
+        rc2, out2, err2 = run_quiet(fallback, timeout)
         rows = _parse_task_export(out2)
+
+        if not rows and log_fn:
+            if rc != 0:
+                log_fn(f"[TaskCanvas] task export failed (rc={rc}): {(err or '').strip()[:220]}")
+            if rc2 != 0:
+                log_fn(f"[TaskCanvas] fallback task export failed (rc={rc2}): {(err2 or '').strip()[:220]}")
 
     tasks = []
     for r in rows or []:

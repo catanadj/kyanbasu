@@ -21,6 +21,10 @@ class TestTaskIO(unittest.TestCase):
         self.assertEqual(rows[0]["uuid"], "u1")
         self.assertEqual(rows[1]["uuid"], "u2")
 
+    def test_fetch_tasks_raises_on_invalid_filter_syntax(self):
+        with self.assertRaisesRegex(ValueError, "Invalid --filter expression"):
+            fetch_tasks('project:"broken')
+
     @patch("taskcanvas.task_io.run_quiet")
     def test_fetch_tasks_filter_and_log(self, mock_run_quiet):
         mock_run_quiet.return_value = (
@@ -61,7 +65,7 @@ class TestTaskIO(unittest.TestCase):
         self.assertTrue(any("Loaded tasks: 2" in line for line in logs))
 
     @patch("taskcanvas.task_io.run_quiet")
-    def test_fetch_tasks_fallback_to_plain_export(self, mock_run_quiet):
+    def test_fetch_tasks_fallback_preserves_pending_scope(self, mock_run_quiet):
         mock_run_quiet.side_effect = [
             (0, "", ""),
             (0, json.dumps([{"uuid": "u-1", "description": "Recovered"}]), ""),
@@ -71,7 +75,43 @@ class TestTaskIO(unittest.TestCase):
 
         self.assertEqual(len(tasks), 1)
         self.assertEqual(mock_run_quiet.call_args_list[0].args[0][-2:], ["status:pending", "export"])
-        self.assertEqual(mock_run_quiet.call_args_list[1].args[0], ["task", "export"])
+        self.assertEqual(
+            mock_run_quiet.call_args_list[1].args[0],
+            ["task", "status:pending", "export"],
+        )
+
+    @patch("taskcanvas.task_io.run_quiet")
+    def test_fetch_tasks_fallback_preserves_filter_scope(self, mock_run_quiet):
+        mock_run_quiet.side_effect = [
+            (1, "", "primary failed"),
+            (
+                0,
+                json.dumps([{"uuid": "u-2", "description": "Recovered filtered"}]),
+                "",
+            ),
+        ]
+
+        tasks = fetch_tasks("project:Work +P1")
+
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(
+            mock_run_quiet.call_args_list[1].args[0],
+            ["task", "project:Work", "+P1", "export"],
+        )
+
+    @patch("taskcanvas.task_io.run_quiet")
+    def test_fetch_tasks_logs_when_both_primary_and_fallback_fail(self, mock_run_quiet):
+        mock_run_quiet.side_effect = [
+            (1, "", "primary failed"),
+            (1, "", "fallback failed"),
+        ]
+        logs = []
+
+        tasks = fetch_tasks("project:Work", log_fn=logs.append)
+
+        self.assertEqual(tasks, [])
+        self.assertTrue(any("task export failed" in m for m in logs))
+        self.assertTrue(any("fallback task export failed" in m for m in logs))
 
 
 if __name__ == "__main__":

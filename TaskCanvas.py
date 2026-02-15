@@ -259,8 +259,9 @@ def _load_template(name: str) -> str:
     except Exception as e:
         raise RuntimeError(f"Failed to load template: {path} ({e})")
 
-HTML = _load_template("taskcanvas.base.html")
-HTML = HTML.replace("</body>", _load_template("new_project_modal_v2_minimal.replace.html"))
+def _load_runtime_html() -> str:
+    html = _load_template("taskcanvas.base.html")
+    return html.replace("</body>", _load_template("new_project_modal_v2_minimal.replace.html"))
 
 
 
@@ -269,17 +270,29 @@ HTML = HTML.replace("</body>", _load_template("new_project_modal_v2_minimal.repl
 
 
 
-def main():
+def main() -> int:
     raw_args = sys.argv[1:]
     filter_str, args_wo_filter = _extract_filter_arg(raw_args)
 
     # 1) Load ALL pending tasks for the payload (drawer/search, etc.)
-    tasks_all = fetch_tasks(None, log_fn=eprint)
+    try:
+        tasks_all = fetch_tasks(None, log_fn=eprint)
+    except Exception as e:
+        eprint(f"[TaskCanvas] ERROR: failed to load pending tasks: {e}")
+        return 1
 
     # 2) If filter is present, run it separately and capture just the UUIDs to auto-place
     init_task_uuids = []
     if filter_str:
-        filtered = fetch_tasks(filter_str, log_fn=eprint)
+        try:
+            filtered = fetch_tasks(filter_str, log_fn=eprint)
+        except ValueError as e:
+            eprint(f"[TaskCanvas] ERROR: {e}")
+            eprint("[TaskCanvas] Tip: quote filter expressions, e.g. --filter 'project:Work +P1'")
+            return 2
+        except Exception as e:
+            eprint(f"[TaskCanvas] ERROR: failed to apply filter {filter_str!r}: {e}")
+            return 1
         init_task_uuids = [t["uuid"] for t in filtered]
 
     # 3) Build payload using *all* tasks
@@ -323,7 +336,12 @@ def main():
         )
         return [esc[i:i+chunk] for i in range(0, len(esc), chunk)] if esc else []
 
-    html = HTML.replace("<!-- INLINE_PAYLOAD_HERE -->", "")
+    try:
+        html = _load_runtime_html().replace("<!-- INLINE_PAYLOAD_HERE -->", "")
+    except RuntimeError as e:
+        eprint(f"[TaskCanvas] ERROR: {e}")
+        eprint("[TaskCanvas] Ensure templates/ exists next to TaskCanvas.py.")
+        return 1
     
     # Append JSON payload at end of body (robust)
     safe_json = json_text.replace("</script", "<\/script")
@@ -339,13 +357,6 @@ def main():
         var tlen = (window.DATA && Array.isArray(window.DATA.tasks)) ? window.DATA.tasks.length : 0;
         console.log('[payload] tasks =', tlen);
         try { document.dispatchEvent(new CustomEvent('twdata')); } catch(_) {}
-    try {
-      if (!window.__INIT_DONE__ && typeof initFromDATA==='function') {
-        window.__INIT_DONE__ = true;
-        console.log('[payload] calling initFromDATA directly');
-        initFromDATA();
-      }
-    } catch(e) { console.log('[payload] initFromDATA error', e); }
     try {
       if (!window.__INIT_DONE__ && typeof initFromDATA==='function') {
         window.__INIT_DONE__ = true;
@@ -1236,10 +1247,15 @@ def main():
         eprint("[TaskCanvas] No custom bg found. Put 'taskcanvas-bg.(jpg|png|webp|svg)' next to the script or pass --bg=FILE.")
 
 
-    
-    OUT_HTML.write_text(html, encoding="utf-8")
+    try:
+        OUT_HTML.write_text(html, encoding="utf-8")
+    except Exception as e:
+        eprint(f"[TaskCanvas] ERROR: failed to write {OUT_HTML}: {e}")
+        return 1
+
     print(f"Wrote {OUT_HTML}")
     open_file(OUT_HTML)
+    return 0
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
