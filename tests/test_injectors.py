@@ -62,6 +62,7 @@ class TestInjectors(unittest.TestCase):
         self.assertIn("redoCanvasChange", twice)
         self.assertIn("maybeArmReady", twice)
         self.assertIn("flushPendingSnapshot", twice)
+        self.assertIn("enqueueImmediateSnapshot", twice)
 
     def test_inject_command_preflight_idempotent(self):
         html = "<html><head></head><body></body></html>"

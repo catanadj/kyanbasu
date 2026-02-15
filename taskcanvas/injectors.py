@@ -2211,6 +2211,15 @@ def inject_undo_redo(html: str) -> str:
       pushSnapshot(reason || "scheduled", false);
     }, Math.max(120, delay || 220));
   }
+  function enqueueImmediateSnapshot(reason){
+    if (suppress) return;
+    if (!ready) maybeArmReady("immediate:" + String(reason || ""));
+    if (!ready) return;
+    // Run after current event loop so app handlers can finish mutating state.
+    setTimeout(function(){
+      pushSnapshot(reason || "immediate", false);
+    }, 0);
+  }
   function flushPendingSnapshot(reason){
     if (suppress || !ready) return;
     if (saveTimer){
@@ -2450,8 +2459,14 @@ def inject_undo_redo(html: str) -> str:
       });
     }catch(_){}
 
-    document.addEventListener("mouseup", function(){ scheduleSnapshot("mouseup", 60); }, true);
-    document.addEventListener("touchend", function(){ scheduleSnapshot("touchend", 60); }, true);
+    document.addEventListener("mouseup", function(){
+      enqueueImmediateSnapshot("mouseup-step");
+      scheduleSnapshot("mouseup-fallback", 140);
+    }, true);
+    document.addEventListener("touchend", function(){
+      enqueueImmediateSnapshot("touchend-step");
+      scheduleSnapshot("touchend-fallback", 140);
+    }, true);
 
     document.addEventListener("keydown", function(ev){
       if (isEditableTarget(ev.target)) return;
