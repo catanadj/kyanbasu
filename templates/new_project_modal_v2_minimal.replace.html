@@ -1,0 +1,148 @@
+
+<!-- NEW_PROJECT_MODAL_V2_MINIMAL -->
+<script id="NEW_PROJECT_MODAL_V2_MINIMAL">
+(function(){
+  // Always prefer V2: neutralize any V1 guard and remove old fallback boxes
+  try{ delete window.__NEW_PROJECT_MODAL_V1__; }catch(_){}
+  function cleanupFallback(){
+    try{ document.querySelectorAll('.npProjBox, .projGhost').forEach(function(n){ n.remove(); }); }catch(_){}
+  }
+
+  // Small, inline-styled modal to avoid needing CSS edits in the template
+  function showNewProjectModal(){
+    var ov = document.createElement('div');
+    ov.style.position='fixed'; ov.style.left=0; ov.style.top=0; ov.style.right=0; ov.style.bottom=0;
+    ov.style.background='rgba(0,0,0,.45)'; ov.style.zIndex=40010;
+    ov.style.display='flex'; ov.style.alignItems='center'; ov.style.justifyContent='center';
+
+    var box = document.createElement('div');
+    box.style.width='min(560px,92vw)'; box.style.maxWidth='92vw';
+    box.style.background='#0f1525'; box.style.color='var(--fg,#c9d1d9)';
+    box.style.border='1px solid #2a3344'; box.style.borderRadius='12px';
+    box.style.boxShadow='0 18px 48px rgba(0,0,0,.5)'; box.style.overflow='hidden';
+
+    var head = document.createElement('div');
+    head.textContent='Create new project';
+    head.style.padding='12px'; head.style.borderBottom='1px solid #202736'; head.style.fontWeight='600';
+
+    var body = document.createElement('div');
+    body.style.padding='14px'; body.style.display='flex'; body.style.flexDirection='column'; body.style.gap='10px';
+    var lab = document.createElement('label'); lab.textContent='Project name';
+    var inp = document.createElement('input');
+    inp.placeholder='e.g. Home.Renovation';
+    inp.style.padding='10px 12px'; inp.style.borderRadius='8px'; inp.style.border='1px solid #2a3344';
+    inp.style.background='#0e1320'; inp.style.color='inherit';
+
+    var foot = document.createElement('div');
+    foot.style.padding='10px 12px'; foot.style.borderTop='1px solid #202736';
+    foot.style.display='flex'; foot.style.justifyContent='flex-end'; foot.style.gap='8px';
+    var cancel = document.createElement('button');
+    cancel.textContent='Cancel';
+    cancel.style.padding='8px 10px'; cancel.style.border='1px solid #2a3344';
+    cancel.style.background='#121a2b'; cancel.style.color='inherit'; cancel.style.borderRadius='8px';
+    var create = document.createElement('button');
+    create.textContent='Create';
+    create.style.padding='8px 10px'; create.style.border='1px solid #2d3a55';
+    create.style.background='#1b2945'; create.style.color='inherit'; create.style.borderRadius='8px';
+
+    body.appendChild(lab); body.appendChild(inp);
+    foot.appendChild(cancel); foot.appendChild(create);
+    box.appendChild(head); box.appendChild(body); box.appendChild(foot);
+    ov.appendChild(box); document.body.appendChild(ov);
+
+    function close(){ try{ document.removeEventListener('keydown', onKey); }catch(_){}
+      try{ ov.remove(); }catch(_){}
+    }
+    function onKey(e){ if(e.key==='Escape'){e.preventDefault();close();}
+                       else if(e.key==='Enter'){e.preventDefault();doCreate();} }
+
+    function centerIntoView(el){
+      try{
+        var cv = document.querySelector('#builderWrap .canvas') || document.querySelector('.canvas');
+        if (!cv || !el) return;
+        var cvr = cv.getBoundingClientRect(), er = el.getBoundingClientRect();
+        var dx = (er.left+er.width/2) - (cvr.left+cvr.width/2);
+        var dy = (er.top +er.height/2) - (cvr.top +cv.clientHeight/2);
+        cv.scrollTo({
+          left: Math.max(0, Math.min(cv.scrollWidth-cv.clientWidth,  cv.scrollLeft + dx)),
+          top:  Math.max(0, Math.min(cv.scrollHeight-cv.clientHeight, cv.scrollTop  + dy)),
+          behavior: 'smooth'
+        });
+      }catch(_){}
+    }
+
+    function projectExists(name){
+      name=(name||'').trim(); if(!name) return false;
+      try{ if (window.projectAreas && typeof projectAreas.has==='function') return projectAreas.has(name); }catch(_){}
+      try{ return !!document.querySelector('.projArea[data-proj="'+CSS.escape(name)+'"]'); }catch(_){ return !!document.querySelector('.projArea[data-proj="'+name+'"]'); }
+    }
+
+    function doCreate(){
+      var name=(inp.value||'').trim(); if(!name){ inp.focus(); return; }
+      if (projectExists(name)){
+        try{ showToast && showToast('Project "'+name+'" already exists.'); }catch(_){}
+        centerIntoView(document.querySelector('.projArea[data-proj="'+(CSS?.escape?CSS.escape(name):name)+'"]'));
+        return;
+      }
+      try{ typeof ensureProjectArea==='function' && ensureProjectArea(name); }catch(_){}
+      try{ typeof recomputeAreasAndTags==='function' && recomputeAreasAndTags(); }catch(_){}
+      setTimeout(function(){
+        try{
+          var el = document.querySelector('.projArea[data-proj="'+(CSS?.escape?CSS.escape(name):name)+'"]');
+          centerIntoView(el);
+          try{ showToast && showToast('Project "'+name+'" created.'); }catch(_){}
+        }catch(_){}
+      },0);
+      close();
+    }
+
+    cancel.addEventListener('click', close);
+    create.addEventListener('click', doCreate);
+    setTimeout(function(){ try{ inp.focus(); }catch(_){} },0);
+    document.addEventListener('keydown', onKey);
+  }
+
+  function normalize(s){ return (s||'').replace(/\s+/g,' ').trim().toLowerCase(); }
+
+  function rebindFAB(){
+    var menu = document.getElementById('fabMenu') || document.querySelector('.fab-menu, #fab');
+    var items = Array.from((menu||document).querySelectorAll('button, .item, [data-action]'));
+    var target = null;
+
+    // If we already have a create-project entry, use it
+    target = items.find(function(el){ return (el.getAttribute('data-action')||'').toLowerCase()==='create-project'; });
+    // Else hijack "Add new task"
+    if (!target){
+      target = items.find(function(el){
+        var t = normalize(el.textContent);
+        return t==='add new task' || t==='add task' || /add.*new.*task/.test(t);
+      });
+    }
+
+    if (target){
+      target.textContent = 'Add new project';
+      target.setAttribute('data-action','create-project');
+      var c = target.cloneNode(true);
+      target.replaceWith(c);
+      c.addEventListener('click', function(){
+        try{ (document.getElementById('fabMenu')||window.fabMenu)?.classList.add('hidden'); }catch(_){}
+        showNewProjectModal();
+      });
+    }else if(menu && !document.getElementById('fabCreateProject')){
+      var btn=document.createElement('button');
+      btn.id='fabCreateProject'; btn.className='fab-item'; btn.textContent='Add new project';
+      btn.style.marginTop='8px';
+      btn.addEventListener('click', showNewProjectModal);
+      menu.appendChild(btn);
+    }
+  }
+
+  function boot(){
+    cleanupFallback();
+    rebindFAB();
+  }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+})();
+</script>
+
+</body>

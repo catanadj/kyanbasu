@@ -13,7 +13,7 @@ Every action becomes plain task commands that you copy-paste back into your term
 
 ## What it does
 
-TaskCanvas is a single-file Python 3 script that:
+TaskCanvas is a Python 3 app (`TaskCanvas.py` + `templates/`) that:
 
 - Calls task status:pending export (or a custom filter) to fetch your tasks.
 
@@ -39,8 +39,9 @@ Inside the browser you get an interactive canvas where you can:
 ## 30-second start
 
 ```bash
-# 1. clone or download TaskCanvas.py anywhere
-curl -LO https://raw.githubusercontent.com/catanadj/taskwarrior-canvas/main/TaskCanvas.py
+# 1. clone the repo (TaskCanvas.py + templates/)
+git clone https://github.com/catanadj/taskwarrior-canvas.git
+cd taskwarrior-canvas
 chmod +x TaskCanvas.py
 
 # 2. generate the board
@@ -134,7 +135,21 @@ Termux & desktop friendly
 
 - Taskwarrior installed and on your $PATH so the task command works.
 
+- Keep the `templates/` directory next to `TaskCanvas.py` (the script loads UI templates from there at runtime).
+
 - A reasonably modern browser (the UI is vanilla HTML/JS/SVG, no external JS dependencies). Chrome is recommended.
+
+---
+
+## Code layout (for contributors)
+
+- `TaskCanvas.py`: app orchestrator (HTML assembly, feature injection, runtime flow).
+- `taskcanvas/task_io.py`: Taskwarrior export execution and parsing.
+- `taskcanvas/payload.py`: task graph payload construction.
+- `taskcanvas/cli.py`: CLI argument extraction helpers (`--filter`, `--bg`, `--bg-opacity`).
+- `taskcanvas/output.py`: cross-platform browser opener.
+- `taskcanvas/injectors.py`: HTML/JS feature injectors and background/overlay patch helpers.
+- `templates/`: base HTML template and modal replacement fragment.
 
 ---
 
@@ -153,7 +168,7 @@ The rest of your pending tasks remain available in the left-hand drawer for drag
 Use -f / --filter to provide any Taskwarrior filter expression; matching tasks will be auto-placed:
 
 ```
-python3 TaskCanvas.py -f 'project:Work +P1' python3 TaskCanvas.py --filter 'due.before:2026-01-01 status:pending'
+python3 TaskCanvas.py --filter 'due.before:2026-01-01 status:pending'
 ```
 
 The filter is only used to choose which tasks to pre-place; **all** pending tasks still go into the drawer/search payload.
@@ -191,7 +206,8 @@ If curses is not available, it falls back to a numbered prompt.
 To use a specific background image:
 
 ```
-python3 TaskCanvas.py --bg /path/to/image.jpg python3 TaskCanvas.py --bg=mywall.png --bg-opacity=0.12
+python3 TaskCanvas.py --bg /path/to/image.jpg
+python3 TaskCanvas.py --bg=mywall.png --bg-opacity=0.12
 ```
 
 TaskCanvas will copy the image next to TaskCanvas.html (same directory) and inject a body::before overlay with the given opacity (default ≈ 0.18).
@@ -208,7 +224,7 @@ Without --bg, it tries to locate a file named like taskcanvas-bg.*, canvas-bg.*,
 
 - The UI relies on modern browser features (MutationObserver, SVG path length, etc.); very old browsers may not render animations correctly.
 
-- If you want to share this project with some other user, share the .py project not the html file because it has embeded your pending tasks.
+- If you want to share this project with another user, share the project folder (script + templates), not your generated HTML file, because it embeds your pending tasks.
 
 ## Support
 
