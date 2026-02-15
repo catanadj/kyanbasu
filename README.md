@@ -84,6 +84,8 @@ Hover actions & staging
 
 - Staged tasks are visually highlighted (green for Done, red for Delete) with line-through titles.
 
+- Undo/redo is available for staged interactions and canvas edits via `Ctrl/Cmd+Z` (undo), `Ctrl+Y` or `Ctrl/Cmd+Shift+Z` (redo).
+
 Dependencies that _feel_ alive
 
 - Existing dependency edges are rendered as smooth cubic curves with arrowheads; staged ones use animated dashed strokes.

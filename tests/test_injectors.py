@@ -10,6 +10,7 @@ from taskcanvas.injectors import (
     inject_command_preflight,
     inject_custom_background,
     inject_energy_arrows,
+    inject_undo_redo,
     inject_wire_deps_as_main,
 )
 
@@ -51,6 +52,14 @@ class TestInjectors(unittest.TestCase):
         self.assertEqual(twice.count("FEATURE_LAYOUT_PERSIST_V1"), 1)
         self.assertIn("localStorage", twice)
         self.assertIn("boardKey", twice)
+
+    def test_inject_undo_redo_idempotent(self):
+        html = "<html><head></head><body></body></html>"
+        once = inject_undo_redo(html)
+        twice = inject_undo_redo(once)
+        self.assertEqual(twice.count("FEATURE_UNDO_REDO_V1"), 1)
+        self.assertIn("undoCanvasChange", twice)
+        self.assertIn("redoCanvasChange", twice)
 
     def test_inject_command_preflight_idempotent(self):
         html = "<html><head></head><body></body></html>"

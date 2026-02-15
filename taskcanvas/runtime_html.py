@@ -11,6 +11,7 @@ from taskcanvas.injectors import (
     inject_layout_persistence,
     inject_multiline_add,
     inject_newtask_console_sync,
+    inject_undo_redo,
     inject_staged_deps_color_split,
     inject_wire_deps_as_main,
 )
@@ -928,5 +929,6 @@ def build_runtime_html(
     html = inject_actionable_beacon(html)
     html = inject_layout_persistence(html)
     html = inject_command_preflight(html)
-    
+    html = inject_undo_redo(html)
+
     return html

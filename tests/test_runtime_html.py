@@ -24,6 +24,7 @@ class TestRuntimeHtml(unittest.TestCase):
             "FEATURE_ACTIONABLE_BEACON_V7B_JS",
             "FEATURE_LAYOUT_PERSIST_V1",
             "FEATURE_COMMAND_PREFLIGHT_V1",
+            "FEATURE_UNDO_REDO_V1",
         ]
         for marker in required_markers:
             self.assertIn(marker, out)
