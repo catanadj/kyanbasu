@@ -27,6 +27,50 @@ def _split_filter(filter_str: str):
         raise ValueError(f"Invalid --filter expression: {e}") from e
 
 
+def _assign_unique_shorts(uuids: list[str], min_len: int = 8) -> dict[str, str]:
+    """
+    Build collision-safe short IDs from UUIDs.
+    Starts at min_len and grows only where needed.
+    """
+    normalized = {}
+    for uuid in uuids:
+        normalized[uuid] = re.sub(r"[^0-9a-fA-F]", "", str(uuid)).lower()
+
+    lengths = {uuid: min_len for uuid in uuids}
+    max_len = max((len(v) for v in normalized.values()), default=min_len)
+    if max_len < min_len:
+        max_len = min_len
+
+    while True:
+        buckets = {}
+        for uuid in uuids:
+            raw = normalized[uuid] or str(uuid)
+            pref_len = min(lengths[uuid], len(raw))
+            short = raw[:pref_len]
+            buckets.setdefault(short, []).append(uuid)
+
+        collisions = [group for group in buckets.values() if len(group) > 1]
+        if not collisions:
+            break
+
+        progressed = False
+        for group in collisions:
+            for uuid in group:
+                raw = normalized[uuid] or str(uuid)
+                if lengths[uuid] < len(raw):
+                    lengths[uuid] += 1
+                    progressed = True
+        if not progressed:
+            # Pathological case: identical normalized strings; fall back to full source token.
+            break
+
+    out = {}
+    for uuid in uuids:
+        raw = normalized[uuid] or str(uuid)
+        out[uuid] = raw[: min(lengths[uuid], len(raw))]
+    return out
+
+
 def _parse_task_export(raw: str):
     if not raw:
         return []
@@ -102,7 +146,7 @@ def fetch_tasks(filter_str=None, timeout=30, log_fn: Callable[[str], None] | Non
             if rc2 != 0:
                 log_fn(f"[TaskCanvas] fallback task export failed (rc={rc2}): {(err2 or '').strip()[:220]}")
 
-    tasks = []
+    tasks_raw = []
     for r in rows or []:
         uuid = r.get("uuid") or r.get("id") or ""
         if not uuid:
@@ -116,10 +160,9 @@ def fetch_tasks(filter_str=None, timeout=30, log_fn: Callable[[str], None] | Non
         if isinstance(depends, str):
             depends = [d for d in re.split(r"[,\s]+", depends) if d]
         due = r.get("due")
-        tasks.append(
+        tasks_raw.append(
             {
                 "uuid": uuid,
-                "short": uuid.replace("-", "")[:8],
                 "desc": desc,
                 "project": project,
                 "tags": tags,
@@ -128,10 +171,23 @@ def fetch_tasks(filter_str=None, timeout=30, log_fn: Callable[[str], None] | Non
             }
         )
 
+    short_map = _assign_unique_shorts([t["uuid"] for t in tasks_raw], min_len=8)
+    tasks = []
+    widened = 0
+    for t in tasks_raw:
+        short = short_map.get(t["uuid"], re.sub(r"[^0-9a-fA-F]", "", t["uuid"]).lower()[:8])
+        if len(short) > 8:
+            widened += 1
+        t2 = dict(t)
+        t2["short"] = short
+        tasks.append(t2)
+
     tasks.sort(key=lambda t: (t["project"], t["desc"]))
 
     msg = f"[TaskCanvas] Loaded tasks: {len(tasks)} (filter: {filter_str!r})"
     if log_fn:
         log_fn(msg)
+        if widened:
+            log_fn(f"[TaskCanvas] Short ID collision guard widened {widened} task id(s) beyond 8 chars.")
 
     return tasks

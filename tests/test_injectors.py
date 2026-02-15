@@ -5,6 +5,7 @@ from pathlib import Path
 from taskcanvas.injectors import (
     _append_remove_mode,
     _find_bg_file,
+    inject_command_preflight,
     inject_custom_background,
     inject_energy_arrows,
     inject_wire_deps_as_main,
@@ -32,6 +33,12 @@ class TestInjectors(unittest.TestCase):
         twice = inject_energy_arrows(once)
         self.assertEqual(twice.count("__ENERGY_ARROW_CSS__"), 1)
         self.assertEqual(twice.count("__ENERGY_ARROW_JS__"), 1)
+
+    def test_inject_command_preflight_idempotent(self):
+        html = "<html><head></head><body></body></html>"
+        once = inject_command_preflight(html)
+        twice = inject_command_preflight(once)
+        self.assertEqual(twice.count("FEATURE_COMMAND_PREFLIGHT_V1"), 1)
 
     def test_find_bg_file_prefers_base_dir_candidates(self):
         with tempfile.TemporaryDirectory() as tmp:

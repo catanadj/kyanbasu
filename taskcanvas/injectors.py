@@ -1792,3 +1792,152 @@ def inject_energy_arrows(html: str) -> str:
             else html + '\n' + ENERGY_ARROW_JS
         )
     return html
+
+
+def inject_command_preflight(html: str) -> str:
+    """
+    Final buildCommands guardrail:
+      - de-duplicates exact duplicate command lines
+      - prevents conflicting per-task done/delete/modify mixes
+      - merges multiple modify commands for the same task into one line
+    """
+    js = r"""
+<script id="FEATURE_COMMAND_PREFLIGHT_V1">
+(function(){
+  if (window.__CMD_PREFLIGHT_V1__) return; window.__CMD_PREFLIGHT_V1__ = true;
+
+  function parseAndNormalize(raw){
+    var lines = String(raw||'').split(/\r?\n/).map(function(s){ return s.trim(); }).filter(Boolean);
+    var seenExact = Object.create(null);
+    var passthrough = [];
+    var byTask = Object.create(null);
+    var order = [];
+    var warnings = [];
+
+    function warn(msg){
+      if (warnings.indexOf(msg) === -1) warnings.push(msg);
+    }
+
+    for (var i=0;i<lines.length;i++){
+      var line = lines[i];
+      if (seenExact[line]) continue;
+      seenExact[line] = 1;
+
+      var m = /^task\s+(\S+)\s+(modify|done|delete)\b(?:\s+(.*))?$/i.exec(line);
+      if (!m){
+        passthrough.push(line);
+        continue;
+      }
+
+      var id = m[1];
+      var verb = String(m[2]||'').toLowerCase();
+      var rest = String(m[3]||'').trim();
+
+      if (!byTask[id]){
+        byTask[id] = { terminal:null, mods:[] };
+        order.push(id);
+      }
+      var st = byTask[id];
+
+      if (verb === 'modify'){
+        if (st.terminal){
+          warn('Dropped modify after terminal action for task ' + id);
+          continue;
+        }
+        if (rest) st.mods.push(rest);
+        continue;
+      }
+
+      // done/delete are terminal; last one wins.
+      if (st.terminal && st.terminal !== verb){
+        warn('Conflicting terminal actions for task ' + id + ' (kept last: ' + verb + ')');
+      }
+      st.terminal = verb;
+    }
+
+    var out = passthrough.slice();
+    for (var j=0;j<order.length;j++){
+      var id2 = order[j], s = byTask[id2];
+      if (!s) continue;
+      if (s.terminal){
+        out.push('task ' + id2 + ' ' + s.terminal);
+        continue;
+      }
+      if (s.mods && s.mods.length){
+        var tokSeen = Object.create(null), toks = [];
+        s.mods.join(' ').split(/\s+/).forEach(function(t){
+          if (!t) return;
+          if (tokSeen[t]) return;
+          tokSeen[t] = 1;
+          toks.push(t);
+        });
+        if (toks.length){
+          out.push('task ' + id2 + ' modify ' + toks.join(' '));
+        }
+      }
+    }
+    return { text: out.join('\n'), warnings: warnings };
+  }
+
+  function wrapBuildCommands(){
+    var orig = window.buildCommands;
+    if (typeof orig !== 'function' || orig.__cmdPreflightWrapped) return;
+    window.buildCommands = function(){
+      var raw = '';
+      try{ raw = String(orig.apply(this, arguments) || ''); }catch(_){ return raw; }
+      var res = parseAndNormalize(raw);
+      window.__CMD_PREFLIGHT_WARNINGS__ = res.warnings || [];
+      return res.text;
+    };
+    window.buildCommands.__cmdPreflightWrapped = true;
+  }
+
+  function wrapUpdateConsoleHint(){
+    var _u = window.updateConsole;
+    if (typeof _u !== 'function' || _u.__cmdPreflightHintWrap) return;
+    window.updateConsole = function(){
+      var rv = _u.apply(this, arguments);
+      try{
+        var w = window.__CMD_PREFLIGHT_WARNINGS__ || [];
+        var box = document.getElementById('__cmdPreflightHint');
+        if (!box){
+          box = document.createElement('div');
+          box.id = '__cmdPreflightHint';
+          box.style.position = 'fixed';
+          box.style.left = '12px';
+          box.style.bottom = '12px';
+          box.style.maxWidth = '40vw';
+          box.style.padding = '6px 8px';
+          box.style.borderRadius = '8px';
+          box.style.background = '#2a1f12';
+          box.style.border = '1px solid #8b5e34';
+          box.style.color = '#fbd38d';
+          box.style.font = '12px ui-monospace, monospace';
+          box.style.zIndex = '99999';
+          box.style.display = 'none';
+          document.body.appendChild(box);
+        }
+        if (w.length){
+          box.textContent = 'Preflight: ' + w.join(' | ');
+          box.style.display = 'block';
+        }else{
+          box.style.display = 'none';
+        }
+      }catch(_){}
+      return rv;
+    };
+    window.updateConsole.__cmdPreflightHintWrap = true;
+  }
+
+  wrapBuildCommands();
+  wrapUpdateConsoleHint();
+  setTimeout(function(){ try{ if (typeof updateConsole==='function') updateConsole(); }catch(_){} }, 0);
+})();
+</script>
+""".strip()
+
+    if 'id="FEATURE_COMMAND_PREFLIGHT_V1"' in html:
+        return html
+    if re.search(r'</body\s*>', html, flags=re.I):
+        return re.sub(r'</body\s*>', lambda m: js + '\n' + m.group(0), html, count=1, flags=re.I)
+    return html + '\n' + js

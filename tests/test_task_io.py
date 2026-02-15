@@ -65,6 +65,31 @@ class TestTaskIO(unittest.TestCase):
         self.assertTrue(any("Loaded tasks: 2" in line for line in logs))
 
     @patch("taskcanvas.task_io.run_quiet")
+    def test_fetch_tasks_widens_short_ids_on_collision(self, mock_run_quiet):
+        mock_run_quiet.return_value = (
+            0,
+            json.dumps(
+                [
+                    {
+                        "uuid": "aaaaaaaa-1111-1111-1111-111111111111",
+                        "description": "One",
+                    },
+                    {
+                        "uuid": "aaaaaaaa-2222-2222-2222-222222222222",
+                        "description": "Two",
+                    },
+                ]
+            ),
+            "",
+        )
+        logs = []
+        tasks = fetch_tasks(None, log_fn=logs.append)
+        shorts = [t["short"] for t in tasks]
+        self.assertEqual(len(set(shorts)), 2)
+        self.assertTrue(all(len(s) >= 9 for s in shorts))
+        self.assertTrue(any("collision guard widened" in line.lower() for line in logs))
+
+    @patch("taskcanvas.task_io.run_quiet")
     def test_fetch_tasks_fallback_preserves_pending_scope(self, mock_run_quiet):
         mock_run_quiet.side_effect = [
             (0, "", ""),

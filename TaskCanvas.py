@@ -13,6 +13,7 @@ from taskcanvas.injectors import (
     _append_remove_mode,
     _find_bg_file,
     inject_actionable_beacon,
+    inject_command_preflight,
     inject_console_hotkey_patch,
     inject_custom_background,
     inject_energy_arrows,
@@ -1235,6 +1236,7 @@ def main() -> int:
     html = inject_staged_deps_color_split(html)
     html = inject_follow_edges_on_move(html)
     html = inject_actionable_beacon(html)
+    html = inject_command_preflight(html)
 
     # Parse bg flags out of the leftover args:
     bg_arg, bg_opacity, args_wo_filter = _extract_bg_args(args_wo_filter)
