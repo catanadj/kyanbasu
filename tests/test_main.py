@@ -178,6 +178,7 @@ class TestMainFlow(unittest.TestCase):
                 "__ONLY_DEPS_CONSOLE_CSS__",
                 "__FIXPACK_V61__",
                 "FEATURE_ACTIONABLE_BEACON_V7B_JS",
+                "FEATURE_LAYOUT_PERSIST_V1",
                 "FEATURE_COMMAND_PREFLIGHT_V1",
             ]
             for marker in required_markers:

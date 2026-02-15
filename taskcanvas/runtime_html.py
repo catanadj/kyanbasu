@@ -8,6 +8,7 @@ from taskcanvas.injectors import (
     inject_energy_arrows,
     inject_follow_edges_on_move,
     inject_hover_console_features,
+    inject_layout_persistence,
     inject_multiline_add,
     inject_newtask_console_sync,
     inject_staged_deps_color_split,
@@ -925,6 +926,7 @@ def build_runtime_html(
     html = inject_staged_deps_color_split(html)
     html = inject_follow_edges_on_move(html)
     html = inject_actionable_beacon(html)
+    html = inject_layout_persistence(html)
     html = inject_command_preflight(html)
     
     return html

@@ -5,6 +5,7 @@ from pathlib import Path
 from taskcanvas.injectors import (
     _append_remove_mode,
     _find_bg_file,
+    inject_layout_persistence,
     inject_staged_deps_color_split,
     inject_command_preflight,
     inject_custom_background,
@@ -42,6 +43,14 @@ class TestInjectors(unittest.TestCase):
         self.assertIn("scheduleRestyle", out)
         self.assertIn("document.hidden", out)
         self.assertIn("900", out)
+
+    def test_inject_layout_persistence_idempotent(self):
+        html = "<html><head></head><body></body></html>"
+        once = inject_layout_persistence(html)
+        twice = inject_layout_persistence(once)
+        self.assertEqual(twice.count("FEATURE_LAYOUT_PERSIST_V1"), 1)
+        self.assertIn("localStorage", twice)
+        self.assertIn("boardKey", twice)
 
     def test_inject_command_preflight_idempotent(self):
         html = "<html><head></head><body></body></html>"

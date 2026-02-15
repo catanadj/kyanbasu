@@ -238,7 +238,9 @@ Without --bg, it tries to locate a file named like taskcanvas-bg.*, canvas-bg.*,
 
 ## Notes & limitations
 
-- Layout is not persisted. Each run builds a fresh canvas from current Taskwarrior state; you can keep the HTML open as long as you like, but there is no save/load of positions yet.
+- Layout is auto-saved in browser `localStorage` (per task-set signature). Node positions, project/tag area placement, zoom, and drawer state are restored on next run.
+
+- Clearing browser site data (or using private/incognito mode) resets saved layout state.
 
 - The curses selector does not work well on some Windows terminals; in that case the fallback prompt is used.
 
