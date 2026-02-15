@@ -2076,6 +2076,25 @@ def inject_undo_redo(html: str) -> str:
     if (t.isContentEditable) return true;
     return false;
   }
+  function hasCanvasData(){
+    try{
+      if (window.TASKS && Array.isArray(TASKS) && TASKS.length) return true;
+      if (window.DATA_READY && window.DATA && Array.isArray(window.DATA.tasks) && window.DATA.tasks.length) return true;
+      var nodes = document.querySelectorAll("#builderStage .node");
+      if (nodes && nodes.length) return true;
+    }catch(_){}
+    return false;
+  }
+  function armReady(reason){
+    if (ready) return;
+    ready = true;
+    pushSnapshot("baseline:" + String(reason || "auto"), true);
+    setTimeout(function(){ pushSnapshot("baseline-late:" + String(reason || "auto"), true); }, 260);
+  }
+  function maybeArmReady(reason){
+    if (ready) return;
+    if (hasCanvasData()) armReady(reason);
+  }
 
   function captureAreas(){
     var out = {projects: [], tags: []};
@@ -2179,7 +2198,9 @@ def inject_undo_redo(html: str) -> str:
   }
 
   function scheduleSnapshot(reason, delay){
-    if (!ready || suppress) return;
+    if (suppress) return;
+    if (!ready) maybeArmReady("schedule:" + String(reason || ""));
+    if (!ready) return;
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(function(){
       saveTimer = 0;
@@ -2397,7 +2418,9 @@ def inject_undo_redo(html: str) -> str:
     try{
       var stage = document.getElementById("builderStage") || document.body;
       var mo = new MutationObserver(function(muts){
-        if (suppress || !ready) return;
+        if (suppress) return;
+        if (!ready) maybeArmReady("mutation");
+        if (!ready) return;
         for (var i=0; i<muts.length; i++){
           var m = muts[i];
           if (m.type === "attributes" || m.type === "childList"){
@@ -2422,6 +2445,7 @@ def inject_undo_redo(html: str) -> str:
       var key = String(ev.key || "").toLowerCase();
       var ctrl = !!(ev.ctrlKey || ev.metaKey);
       if (!ctrl || ev.altKey) return;
+      maybeArmReady("hotkey");
 
       if (key === "z"){
         ev.preventDefault(); ev.stopImmediatePropagation();
@@ -2436,12 +2460,20 @@ def inject_undo_redo(html: str) -> str:
     }, true);
 
     document.addEventListener("twdata", function(){
-      setTimeout(function(){
-        ready = true;
-        pushSnapshot("baseline", true);
-      }, 700);
-      setTimeout(function(){ pushSnapshot("baseline-late", true); }, 1400);
+      setTimeout(function(){ maybeArmReady("twdata"); }, 40);
+      setTimeout(function(){ maybeArmReady("twdata-late"); }, 320);
     });
+    document.addEventListener("DOMContentLoaded", function(){ setTimeout(function(){ maybeArmReady("domcontentloaded"); }, 120); });
+    window.addEventListener("load", function(){ setTimeout(function(){ maybeArmReady("load"); }, 140); });
+
+    (function bootstrapProbe(){
+      var tries = 0;
+      var t = setInterval(function(){
+        tries += 1;
+        maybeArmReady("probe-" + tries);
+        if (ready || tries >= 20) clearInterval(t);
+      }, 150);
+    })();
 
     setTimeout(function(){
       if (ready) pushSnapshot("boot", true);
