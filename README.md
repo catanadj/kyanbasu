@@ -1,3 +1,4 @@
+[![CI](https://github.com/catanadj/taskwarrior-canvas/actions/workflows/ci.yml/badge.svg)](https://github.com/catanadj/taskwarrior-canvas/actions/workflows/ci.yml)
 
 ![canvas](https://github.com/user-attachments/assets/dd74d092-0f3e-4416-a6ec-09f9cbfc6504)
 
