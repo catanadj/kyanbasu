@@ -2201,11 +2201,23 @@ def inject_undo_redo(html: str) -> str:
     if (suppress) return;
     if (!ready) maybeArmReady("schedule:" + String(reason || ""));
     if (!ready) return;
+    if ((delay|0) <= 0){
+      pushSnapshot(reason || "scheduled-now", false);
+      return;
+    }
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(function(){
       saveTimer = 0;
       pushSnapshot(reason || "scheduled", false);
     }, Math.max(120, delay || 220));
+  }
+  function flushPendingSnapshot(reason){
+    if (suppress || !ready) return;
+    if (saveTimer){
+      clearTimeout(saveTimer);
+      saveTimer = 0;
+    }
+    pushSnapshot(reason || "flush", false);
   }
 
   function rebuildAreaMaps(snapshot){
@@ -2368,6 +2380,7 @@ def inject_undo_redo(html: str) -> str:
   }
 
   function undoCanvasChange(){
+    flushPendingSnapshot("before-undo");
     if (index <= 0){
       notify("Nothing to undo");
       return false;
@@ -2437,8 +2450,8 @@ def inject_undo_redo(html: str) -> str:
       });
     }catch(_){}
 
-    document.addEventListener("mouseup", function(){ scheduleSnapshot("mouseup", 260); }, true);
-    document.addEventListener("touchend", function(){ scheduleSnapshot("touchend", 260); }, true);
+    document.addEventListener("mouseup", function(){ scheduleSnapshot("mouseup", 60); }, true);
+    document.addEventListener("touchend", function(){ scheduleSnapshot("touchend", 60); }, true);
 
     document.addEventListener("keydown", function(ev){
       if (isEditableTarget(ev.target)) return;
