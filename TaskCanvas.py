@@ -729,7 +729,13 @@ def main() -> int:
       }
     }catch(_){}
   }
-  setInterval(rekeySync, 320);
+  setInterval(function(){
+    if (document.hidden) return;
+    rekeySync();
+  }, 700);
+  document.addEventListener('visibilitychange', function(){
+    if (!document.hidden) setTimeout(rekeySync, 30);
+  });
   window.addEventListener('load', function(){ setTimeout(rekeySync, 140); });
 
   // ===== state =====
@@ -921,7 +927,13 @@ def main() -> int:
       if (ta.value !== v) ta.value = v;
     }catch(_){}
   }
-  setInterval(tick, 260);
+  setInterval(function(){
+    if (document.hidden) return;
+    tick();
+  }, 520);
+  document.addEventListener('visibilitychange', function(){
+    if (!document.hidden) setTimeout(tick, 30);
+  });
   window.addEventListener('load', function(){ setTimeout(tick, 180); });
 
 })();</script></body>'''

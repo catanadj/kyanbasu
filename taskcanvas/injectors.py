@@ -64,13 +64,19 @@ ENERGY_ARROW_JS = r"""
     });
   }
 
-  // Run often enough to catch newly drawn staged edges
-  var t = setInterval(restyleStaging, 250);
+  // Run periodically; skip work when tab is hidden to reduce background CPU churn.
+  var t = setInterval(function(){
+    if (document.hidden) return;
+    restyleStaging();
+  }, 650);
 
   // Also react to DOM changes inside the staging layer
   try{
     var root = document.getElementById('builderStage') || document.body;
-    var mo = new MutationObserver(function(){ restyleStaging(); });
+    var mo = new MutationObserver(function(){
+      if (document.hidden) return;
+      restyleStaging();
+    });
     mo.observe(root, {subtree:true, childList:true, attributes:true});
   }catch(_){}
 
@@ -1393,6 +1399,17 @@ line.existing[class*="dep"] {
     }catch(_){}
   }
 
+  var __restyleScheduled = false;
+  function scheduleRestyle(delay){
+    if (__restyleScheduled) return;
+    __restyleScheduled = true;
+    setTimeout(function(){
+      __restyleScheduled = false;
+      if (document.hidden) return;
+      restyleAll();
+    }, delay || 10);
+  }
+
   // Hook common renderers
   ['drawLinks','renderStagedOverlay','renderDepsOverlay','__depsOverlayRender','updateLinks','redrawLinks'].forEach(function(name){
     var fn = window[name];
@@ -1400,15 +1417,18 @@ line.existing[class*="dep"] {
       var orig = fn;
       window[name] = function(){
         var rv = orig.apply(this, arguments);
-        setTimeout(function(){ restyleAll(); }, 10);
+        scheduleRestyle(10);
         return rv;
       };
       window[name].__stagedAnimWrap = true;
     }
   });
 
-  // Periodic sweep
-  setInterval(function(){ restyleAll(); }, 300);
+  // Periodic sweep (low frequency; hidden tabs do no work)
+  setInterval(function(){
+    if (document.hidden) return;
+    restyleAll();
+  }, 900);
 
   // Watch for DOM changes
   try {
@@ -1420,17 +1440,17 @@ line.existing[class*="dep"] {
         }
       });
       if (shouldRestyle) {
-        setTimeout(function(){ restyleAll(); }, 10);
+        scheduleRestyle(10);
       }
     });
     observer.observe(document.body, {childList: true, subtree: true});
   } catch(_){}
 
   // Initial passes
-  setTimeout(function(){ restyleAll(); }, 10);
-  setTimeout(function(){ restyleAll(); }, 100);
-  setTimeout(function(){ restyleAll(); }, 500);
-  setTimeout(function(){ restyleAll(); }, 1000);
+  scheduleRestyle(10);
+  scheduleRestyle(100);
+  scheduleRestyle(500);
+  scheduleRestyle(1000);
 })();</script>
 """.strip()
 

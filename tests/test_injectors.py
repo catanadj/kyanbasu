@@ -5,6 +5,7 @@ from pathlib import Path
 from taskcanvas.injectors import (
     _append_remove_mode,
     _find_bg_file,
+    inject_staged_deps_color_split,
     inject_command_preflight,
     inject_custom_background,
     inject_energy_arrows,
@@ -33,6 +34,14 @@ class TestInjectors(unittest.TestCase):
         twice = inject_energy_arrows(once)
         self.assertEqual(twice.count("__ENERGY_ARROW_CSS__"), 1)
         self.assertEqual(twice.count("__ENERGY_ARROW_JS__"), 1)
+        self.assertIn("document.hidden", twice)
+
+    def test_staged_deps_color_split_has_coalesced_scheduler(self):
+        html = "<html><head></head><body></body></html>"
+        out = inject_staged_deps_color_split(html)
+        self.assertIn("scheduleRestyle", out)
+        self.assertIn("document.hidden", out)
+        self.assertIn("900", out)
 
     def test_inject_command_preflight_idempotent(self):
         html = "<html><head></head><body></body></html>"
