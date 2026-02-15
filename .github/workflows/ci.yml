@@ -10,6 +10,7 @@ on:
       - "taskcanvas/**"
       - "templates/**"
       - "tests/**"
+      - "scripts/**"
   pull_request:
     branches:
       - main
@@ -19,6 +20,7 @@ on:
       - "taskcanvas/**"
       - "templates/**"
       - "tests/**"
+      - "scripts/**"
   workflow_dispatch:
     inputs:
       run_integration:
@@ -51,21 +53,7 @@ jobs:
         run: python --version
 
       - name: Compile
-        run: |
-          python -m py_compile \
-            TaskCanvas.py \
-            taskcanvas/__init__.py \
-            taskcanvas/cli.py \
-            taskcanvas/injectors.py \
-            taskcanvas/output.py \
-            taskcanvas/payload.py \
-            taskcanvas/task_io.py \
-            tests/test_cli.py \
-            tests/test_injectors.py \
-            tests/test_main.py \
-            tests/test_payload.py \
-            tests/test_task_io.py \
-            tests/test_task_io_integration.py
+        run: python -m compileall -q TaskCanvas.py taskcanvas tests
 
       - name: Run unit tests
         run: python -m unittest discover -s tests -v

@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+TaskCanvas.html
+
+.pytest_cache/
+.mypy_cache/
+.coverage
