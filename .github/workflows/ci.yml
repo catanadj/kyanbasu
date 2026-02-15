@@ -19,6 +19,13 @@ on:
       - "taskcanvas/**"
       - "templates/**"
       - "tests/**"
+  workflow_dispatch:
+    inputs:
+      run_integration:
+        description: "Run Taskwarrior integration test job"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -57,7 +64,29 @@ jobs:
             tests/test_injectors.py \
             tests/test_main.py \
             tests/test_payload.py \
-            tests/test_task_io.py
+            tests/test_task_io.py \
+            tests/test_task_io_integration.py
 
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
+
+  integration:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_integration == 'true' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Taskwarrior
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y taskwarrior
+
+      - name: Run integration tests
+        run: TASKCANVAS_RUN_INTEGRATION=1 python -m unittest tests.test_task_io_integration -v

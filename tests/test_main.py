@@ -31,7 +31,7 @@ class TestMainFlow(unittest.TestCase):
 
         calls = []
 
-        def fake_fetch(filter_str=None, timeout=30, log_fn=None):
+        def fake_fetch(filter_str=None, timeout=30, log_fn=None, strict_errors=False):
             calls.append(filter_str)
             return filtered_tasks if filter_str else all_tasks
 
@@ -78,7 +78,7 @@ class TestMainFlow(unittest.TestCase):
             self.assertEqual(payload["init_task_uuids"], ["bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"])
 
     def test_main_returns_error_on_invalid_filter(self):
-        def fake_fetch(filter_str=None, timeout=30, log_fn=None):
+        def fake_fetch(filter_str=None, timeout=30, log_fn=None, strict_errors=False):
             if filter_str is None:
                 return []
             raise ValueError("Invalid --filter expression: No closing quotation")
@@ -122,6 +122,23 @@ class TestMainFlow(unittest.TestCase):
             self.assertEqual(rc, 1)
             self.assertFalse(out_html.exists())
             mock_open.assert_not_called()
+
+    def test_main_succeeds_even_if_auto_open_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_html = Path(tmp) / "TaskCanvas.html"
+            with patch.object(TaskCanvas, "OUT_HTML", out_html), patch.object(
+                TaskCanvas, "fetch_tasks", return_value=[]
+            ), patch.object(
+                TaskCanvas, "_find_bg_file", return_value=None
+            ), patch.object(
+                TaskCanvas, "open_file", return_value=False
+            ), patch.object(
+                TaskCanvas.sys, "argv", ["TaskCanvas.py"]
+            ):
+                rc = TaskCanvas.main()
+
+            self.assertEqual(rc, 0)
+            self.assertTrue(out_html.exists())
 
     def test_main_smoke_generates_html_with_critical_blocks(self):
         tasks = [

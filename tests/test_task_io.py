@@ -138,6 +138,15 @@ class TestTaskIO(unittest.TestCase):
         self.assertTrue(any("task export failed" in m for m in logs))
         self.assertTrue(any("fallback task export failed" in m for m in logs))
 
+    @patch("taskcanvas.task_io.run_quiet")
+    def test_fetch_tasks_raises_when_strict_and_both_exports_fail(self, mock_run_quiet):
+        mock_run_quiet.side_effect = [
+            (1, "", "primary failed"),
+            (1, "", "fallback failed"),
+        ]
+        with self.assertRaisesRegex(RuntimeError, "Taskwarrior export failed"):
+            fetch_tasks("project:Work", strict_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main()

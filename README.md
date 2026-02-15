@@ -154,6 +154,25 @@ Termux & desktop friendly
 
 ---
 
+## Diagnostics
+
+- Set `TASKCANVAS_LOG_LEVEL` to control runtime logs (`DEBUG`, `INFO`, `WARNING`, `ERROR`).
+- Default log level is `INFO`.
+
+---
+
+## Release checks
+
+- Unit tests:
+  - `python3 -m unittest discover -s tests -v`
+- Integration test (real Taskwarrior):
+  - `TASKCANVAS_RUN_INTEGRATION=1 python3 -m unittest tests.test_task_io_integration -v`
+- Combined local release check:
+  - `./scripts/release_check.sh`
+- CI integration job is optional and can be run via **Actions -> CI -> Run workflow** with `run_integration=true`.
+
+---
+
 ### Auto-placing tasks by project
 
 You can pass project names as positional arguments; tasks from those projects will be initially placed on the canvas:

@@ -106,7 +106,12 @@ def _parse_task_export(raw: str):
     return rows
 
 
-def fetch_tasks(filter_str=None, timeout=30, log_fn: Callable[[str], None] | None = None):
+def fetch_tasks(
+    filter_str=None,
+    timeout=30,
+    log_fn: Callable[[str], None] | None = None,
+    strict_errors: bool = False,
+):
     """
     If filter_str is None → equivalent to 'task status:pending export'
     Else → runs 'task <filter_str> export'
@@ -128,6 +133,8 @@ def fetch_tasks(filter_str=None, timeout=30, log_fn: Callable[[str], None] | Non
     base += ["export"]
 
     rc, out, err = run_quiet(base, timeout)
+    rc2 = 0
+    err2 = ""
     rows = _parse_task_export(out)
     if not rows:
         # Fallback drops rc flags only, but preserves scope/filter semantics.
@@ -145,6 +152,8 @@ def fetch_tasks(filter_str=None, timeout=30, log_fn: Callable[[str], None] | Non
                 log_fn(f"[TaskCanvas] task export failed (rc={rc}): {(err or '').strip()[:220]}")
             if rc2 != 0:
                 log_fn(f"[TaskCanvas] fallback task export failed (rc={rc2}): {(err2 or '').strip()[:220]}")
+        if not rows and strict_errors and rc != 0 and rc2 != 0:
+            raise RuntimeError("Taskwarrior export failed in both primary and fallback modes.")
 
     tasks_raw = []
     for r in rows or []:

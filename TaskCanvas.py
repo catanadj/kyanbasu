@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 
-import json, sys
+import json, logging, os, sys
 from pathlib import Path
 
 from taskcanvas.cli import _extract_bg_args, _extract_filter_arg
@@ -27,8 +27,34 @@ from taskcanvas.injectors import (
 
 OUT_HTML = Path.cwd() / "TaskCanvas.html"
 
+def _build_logger():
+    level_name = os.environ.get("TASKCANVAS_LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+    logger = logging.getLogger("TaskCanvas")
+    if not logger.handlers:
+        h = logging.StreamHandler(sys.stderr)
+        h.setFormatter(logging.Formatter("[%(name)s][%(levelname)s] %(message)s"))
+        logger.addHandler(h)
+    logger.setLevel(level)
+    logger.propagate = False
+    return logger
+
+LOGGER = _build_logger()
+
 def eprint(*args):
-    sys.stderr.write(" ".join(str(a) for a in args) + "\n"); sys.stderr.flush()
+    LOGGER.info(" ".join(str(a) for a in args))
+
+def ewarn(*args):
+    LOGGER.warning(" ".join(str(a) for a in args))
+
+def eerror(*args):
+    LOGGER.error(" ".join(str(a) for a in args))
+
+def _fail(msg: str, *, tip: str | None = None, code: int = 1) -> int:
+    eerror(msg)
+    if tip:
+        eerror(tip)
+    return code
 
 # ======================= Better project selector (curses) =====================
 
@@ -277,23 +303,23 @@ def main() -> int:
 
     # 1) Load ALL pending tasks for the payload (drawer/search, etc.)
     try:
-        tasks_all = fetch_tasks(None, log_fn=eprint)
+        tasks_all = fetch_tasks(None, log_fn=eprint, strict_errors=True)
     except Exception as e:
-        eprint(f"[TaskCanvas] ERROR: failed to load pending tasks: {e}")
-        return 1
+        return _fail(f"Failed to load pending tasks: {e}", code=1)
 
     # 2) If filter is present, run it separately and capture just the UUIDs to auto-place
     init_task_uuids = []
     if filter_str:
         try:
-            filtered = fetch_tasks(filter_str, log_fn=eprint)
+            filtered = fetch_tasks(filter_str, log_fn=eprint, strict_errors=True)
         except ValueError as e:
-            eprint(f"[TaskCanvas] ERROR: {e}")
-            eprint("[TaskCanvas] Tip: quote filter expressions, e.g. --filter 'project:Work +P1'")
-            return 2
+            return _fail(
+                str(e),
+                tip="Tip: quote filter expressions, e.g. --filter 'project:Work +P1'",
+                code=2,
+            )
         except Exception as e:
-            eprint(f"[TaskCanvas] ERROR: failed to apply filter {filter_str!r}: {e}")
-            return 1
+            return _fail(f"Failed to apply filter {filter_str!r}: {e}", code=1)
         init_task_uuids = [t["uuid"] for t in filtered]
 
     # 3) Build payload using *all* tasks
@@ -340,9 +366,7 @@ def main() -> int:
     try:
         html = _load_runtime_html().replace("<!-- INLINE_PAYLOAD_HERE -->", "")
     except RuntimeError as e:
-        eprint(f"[TaskCanvas] ERROR: {e}")
-        eprint("[TaskCanvas] Ensure templates/ exists next to TaskCanvas.py.")
-        return 1
+        return _fail(str(e), tip="Ensure templates/ exists next to TaskCanvas.py.", code=1)
     
     # Append JSON payload at end of body (robust)
     safe_json = json_text.replace("</script", "<\/script")
@@ -1252,11 +1276,11 @@ def main() -> int:
     try:
         OUT_HTML.write_text(html, encoding="utf-8")
     except Exception as e:
-        eprint(f"[TaskCanvas] ERROR: failed to write {OUT_HTML}: {e}")
-        return 1
+        return _fail(f"Failed to write {OUT_HTML}: {e}", code=1)
 
     print(f"Wrote {OUT_HTML}")
-    open_file(OUT_HTML)
+    if not open_file(OUT_HTML):
+        ewarn(f"Could not auto-open {OUT_HTML}. Open it manually in your browser.")
     return 0
 
 if __name__ == "__main__":
