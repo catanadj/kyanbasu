@@ -29,6 +29,5 @@ Status key: `[ ]` pending, `[~]` in progress, `[x]` done
 
 - [x] `python3 -m unittest discover -s tests -v`
 - [x] `TASKCANVAS_RUN_INTEGRATION=1 python3 -m unittest tests.test_task_io_integration -v`
-- [~] Manual browser smoke run with hostile payload text and repeated HTML rebuilds.
-  - Automated hostile-payload + repeated rebuild smoke checks completed in this environment.
-  - Interactive browser validation remains pending where Chromium can run without sandbox restrictions.
+- [x] Automated hostile-payload + repeated rebuild smoke checks.
+- [x] Interactive browser validation where Chromium can run without sandbox restrictions.

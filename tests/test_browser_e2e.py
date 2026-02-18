@@ -18,7 +18,7 @@ class TestBrowserE2E(unittest.TestCase):
 
         # Validate chromium is runnable in this environment.
         p = subprocess.run(
-            [cls.chromium, "--headless", "--no-sandbox", "about:blank"],
+            [cls.chromium, "--headless", "--no-sandbox", "--dump-dom", "about:blank"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
