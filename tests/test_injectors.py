@@ -5,11 +5,13 @@ from pathlib import Path
 from taskcanvas.injectors import (
     _append_remove_mode,
     _find_bg_file,
+    inject_hover_console_features,
     inject_layout_persistence,
     inject_staged_deps_color_split,
     inject_command_preflight,
     inject_custom_background,
     inject_energy_arrows,
+    inject_runtime_diagnostics,
     inject_undo_redo,
     inject_wire_deps_as_main,
 )
@@ -43,7 +45,22 @@ class TestInjectors(unittest.TestCase):
         out = inject_staged_deps_color_split(html)
         self.assertIn("scheduleRestyle", out)
         self.assertIn("document.hidden", out)
-        self.assertIn("900", out)
+        self.assertIn("2800", out)
+
+    def test_staged_deps_color_split_idempotent(self):
+        html = "<html><head></head><body></body></html>"
+        once = inject_staged_deps_color_split(html)
+        twice = inject_staged_deps_color_split(once)
+        self.assertEqual(twice.count("PATCH_STAGED_LINE_ANIM_V1"), 1)
+        self.assertEqual(twice.count("PATCH_STAGED_LINE_ANIM_JS_V1"), 1)
+
+    def test_inject_hover_console_features_idempotent(self):
+        html = "<html><head></head><body></body></html>"
+        once = inject_hover_console_features(html, log=False)
+        twice = inject_hover_console_features(once, log=False)
+        self.assertEqual(twice.count("FEATURE_HOVER_STAGE_OBSERVER_V1"), 1)
+        self.assertEqual(twice.count("FEATURE_SHORTIFY_RENDER_V1"), 1)
+        self.assertEqual(twice.count("FEATURE_CONSOLE_MERGE_V3"), 1)
 
     def test_inject_layout_persistence_idempotent(self):
         html = "<html><head></head><body></body></html>"
@@ -69,6 +86,17 @@ class TestInjectors(unittest.TestCase):
         once = inject_command_preflight(html)
         twice = inject_command_preflight(once)
         self.assertEqual(twice.count("FEATURE_COMMAND_PREFLIGHT_V1"), 1)
+        self.assertIn("function shQuote", twice)
+        self.assertIn("function shellQuoteTaskLine", twice)
+        self.assertIn("task\\s+(add|log)", twice)
+
+    def test_inject_runtime_diagnostics_idempotent(self):
+        html = "<html><head></head><body></body></html>"
+        once = inject_runtime_diagnostics(html)
+        twice = inject_runtime_diagnostics(once)
+        self.assertEqual(twice.count("FEATURE_RUNTIME_DIAGNOSTICS_V1"), 1)
+        self.assertIn("window.addEventListener('error'", twice)
+        self.assertIn("window.addEventListener('unhandledrejection'", twice)
 
     def test_find_bg_file_prefers_base_dir_candidates(self):
         with tempfile.TemporaryDirectory() as tmp:

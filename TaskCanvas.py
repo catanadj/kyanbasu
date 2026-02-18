@@ -289,7 +289,14 @@ def _load_runtime_html() -> str:
 
 def main() -> int:
     raw_args = sys.argv[1:]
-    filter_str, args_wo_filter = _extract_filter_arg(raw_args)
+    try:
+        filter_str, args_wo_filter = _extract_filter_arg(raw_args)
+    except ValueError as e:
+        return _fail(
+            str(e),
+            tip="Tip: quote filter expressions, e.g. --filter 'project:Work +P1'",
+            code=2,
+        )
 
     # 1) Load ALL pending tasks for the payload (drawer/search, etc.)
     try:
@@ -349,7 +356,14 @@ def main() -> int:
     html = build_runtime_html(base_html, json_text, len(tasks_all), eprint)
 
     # Parse bg flags out of the leftover args:
-    bg_arg, bg_opacity, args_wo_filter = _extract_bg_args(args_wo_filter)
+    try:
+        bg_arg, bg_opacity, args_wo_filter = _extract_bg_args(args_wo_filter)
+    except ValueError as e:
+        return _fail(
+            str(e),
+            tip="Tip: pass values as --bg=FILE and --bg-opacity=0.18 (or separated by a space).",
+            code=2,
+        )
 
     bg_path = _find_bg_file(bg_arg, base_dir=BASE_DIR)
     if bg_path:

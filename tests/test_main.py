@@ -101,6 +101,42 @@ class TestMainFlow(unittest.TestCase):
             mock_html_loader.assert_not_called()
             mock_open.assert_not_called()
 
+    def test_main_returns_error_on_missing_filter_value(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_html = Path(tmp) / "TaskCanvas.html"
+            with patch.object(TaskCanvas, "OUT_HTML", out_html), patch.object(
+                TaskCanvas, "fetch_tasks"
+            ) as mock_fetch, patch.object(
+                TaskCanvas, "open_file"
+            ) as mock_open, patch.object(
+                TaskCanvas.sys, "argv", ["TaskCanvas.py", "--filter"]
+            ):
+                rc = TaskCanvas.main()
+
+            self.assertEqual(rc, 2)
+            self.assertFalse(out_html.exists())
+            mock_fetch.assert_not_called()
+            mock_open.assert_not_called()
+
+    def test_main_returns_error_on_missing_bg_value(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_html = Path(tmp) / "TaskCanvas.html"
+            with patch.object(TaskCanvas, "OUT_HTML", out_html), patch.object(
+                TaskCanvas, "fetch_tasks", return_value=[]
+            ), patch.object(
+                TaskCanvas, "_find_bg_file"
+            ) as mock_find_bg, patch.object(
+                TaskCanvas, "open_file"
+            ) as mock_open, patch.object(
+                TaskCanvas.sys, "argv", ["TaskCanvas.py", "--bg"]
+            ):
+                rc = TaskCanvas.main()
+
+            self.assertEqual(rc, 2)
+            self.assertFalse(out_html.exists())
+            mock_find_bg.assert_not_called()
+            mock_open.assert_not_called()
+
     def test_main_returns_error_on_template_load_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
             out_html = Path(tmp) / "TaskCanvas.html"
@@ -180,6 +216,7 @@ class TestMainFlow(unittest.TestCase):
                 "FEATURE_ACTIONABLE_BEACON_V7B_JS",
                 "FEATURE_LAYOUT_PERSIST_V1",
                 "FEATURE_COMMAND_PREFLIGHT_V1",
+                "FEATURE_RUNTIME_DIAGNOSTICS_V1",
                 "FEATURE_UNDO_REDO_V1",
             ]
             for marker in required_markers:

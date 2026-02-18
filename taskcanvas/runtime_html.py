@@ -11,6 +11,7 @@ from taskcanvas.injectors import (
     inject_layout_persistence,
     inject_multiline_add,
     inject_newtask_console_sync,
+    inject_runtime_diagnostics,
     inject_undo_redo,
     inject_staged_deps_color_split,
     inject_wire_deps_as_main,
@@ -24,7 +25,8 @@ def build_runtime_html(
     log_fn: Callable[[str], None],
 ) -> str:
     html = base_html.replace("<!-- INLINE_PAYLOAD_HERE -->", "")
-    safe_json = json_text.replace("</script", "<\/script")
+    # Escape '<' so embedded JSON cannot terminate the script tag (e.g. </SCRIPT>).
+    safe_json = json_text.replace("<", "\\u003c")
     payload_tag = ("<script id='payload_data' type='application/json'>" + safe_json + "</script>\n")
     runner = """<script>(function(){
       try{
@@ -384,14 +386,35 @@ def build_runtime_html(
       }
     }catch(_){}
       }
+      var __rekeyTimer = 0;
+      function scheduleRekey(delay){
+    if (__rekeyTimer) return;
+    __rekeyTimer = setTimeout(function(){
+      __rekeyTimer = 0;
+      if (document.hidden) return;
+      rekeySync();
+    }, Math.max(30, delay||60));
+      }
       setInterval(function(){
     if (document.hidden) return;
-    rekeySync();
-      }, 700);
+    scheduleRekey(120);
+      }, 3000);
+      try{
+    var __rekeyRoot = document.getElementById('builderStage') || document.body;
+    var __rekeyObs = new MutationObserver(function(muts){
+      for (var i=0;i<muts.length;i++){
+        var m = muts[i];
+        if (m.type === 'childList' || m.type === 'attributes'){
+          scheduleRekey(40); break;
+        }
+      }
+    });
+    __rekeyObs.observe(__rekeyRoot, {subtree:true, childList:true, attributes:true, attributeFilter:['class','style','data-uuid','data-short']});
+      }catch(_){}
       document.addEventListener('visibilitychange', function(){
-    if (!document.hidden) setTimeout(rekeySync, 30);
+    if (!document.hidden) scheduleRekey(30);
       });
-      window.addEventListener('load', function(){ setTimeout(rekeySync, 140); });
+      window.addEventListener('load', function(){ scheduleRekey(140); });
     
       // ===== state =====
       var FOLD = window.__FOLD_STATE__ || Object.create(null);  // for new tasks
@@ -582,14 +605,35 @@ def build_runtime_html(
       if (ta.value !== v) ta.value = v;
     }catch(_){}
       }
+      var __tickTimer = 0;
+      function scheduleTick(delay){
+    if (__tickTimer) return;
+    __tickTimer = setTimeout(function(){
+      __tickTimer = 0;
+      if (document.hidden) return;
+      tick();
+    }, Math.max(30, delay||50));
+      }
       setInterval(function(){
     if (document.hidden) return;
-    tick();
-      }, 520);
+    scheduleTick(100);
+      }, 2500);
+      try{
+    var __tickRoot = document.getElementById('builderStage') || document.body;
+    var __tickObs = new MutationObserver(function(muts){
+      for (var i=0;i<muts.length;i++){
+        var m = muts[i];
+        if (m.type === 'childList' || m.type === 'attributes'){
+          scheduleTick(40); break;
+        }
+      }
+    });
+    __tickObs.observe(__tickRoot, {subtree:true, childList:true, attributes:true, attributeFilter:['class','style','data-proj','data-tag']});
+      }catch(_){}
       document.addEventListener('visibilitychange', function(){
-    if (!document.hidden) setTimeout(tick, 30);
+    if (!document.hidden) scheduleTick(30);
       });
-      window.addEventListener('load', function(){ setTimeout(tick, 180); });
+      window.addEventListener('load', function(){ scheduleTick(180); });
     
     })();</script></body>'''
     
@@ -929,6 +973,7 @@ def build_runtime_html(
     html = inject_actionable_beacon(html)
     html = inject_layout_persistence(html)
     html = inject_command_preflight(html)
+    html = inject_runtime_diagnostics(html)
     html = inject_undo_redo(html)
 
     return html

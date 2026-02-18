@@ -64,11 +64,11 @@ ENERGY_ARROW_JS = r"""
     });
   }
 
-  // Run periodically; skip work when tab is hidden to reduce background CPU churn.
+  // Slow fallback sweep; primary updates are event-driven via observers/hooks below.
   var t = setInterval(function(){
     if (document.hidden) return;
     restyleStaging();
-  }, 650);
+  }, 2800);
 
   // Also react to DOM changes inside the staging layer
   try{
@@ -463,6 +463,13 @@ def inject_hover_console_features(html: str, *, log=True) -> str:
     def logp(*a):
         if log: print(*a, file=sys.stderr)
 
+    def append_before_body(doc: str, snippet: str) -> str:
+        low = doc.lower()
+        idx = low.rfind("</body>")
+        if idx == -1:
+            return doc + snippet
+        return doc[:idx] + snippet + doc[idx:]
+
     # ============= OBSERVER (toggle-aware ✓/🗑) =============
     SNIP_OBS = r"""
 <script id="FEATURE_HOVER_STAGE_OBSERVER_V1">(function(){
@@ -739,26 +746,26 @@ def inject_hover_console_features(html: str, *, log=True) -> str:
             html = new_html
         else:
             # Fallback: append at </body> so it still works if the anchor shifts/minifies away
-            html = html.replace("</body>", "<script>"+SNIP_MODIFY+"</script>\n</body>")
+            html = append_before_body(html, "<script>"+SNIP_MODIFY+"</script>\n")
             logp("[gen] modify injector: fallback appended at </body>.")
 
     # Ensure observer present
     if "FEATURE_HOVER_STAGE_OBSERVER_V1" not in html:
-        html = html.replace("</body>", SNIP_OBS + "\n</body>")
+        html = append_before_body(html, SNIP_OBS + "\n")
         logp("[gen] observer: appended.")
     else:
         logp("[gen] observer: already present.")
 
     # Ensure shortify present
     if "FEATURE_SHORTIFY_RENDER_V1" not in html:
-        html = html.replace("</body>", SNIP_SHORTIFY + "\n</body>")
+        html = append_before_body(html, SNIP_SHORTIFY + "\n")
         logp("[gen] shortify: appended.")
     else:
         logp("[gen] shortify: already present.")
 
     # Ensure merge wrapper present
-    if "FEATURE_CONSOLE_MERGE_V2" not in html:
-        html = html.replace("</body>", SNIP_MERGE + "\n</body>")
+    if "FEATURE_CONSOLE_MERGE_V3" not in html:
+        html = append_before_body(html, SNIP_MERGE + "\n")
         logp("[gen] merge wrapper: appended.")
     else:
         logp("[gen] merge wrapper: already present.")
@@ -1424,11 +1431,11 @@ line.existing[class*="dep"] {
     }
   });
 
-  // Periodic sweep (low frequency; hidden tabs do no work)
+  // Slow fallback sweep; primary updates are hook/observer driven.
   setInterval(function(){
     if (document.hidden) return;
-    restyleAll();
-  }, 900);
+    scheduleRestyle(40);
+  }, 2800);
 
   // Watch for DOM changes
   try {
@@ -1454,9 +1461,9 @@ line.existing[class*="dep"] {
 })();</script>
 """.strip()
 
-    if 'id="STAGED_DEPS_COLOR_SPLIT"' not in html:
+    if 'id="PATCH_STAGED_LINE_ANIM_V1"' not in html:
         html = re.sub(r'</head>', CSS + '\n</head>', html, count=1, flags=re.I)
-    if 'id="STAGED_DEPS_COLOR_SPLIT_JS"' not in html:
+    if 'id="PATCH_STAGED_LINE_ANIM_JS_V1"' not in html:
         html = re.sub(r'</body>', JS + '\n</body>', html, count=1, flags=re.I)
     return html
 
@@ -2655,11 +2662,63 @@ def inject_command_preflight(html: str) -> str:
       - de-duplicates exact duplicate command lines
       - prevents conflicting per-task done/delete/modify mixes
       - merges multiple modify commands for the same task into one line
+      - shell-quotes generated task command args to avoid shell injection/splitting
     """
     js = r"""
 <script id="FEATURE_COMMAND_PREFLIGHT_V1">
 (function(){
   if (window.__CMD_PREFLIGHT_V1__) return; window.__CMD_PREFLIGHT_V1__ = true;
+
+  function shQuote(arg){
+    var s = String(arg == null ? '' : arg);
+    return "'" + s.replace(/'/g, "'\"'\"'") + "'";
+  }
+
+  function isModifierToken(tok){
+    var t = String(tok || '').trim();
+    if (!t) return false;
+    if (/^[+-]\S+$/.test(t)) return true;
+    if (/^[A-Za-z0-9_.-]+:.+$/.test(t)) return true;
+    return false;
+  }
+
+  function shellQuoteTaskLine(line){
+    var s = String(line || '').trim();
+    if (!s) return '';
+
+    var mTerm = /^task\s+(\S+)\s+(done|delete)\s*$/i.exec(s);
+    if (mTerm){
+      return 'task ' + shQuote(mTerm[1]) + ' ' + String(mTerm[2] || '').toLowerCase();
+    }
+
+    var mMod = /^task\s+(\S+)\s+modify(?:\s+(.*))?$/i.exec(s);
+    if (mMod){
+      var id = mMod[1];
+      var rest = String(mMod[2] || '').trim();
+      var toks = rest ? rest.split(/\s+/).filter(Boolean) : [];
+      var qmods = toks.map(shQuote);
+      return 'task ' + shQuote(id) + ' modify' + (qmods.length ? (' ' + qmods.join(' ')) : '');
+    }
+
+    var mAddLog = /^task\s+(add|log)\s+(.+)$/i.exec(s);
+    if (mAddLog){
+      var verb = String(mAddLog[1] || '').toLowerCase();
+      var rest2 = String(mAddLog[2] || '').trim();
+      if (!rest2){
+        return 'task ' + verb + ' ' + shQuote('(no description)');
+      }
+      var parts = rest2.split(/\s+/).filter(Boolean);
+      var mods = [];
+      while (parts.length > 1 && isModifierToken(parts[parts.length - 1])){
+        mods.unshift(parts.pop());
+      }
+      var desc = parts.join(' ').trim() || '(no description)';
+      var tail = mods.map(shQuote).join(' ');
+      return 'task ' + verb + ' ' + shQuote(desc) + (tail ? (' ' + tail) : '');
+    }
+
+    return s;
+  }
 
   function parseAndNormalize(raw){
     var lines = String(raw||'').split(/\r?\n/).map(function(s){ return s.trim(); }).filter(Boolean);
@@ -2731,7 +2790,8 @@ def inject_command_preflight(html: str) -> str:
         }
       }
     }
-    return { text: out.join('\n'), warnings: warnings };
+    var safe = out.map(shellQuoteTaskLine).filter(Boolean);
+    return { text: safe.join('\n'), warnings: warnings };
   }
 
   function wrapBuildCommands(){
@@ -2796,3 +2856,76 @@ def inject_command_preflight(html: str) -> str:
     if re.search(r'</body\s*>', html, flags=re.I):
         return re.sub(r'</body\s*>', lambda m: js + '\n' + m.group(0), html, count=1, flags=re.I)
     return html + '\n' + js
+
+
+def inject_runtime_diagnostics(html: str) -> str:
+    """
+    Lightweight browser diagnostics:
+      - captures global error / unhandledrejection events
+      - keeps a bounded in-memory ring buffer
+      - exposes snapshot via window.TaskCanvasDiagnostics()
+    """
+    js = r"""
+<script id="FEATURE_RUNTIME_DIAGNOSTICS_V1">
+(function(){
+  if (window.__RUNTIME_DIAGNOSTICS_V1__) return; window.__RUNTIME_DIAGNOSTICS_V1__ = true;
+
+  var diag = window.__TASKCANVAS_DIAG__ || {
+    errors: 0,
+    rejections: 0,
+    events: []
+  };
+  window.__TASKCANVAS_DIAG__ = diag;
+
+  function push(kind, msg, extra){
+    var entry = {
+      ts: new Date().toISOString(),
+      kind: String(kind || 'error'),
+      msg: String(msg || '(no message)')
+    };
+    if (extra && typeof extra === 'object'){
+      for (var k in extra){
+        if (!Object.prototype.hasOwnProperty.call(extra, k)) continue;
+        entry[k] = extra[k];
+      }
+    }
+    diag.events.push(entry);
+    if (diag.events.length > 50) diag.events.shift();
+    try{ console.warn('[TaskCanvas][diag]', entry.kind + ':', entry.msg, entry); }catch(_){}
+  }
+
+  window.addEventListener('error', function(ev){
+    try{
+      diag.errors += 1;
+      var msg = (ev && ev.message) ? ev.message : 'window error';
+      push('error', msg, {
+        file: ev && ev.filename ? ev.filename : '',
+        line: ev && ev.lineno ? ev.lineno : 0,
+        col: ev && ev.colno ? ev.colno : 0
+      });
+    }catch(_){}
+  });
+
+  window.addEventListener('unhandledrejection', function(ev){
+    try{
+      diag.rejections += 1;
+      var reason = ev ? ev.reason : '';
+      var msg = '';
+      if (reason && typeof reason === 'object' && reason.message) msg = reason.message;
+      else msg = String(reason || 'unhandled rejection');
+      push('unhandledrejection', msg, {});
+    }catch(_){}
+  });
+
+  window.TaskCanvasDiagnostics = function(){
+    try{ return JSON.parse(JSON.stringify(diag)); }catch(_){ return diag; }
+  };
+})();
+</script>
+""".strip()
+
+    if 'id="FEATURE_RUNTIME_DIAGNOSTICS_V1"' in html:
+        return html
+    if re.search(r"</body\s*>", html, flags=re.I):
+        return re.sub(r"</body\s*>", lambda m: js + "\n" + m.group(0), html, count=1, flags=re.I)
+    return html + "\n" + js

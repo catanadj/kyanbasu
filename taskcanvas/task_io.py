@@ -65,9 +65,20 @@ def _assign_unique_shorts(uuids: list[str], min_len: int = 8) -> dict[str, str]:
             break
 
     out = {}
+    used = set()
     for uuid in uuids:
         raw = normalized[uuid] or str(uuid)
-        out[uuid] = raw[: min(lengths[uuid], len(raw))]
+        base = raw[: min(lengths[uuid], len(raw))]
+        cand = base
+        if cand in used:
+            n = 1
+            while True:
+                cand = f"{base}{n:x}"
+                if cand not in used:
+                    break
+                n += 1
+        out[uuid] = cand
+        used.add(cand)
     return out
 
 

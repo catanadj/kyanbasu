@@ -14,6 +14,10 @@ class TestCliHelpers(unittest.TestCase):
         self.assertEqual(filt, "due.before:today")
         self.assertEqual(rest, ["Home"])
 
+    def test_extract_filter_arg_missing_value_raises(self):
+        with self.assertRaisesRegex(ValueError, "--filter requires a value"):
+            _extract_filter_arg(["--filter"])
+
     def test_extract_bg_args_mixed_forms(self):
         bg, opacity, rest = _extract_bg_args(["--bg", "wall.jpg", "--bg-opacity=0.22", "Home"])
         self.assertEqual(bg, "wall.jpg")
@@ -25,6 +29,10 @@ class TestCliHelpers(unittest.TestCase):
         self.assertEqual(bg, "wall.jpg")
         self.assertIsNone(opacity)
         self.assertEqual(rest, ["Inbox"])
+
+    def test_extract_bg_args_missing_value_raises(self):
+        with self.assertRaisesRegex(ValueError, "--bg requires a value"):
+            _extract_bg_args(["--bg"])
 
 
 if __name__ == "__main__":

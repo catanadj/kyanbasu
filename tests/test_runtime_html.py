@@ -1,4 +1,5 @@
 import json
+import re
 import unittest
 
 from taskcanvas.runtime_html import build_runtime_html
@@ -24,12 +25,30 @@ class TestRuntimeHtml(unittest.TestCase):
             "FEATURE_ACTIONABLE_BEACON_V7B_JS",
             "FEATURE_LAYOUT_PERSIST_V1",
             "FEATURE_COMMAND_PREFLIGHT_V1",
+            "FEATURE_RUNTIME_DIAGNOSTICS_V1",
             "FEATURE_UNDO_REDO_V1",
         ]
         for marker in required_markers:
             self.assertIn(marker, out)
+        self.assertEqual(out.count('id="FEATURE_CONSOLE_MERGE_V3"'), 1)
         self.assertNotIn("<!-- INLINE_PAYLOAD_HERE -->", out)
         self.assertTrue(any("Embedded tasks: 0" in line for line in logs))
+
+    def test_build_runtime_html_escapes_mixed_case_script_terminators_in_payload(self):
+        base_html = "<html><head></head><body><!-- INLINE_PAYLOAD_HERE --></body></html>"
+        payload = json.dumps(
+            {"tasks": [{"desc": "x</SCRIPT><script>alert(1)</script>"}], "graph": {}},
+            separators=(",", ":"),
+        )
+        out = build_runtime_html(base_html, payload, 1, lambda *_: None)
+
+        m = re.search(r"<script id='payload_data' type='application/json'>(.*?)</script>", out, flags=re.S)
+        self.assertIsNotNone(m)
+        embedded = m.group(1)
+        self.assertNotIn("</script", embedded.lower())
+        self.assertIn("\\u003c/SCRIPT>", embedded)
+        parsed = json.loads(embedded)
+        self.assertEqual(parsed["tasks"][0]["desc"], "x</SCRIPT><script>alert(1)</script>")
 
 
 if __name__ == "__main__":

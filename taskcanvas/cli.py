@@ -19,7 +19,7 @@ def _extract_filter_arg(argv):
                 filt = argv[i + 1]
                 skip_next = True
             else:
-                filt = ""
+                raise ValueError("--filter requires a value")
         elif a.startswith("--filter="):
             filt = a.split("=", 1)[1]
         else:
@@ -42,7 +42,13 @@ def _extract_bg_args(argv):
                 bg = argv[i + 1]
                 skip = True
             else:
-                bg = ""
+                raise ValueError("--bg requires a value")
+        elif a == "--bg-opacity":
+            if i + 1 < len(argv):
+                opacity = argv[i + 1]
+                skip = True
+            else:
+                raise ValueError("--bg-opacity requires a value")
         elif a.startswith("--bg="):
             bg = a.split("=", 1)[1]
         elif a.startswith("--bg-opacity="):

@@ -2,10 +2,17 @@ import json
 import unittest
 from unittest.mock import patch
 
-from taskcanvas.task_io import _parse_task_export, fetch_tasks
+from taskcanvas.task_io import _assign_unique_shorts, _parse_task_export, fetch_tasks
 
 
 class TestTaskIO(unittest.TestCase):
+    def test_assign_unique_shorts_handles_normalized_collisions(self):
+        uuids = ["abc-def", "abcdef", "abc.def"]
+        out = _assign_unique_shorts(uuids, min_len=6)
+        shorts = [out[u] for u in uuids]
+        self.assertEqual(len(set(shorts)), len(uuids))
+        self.assertTrue(all(s.startswith("abcdef") for s in shorts))
+
     def test_parse_task_export_json_array(self):
         raw = (
             "Configuration override rc.verbose=off\n"
