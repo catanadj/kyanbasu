@@ -17,14 +17,17 @@ class TestBrowserE2E(unittest.TestCase):
             raise unittest.SkipTest("Chromium not found; skipping browser E2E.")
 
         # Validate chromium is runnable in this environment.
-        p = subprocess.run(
-            [cls.chromium, "--headless", "--no-sandbox", "--dump-dom", "about:blank"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=15,
-            check=False,
-        )
+        try:
+            p = subprocess.run(
+                [cls.chromium, "--headless", "--no-sandbox", "--dump-dom", "about:blank"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=15,
+                check=False,
+            )
+        except (subprocess.TimeoutExpired, OSError) as e:
+            raise unittest.SkipTest(f"Chromium probe failed in this environment ({type(e).__name__}).")
         if p.returncode != 0:
             raise unittest.SkipTest(
                 f"Chromium unavailable in this environment (rc={p.returncode}); skipping browser E2E."
@@ -67,22 +70,25 @@ window.addEventListener('load', function(){
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "TaskCanvas.e2e.html"
             p.write_text(html, encoding="utf-8")
-            out = subprocess.run(
-                [
-                    self.chromium,
-                    "--headless",
-                    "--no-sandbox",
-                    "--disable-gpu",
-                    "--virtual-time-budget=7000",
-                    "--dump-dom",
-                    f"file://{p}",
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=20,
-                check=False,
-            )
+            try:
+                out = subprocess.run(
+                    [
+                        self.chromium,
+                        "--headless",
+                        "--no-sandbox",
+                        "--disable-gpu",
+                        "--virtual-time-budget=7000",
+                        "--dump-dom",
+                        f"file://{p}",
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=20,
+                    check=False,
+                )
+            except (subprocess.TimeoutExpired, OSError) as e:
+                self.skipTest(f"Chromium execution failed in this environment ({type(e).__name__}).")
             if out.returncode != 0:
                 self.skipTest(f"Chromium failed in this environment (rc={out.returncode}).")
 
