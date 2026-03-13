@@ -65,7 +65,7 @@ def _load_template(name: str) -> str:
     path = TEMPLATES_DIR / name
     try:
         return path.read_text(encoding="utf-8")
-    except Exception as e:
+    except OSError as e:
         raise RuntimeError(f"Failed to load template: {path} ({e})") from e
 
 
@@ -77,7 +77,7 @@ def _load_runtime_html() -> str:
 def _load_pending_tasks() -> list[dict]:
     try:
         return fetch_tasks(None, log_fn=eprint, strict_errors=True)
-    except Exception as e:
+    except RuntimeError as e:
         raise RuntimeError(f"Failed to load pending tasks: {e}") from e
 
 
@@ -88,7 +88,7 @@ def _resolve_initial_task_uuids(filter_str: str | None) -> list[str]:
         filtered = fetch_tasks(filter_str, log_fn=eprint, strict_errors=True)
     except ValueError:
         raise
-    except Exception as e:
+    except RuntimeError as e:
         raise RuntimeError(f"Failed to apply filter {filter_str!r}: {e}") from e
     return [task["uuid"] for task in filtered]
 
@@ -137,7 +137,7 @@ def _apply_background(html: str, args_wo_filter: list[str]) -> str:
 def _write_output_html(html: str) -> None:
     try:
         OUT_HTML.write_text(html, encoding="utf-8")
-    except Exception as e:
+    except OSError as e:
         raise RuntimeError(f"Failed to write {OUT_HTML}: {e}") from e
 
 

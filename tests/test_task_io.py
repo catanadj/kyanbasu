@@ -1,11 +1,22 @@
 import json
+import subprocess
 import unittest
 from unittest.mock import patch
 
-from taskcanvas.task_io import _assign_unique_shorts, _parse_task_export, fetch_tasks
+from taskcanvas.task_io import _assign_unique_shorts, _parse_task_export, fetch_tasks, run_quiet
 
 
 class TestTaskIO(unittest.TestCase):
+    @patch("taskcanvas.task_io.subprocess.run")
+    def test_run_quiet_returns_error_on_timeout(self, mock_run):
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd=["task"], timeout=30)
+
+        rc, out, err = run_quiet(["task"], timeout=30)
+
+        self.assertEqual(rc, 1)
+        self.assertEqual(out, "")
+        self.assertIn("timed out", err.lower())
+
     def test_assign_unique_shorts_handles_normalized_collisions(self):
         uuids = ["abc-def", "abcdef", "abc.def"]
         out = _assign_unique_shorts(uuids, min_len=6)

@@ -2,6 +2,7 @@ import json
 import re
 import shlex
 import subprocess
+from json import JSONDecodeError
 from typing import Callable
 
 
@@ -16,7 +17,9 @@ def run_quiet(cmd, timeout=30):
             text=True,
         )
         return p.returncode, p.stdout, p.stderr
-    except Exception as e:
+    except subprocess.TimeoutExpired:
+        return 1, "", f"Command timed out after {timeout}s"
+    except OSError as e:
         return 1, "", str(e)
 
 
@@ -103,7 +106,7 @@ def _parse_task_export(raw: str):
                 return obj["data"]
             if isinstance(obj.get("rows"), list):
                 return obj["rows"]
-    except Exception:
+    except JSONDecodeError:
         pass
     rows = []
     for ln in txt.splitlines():
@@ -112,7 +115,7 @@ def _parse_task_export(raw: str):
             continue
         try:
             rows.append(json.loads(s))
-        except Exception:
+        except JSONDecodeError:
             pass
     return rows
 

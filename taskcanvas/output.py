@@ -21,6 +21,6 @@ def open_file(path: Path):
         else:
             print(f"Open {path} in your browser.")
             return False
-    except Exception:
+    except (AttributeError, OSError, subprocess.SubprocessError):
         print(f"Open {path} in your browser.")
         return False
