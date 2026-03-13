@@ -1,0 +1,41 @@
+          /* __PATCH_MODIFY_STAGE_TO_CONSOLE__ */
+          try{
+            (function(){
+              console.log("[hover/console] modify injector active");
+              function normalizeMods(arr){
+                var out = [], lastIdx = Object.create(null);
+                for (var i=0;i<arr.length;i++){
+                  var tok = String(arr[i]||'').trim(); if (!tok) continue;
+                  var m = tok.match(/^([^:\s]+):(.*)$/);
+                  if (m){
+                    var key = m[1].toLowerCase();
+                    if (lastIdx[key] != null){ out[lastIdx[key]] = tok; }
+                    else { lastIdx[key] = out.length; out.push(tok); }
+                  }else{
+                    out.push(tok);
+                  }
+                }
+                return out;
+              }
+              function toShortId(x){
+                try{
+                  var n = document.querySelector('#builderStage [data-uuid="'+x+'"]');
+                  if (n) return n.getAttribute('data-short') || String(x).slice(0,8);
+                }catch(_){}
+                var s = String(x||''); return s.length>8 ? s.slice(0,8) : s;
+              }
+              var sid = toShortId(id);
+              var modsArr = (Array.isArray(merged) ? merged.slice() : []);
+              if (!sid || !modsArr.length) return;
+              modsArr = normalizeMods(modsArr);
+              var line = 'task '+sid+' modify '+modsArr.join(' ');
+              var A = (window.STAGED_CMDS = window.STAGED_CMDS || []);
+              for (var i=A.length-1;i>=0;i--){
+                var s = String(A[i]||'');
+                if (s.indexOf('task '+sid+' modify ') === 0){ A.splice(i,1); }
+              }
+              A.push(line);
+              try{ if (typeof window.updateConsole==='function') setTimeout(window.updateConsole, 0); }catch(_){}
+              try{ if (typeof window.__depsOverlayRender==='function') setTimeout(window.__depsOverlayRender, 0); }catch(_){}
+            })();
+          }catch(_){}

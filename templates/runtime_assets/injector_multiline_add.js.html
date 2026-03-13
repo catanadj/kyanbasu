@@ -1,0 +1,195 @@
+<script id="FEATURE_MULTILINE_ADD_V1">(function(){
+  if (window.__ML_ADD_V1__) return; window.__ML_ADD_V1__ = true;
+
+  // -------- UI: multiline textarea modal --------
+  function multilineDialog(title, placeholder){
+    return new Promise((resolve)=>{
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:999999;';
+      wrap.innerHTML = `
+        <div style="position:absolute;inset:0;background:rgba(0,0,0,.36)"></div>
+        <div style="position:relative;max-width:720px;width:92%;background:#111;color:#eee;border-radius:12px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.4)">
+          <div style="font-weight:700;margin-bottom:8px">${title||'Add tasks (one per line)'}</div>
+          <textarea id="mlAddTa" rows="8" autofocus
+            style="width:100%;background:#0c0f16;color:#e7e7ee;border:1px solid #2a3344;border-radius:10px;padding:10px;resize:vertical;line-height:1.3;"
+            placeholder="${placeholder||'One task per line…'}"></textarea>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+            <button id="mlAddCancel" style="padding:6px 12px;border:1px solid #333;background:#1a1f2b;color:#bbb;border-radius:8px;cursor:pointer">Cancel</button>
+            <button id="mlAddOk" style="padding:6px 12px;border:1px solid #3b82f6;background:#2563eb;color:#fff;border-radius:8px;cursor:pointer">Add</button>
+          </div>
+          <div style="font-size:12px;opacity:.7;margin-top:6px">Tip: Ctrl/⌘+Enter to submit</div>
+        </div>`;
+      document.body.appendChild(wrap);
+      const ta = wrap.querySelector('#mlAddTa');
+      const done = (ok)=>{ const v = ta.value; wrap.remove(); resolve(ok ? v : null); };
+      wrap.querySelector('#mlAddOk').onclick = ()=>done(true);
+      wrap.querySelector('#mlAddCancel').onclick = ()=>done(false);
+      wrap.addEventListener('keydown', (ev)=>{
+        if (ev.key==='Escape') { ev.preventDefault(); done(false); }
+        if ((ev.ctrlKey||ev.metaKey) && ev.key==='Enter') { ev.preventDefault(); done(true); }
+      });
+      setTimeout(()=>ta.focus(),0);
+    });
+  }
+
+  // -------- IDs: 'new-' UUID + independent 8-hex short --------
+  function randHex(n){
+    if (window.crypto && crypto.getRandomValues){
+      const arr = new Uint8Array(n/2); crypto.getRandomValues(arr);
+      return Array.from(arr, b=>b.toString(16).padStart(2,'0')).join('');
+    }
+    return Array.from({length:n},()=>Math.floor(Math.random()*16).toString(16)).join('');
+  }
+  function genNewIds(){
+    // uuid prefix signals "new task" to your app's staging; short remains classic 8-hex for DnD
+    const uuid = 'new-' + randHex(16);      // e.g., new-a1b2c3d4e5f67890
+    const short = 'n-' + randHex(6);               // e.g., 7f9e02
+    return { uuid, short };
+  }
+  function makeNewTask(desc, project, tagsArr){
+    const ids = genNewIds();
+    return { uuid: ids.uuid, short: ids.short, desc, project, tags: tagsArr, has_depends:false };
+  }
+  function firstTag(t){ return (t.tags && t.tags.length) ? t.tags[0] : "(no tag)"; }
+
+  // -------- Rebinding: per-node + global --------
+  function rebindForNode(nodeEl){
+    try{
+      if (typeof attachDepHandleToNode === 'function') attachDepHandleToNode(nodeEl);
+      if (typeof __depHandleAuthorV6 === 'function') __depHandleAuthorV6(nodeEl);
+      if (typeof __depHandleAuthorDedupV6b === 'function') __depHandleAuthorDedupV6b(nodeEl);
+      nodeEl.setAttribute('draggable', 'true');    // harmless hint
+      nodeEl.classList.add('draggable-node');      // benign class for delegated DnD
+    }catch(_){}
+  }
+  function fireGlobalRebind(){
+    try{ document.dispatchEvent(new Event('twdata')); }catch(_){}
+  }
+
+  // -------- Place one task using app internals --------
+  function pushAndPlaceTask(t){
+    // model
+    window.TASKS.push(t);
+    try{ window.TASK_BY_SHORT[t.short] = t; }catch(_){}
+    // list
+    try{ renderList(); }catch(_){}
+    // builder + node enforcement
+    try{
+      const proj = t.project || "(no project)";
+      const tag  = firstTag(t);
+      if (typeof ensureTagArea==='function') ensureTagArea(proj, tag);
+      let el = null;
+      if (typeof addToBuilder==='function'){
+        el = addToBuilder(t, null, null);
+      }
+      // ensure DOM carries correct identifiers (some paths may skip data-short)
+      try{
+        if (!el || el.nodeType !== 1){
+          el = document.querySelector(`[data-uuid="${t.uuid}"]`) ||
+               document.querySelector(`#builderStage .node[data-short="${t.short}"]`);
+        }
+        if (el && el.nodeType === 1){
+          el.setAttribute('data-uuid', t.uuid);
+          el.setAttribute('data-short', t.short);  // keep 8-hex for DnD logic
+          rebindForNode(el);
+        }
+      }catch(_){}
+    }catch(_){}
+    try{ if (typeof updateConsole==='function') updateConsole(); }catch(_){}
+  }
+
+  // -------- 1) Intercept per-tag ＋ (.tagAddBtn) --------
+  document.addEventListener('click', async function(ev){
+    const btn = ev.target && ev.target.closest && ev.target.closest('.tagAddBtn');
+    if (!btn) return;
+
+    ev.preventDefault(); ev.stopImmediatePropagation();
+
+    const area  = btn.closest('.tagArea');
+    const project = area?.getAttribute('data-proj') || "(no project)";
+    const tag     = area?.getAttribute('data-tag')  || "(no tag)";
+
+    const val = await multilineDialog(`Add tasks to “${tag}” in ${project}`, 'One task per line…');
+    if (val==null) return;
+    const lines = String(val).split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+    if (!lines.length) return;
+
+    const tagsArr = (tag && tag !== "(no tag)") ? [tag] : [];
+    for (let i=0;i<lines.length;i++){
+      pushAndPlaceTask(makeNewTask(lines[i], project, tagsArr));
+      if (i && i%25===0) await new Promise(r=>setTimeout(r,0)); // yield on large batches
+    }
+    fireGlobalRebind(); // ensure DnD/hover binders include new nodes
+    console.log('[ml-add] added', lines.length, 'tasks to', project, '/', tag);
+  }, true);
+
+  // -------- 2) Intercept FAB (#fabAddNew) --------
+  (function(){
+    const fabBtn = document.getElementById('fabAddNew');
+    if (!fabBtn) return;
+    fabBtn.addEventListener('click', async function(ev){
+      ev.preventDefault(); ev.stopImmediatePropagation();
+
+      const descs = await multilineDialog('Add new tasks (one per line)', 'One task per line…');
+      if (descs==null) return;
+      const lines = String(descs).split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+      if (!lines.length) return;
+
+      // Ask once for project/tags (mirrors original flow)
+      const projs = (function(){
+        const set={}, arr=[];
+        try{
+          for (let i=0;i<(window.TASKS||[]).length;i++){
+            const p=(window.TASKS[i].project||"(no project)");
+            if(!set[p]){ set[p]=1; arr.push(p); }
+          }
+        }catch(_){}
+        arr.sort(); return arr;
+      })();
+
+      const defProj = projs[0] || "(no project)";
+      const project = prompt("Project (existing or new):", defProj) || "(no project)";
+      const tagsIn  = prompt("Tags (comma-separated):", "") || "";
+      const tagsArr = tagsIn.split(",").map(s=>s.trim()).filter(Boolean);
+
+      const onCanvas = (function(){
+        try{ return (window.projectAreas && typeof projectAreas.has==='function') ? projectAreas.has(project) : false; }catch(_){ return false; }
+      })();
+
+      for (let i=0;i<lines.length;i++){
+        const t = makeNewTask(lines[i], project, tagsArr);
+        window.TASKS.push(t);
+        try{ window.TASK_BY_SHORT[t.short] = t; }catch(_){}
+        try{ renderList(); }catch(_){}
+        if (onCanvas){
+          try{
+            if (typeof ensureTagArea==='function') ensureTagArea(project, firstTag(t));
+            if (typeof addToBuilder==='function'){
+              let el = addToBuilder(t, null, null) || null;
+              if (!el || el.nodeType !== 1){
+                el = document.querySelector(`[data-uuid="${t.uuid}"]`) ||
+                     document.querySelector(`#builderStage .node[data-short="${t.short}"]`);
+              }
+              if (el && el.nodeType === 1){
+                el.setAttribute('data-uuid', t.uuid);
+                el.setAttribute('data-short', t.short);
+                rebindForNode(el);
+              }
+            }
+          }catch(_){}
+        }
+        if (i && i%25===0) await new Promise(r=>setTimeout(r,0));
+      }
+
+      if (!onCanvas){
+        try{ alert(`Created ${lines.length} task(s). Add the project (“${project}”) to the canvas to place them.`); }catch(_){}
+      }
+      try{ if (typeof updateConsole==='function') updateConsole(); }catch(_){}
+      fireGlobalRebind();
+
+      console.log('[ml-add] added', lines.length, 'new task(s) to project', project);
+    }, true);
+  })();
+
+  console.log('[ml-add] multiline add enabled (new-uuid + 8hex short + rebind)');
+})();</script>

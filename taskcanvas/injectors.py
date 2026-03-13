@@ -1,7 +1,19 @@
 import re
 import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import Callable
+
+RUNTIME_ASSETS_DIR = Path(__file__).resolve().parent.parent / "templates" / "runtime_assets"
+
+
+@lru_cache(maxsize=None)
+def _load_runtime_asset(name: str) -> str:
+    path = RUNTIME_ASSETS_DIR / name
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as e:
+        raise RuntimeError(f"Failed to load runtime asset: {path} ({e})") from e
 
 ENERGY_ARROW_CSS = r"""
 <style id="__ENERGY_ARROW_CSS__">
@@ -469,303 +481,51 @@ def inject_hover_console_features(html: str, *, log=True) -> str:
         if idx == -1:
             return doc + snippet
         return doc[:idx] + snippet + doc[idx:]
+    snip_obs = _load_runtime_asset("injector_hover_stage_observer.js.html")
+    snip_shortify = _load_runtime_asset("injector_shortify_render.js.html")
+    snip_merge = _load_runtime_asset("injector_console_merge_v3.js.html")
+    snip_modify = _load_runtime_asset("injector_modify_stage_to_console.js.txt")
 
-    # ============= OBSERVER (toggle-aware ✓/🗑) =============
-    SNIP_OBS = r"""
-<script id="FEATURE_HOVER_STAGE_OBSERVER_V1">(function(){
-  if (window.__HOVER_STAGE_OBSERVER_V1__) return;
-  window.__HOVER_STAGE_OBSERVER_V1__ = true;
-
-  function resolveUUID(node){
-    if (!node) return "";
-    var uid = node.getAttribute && (node.getAttribute('data-uuid') || node.getAttribute('data-short')) || "";
-    if (!uid){
-      try{ var s = node.querySelector('.short'); if (s && s.textContent) uid = s.textContent.trim(); }catch(_){}
-    }
-    return uid || "";
-  }
-  function toShort(uid){
-    if (!uid) return "";
-    if (/^[0-9a-f]{6,8}$/i.test(uid)) return uid.slice(0,8);
-    try{
-      if (window.TASKS) for (var i=0;i<TASKS.length;i++) if (TASKS[i]?.uuid===uid) return TASKS[i].short || uid.slice(0,8);
-      if (window.TASK_BY_SHORT){ for (var k in TASK_BY_SHORT) if (TASK_BY_SHORT[k]?.uuid===uid) return k; }
-    }catch(_){}
-    return uid.slice(0,8);
-  }
-  function ensureArray(){ return (window.STAGED_CMDS = Array.isArray(window.STAGED_CMDS) ? window.STAGED_CMDS : []); }
-  function stage(kind, node){
-    var uid = resolveUUID(node); if (!uid) return;
-    var sid = toShort(uid);
-    var cmd = 'task '+sid+' '+(kind==='modify'?'modify':kind);
-    var A = ensureArray();
-    var opp = cmd.replace(/\b(done|delete)\b/, kind==='done'?'delete':'done');
-    for (var i=A.length-1;i>=0;i--){
-      var s = String(A[i]||'');
-      if (s === opp) A.splice(i,1);
-      if (s === cmd) return;
-    }
-    A.push(cmd);
-    try{ if (typeof updateConsole==='function') setTimeout(updateConsole,0); }catch(_){}
-    try{ if (typeof __depsOverlayRender==='function') setTimeout(__depsOverlayRender,0); }catch(_){}
-  }
-  function unstage(kind, node){
-    var uid = resolveUUID(node); if (!uid) return;
-    var sid = toShort(uid);
-    var cmd = 'task '+sid+' '+(kind==='modify'?'modify':kind);
-    var A = ensureArray();
-    for (var i=A.length-1;i>=0;i--){
-      if (String(A[i]||'') === cmd) A.splice(i,1);
-    }
-    try{ if (typeof updateConsole==='function') setTimeout(updateConsole,0); }catch(_){}
-    try{ if (typeof __depsOverlayRender==='function') setTimeout(__depsOverlayRender,0); }catch(_){}
-  }
-  function startObserver(){
-    var root = document.getElementById('builderStage') || document.body;
-    if (!root || root.__hoverObserver) return;
-    var obs = new MutationObserver(function(records){
-      for (var r of records){
-        if (r.type === 'attributes' && r.attributeName === 'class'){
-          var el = r.target; if (!el || !el.classList) continue;
-          // additions
-          if (el.classList.contains('stagedDone'))  stage('done',   el);
-          if (el.classList.contains('stagedDel'))   stage('delete', el);
-          // removals (using oldValue)
-          var ov = r.oldValue || "";
-          var hadDone = /\bstagedDone\b/.test(ov), hasDone = el.classList.contains('stagedDone');
-          var hadDel  = /\bstagedDel\b/.test(ov),  hasDel  = el.classList.contains('stagedDel');
-          if (hadDone && !hasDone) unstage('done', el);
-          if (hadDel  && !hasDel ) unstage('delete', el);
-        } else if (r.type === 'childList'){
-          r.removedNodes && r.removedNodes.forEach(function(n){
-            try{
-              if (n.nodeType !== 1) return;
-              if (n.classList && (n.classList.contains('stagedDone') || n.classList.contains('stagedDel'))){
-                unstage(n.classList.contains('stagedDone') ? 'done' : 'delete', n);
-              }
-              var marked = n.querySelectorAll && n.querySelectorAll('.stagedDone, .stagedDel');
-              if (marked && marked.length){ marked.forEach(function(m){
-                unstage(m.classList.contains('stagedDone') ? 'done' : 'delete', m);
-              });}
-            }catch(_){}
-          });
-        }
-      }
-    });
-    obs.observe(root, { subtree:true, attributes:true, attributeFilter:['class'], attributeOldValue:true, childList:true });
-    root.__hoverObserver = obs;
-  }
-  startObserver();
-  document.addEventListener('twdata', function(){ setTimeout(startObserver, 0); });
-  window.addEventListener('load', function(){ setTimeout(startObserver, 60); });
-  console.log('[observer] hover stage observer active (toggle-aware)');
-})();</script>
-""".strip("\n")
-
-    # ============= SHORTIFY (render-time) =============
-    SNIP_SHORTIFY = r"""
-<script id="FEATURE_SHORTIFY_RENDER_V1">(function(){
-  if (window.__SHORTIFY_RENDER__) return; window.__SHORTIFY_RENDER__=true;
-  function uuidToShort(uuid){
-    try{
-      if (!uuid) return "";
-      if (window.TASKS) for (var i=0;i<TASKS.length;i++) if (TASKS[i]?.uuid===uuid) return TASKS[i].short||uuid;
-      if (window.TASK_BY_SHORT){ for (var k in TASK_BY_SHORT) if (TASK_BY_SHORT[k]?.uuid===uuid) return k; }
-    }catch(_){}
-    return uuid;
-  }
-  function shortifyText(txt){
-    if (!txt) return txt;
-    return String(txt).replace(/\b([0-9a-f]{8}-[0-9a-f-]{13,})\b/ig, function(m){ return uuidToShort(m) || m; });
-  }
-  if (typeof window.updateConsole === 'function' && !window.updateConsole.__shortifyWrap){
-    var _u = window.updateConsole;
-    window.updateConsole = function(){
-      var rv = _u.apply(this, arguments);
-      try{ var el = document.getElementById('consoleText'); if (el && typeof el.value === 'string') el.value = shortifyText(el.value); }catch(_){}
-      return rv;
-    };
-    window.updateConsole.__shortifyWrap = true;
-  }
-  ['__depsOverlayRender','renderStagedOverlay'].forEach(function(fn){
-    if (typeof window[fn] === 'function' && !window[fn].__shortifyWrap){
-      var orig = window[fn];
-      window[fn] = function(){
-        var rv = orig.apply(this, arguments);
-        try{ var pre = document.getElementById('depCmdPre'); if (pre && typeof pre.textContent === 'string') pre.textContent = shortifyText(pre.textContent); }catch(_){}
-        return rv;
-      };
-      window[fn].__shortifyWrap = true;
-    }
-  });
-  try{ if (typeof updateConsole==='function') updateConsole(); }catch(_){}
-  try{ if (typeof __depsOverlayRender==='function') __depsOverlayRender(); }catch(_){}
-})();</script>
-""".strip("\n")
-
-  # ============= MERGE (textarea + Deps overlay) — V3 silent/efficient =============
-    SNIP_MERGE = r"""
-  <script id="FEATURE_CONSOLE_MERGE_V3">(function(){
-    if (window.__CONSOLE_MERGE_V3__) return; window.__CONSOLE_MERGE_V3__=true;
-
-    // --- util ---
-    function uuidToShort(uuid){
-      try{
-        if (!uuid) return "";
-        if (window.TASKS) for (var i=0;i<TASKS.length;i++) if (TASKS[i] && TASKS[i].uuid===uuid) return TASKS[i].short||uuid;
-        if (window.TASK_BY_SHORT) for (var k in TASK_BY_SHORT) if (TASK_BY_SHORT[k] && TASK_BY_SHORT[k].uuid===uuid) return k;
-      }catch(_){}
-      return uuid;
-    }
-    var UUID_RE = /\b([0-9a-f]{8}-[0-9a-f-]{13,})\b/ig;
-    function shortifyText(txt){
-      if (!txt || !UUID_RE.test(txt)) return txt||"";
-      UUID_RE.lastIndex = 0;
-      return String(txt).replace(UUID_RE, function(m){ return uuidToShort(m) || m; });
-    }
-    function lines(s){
-      if (!s) return [];
-      return String(s).replace(/\r\n/g,"\n").split("\n").map(function(x){return x.trim();}).filter(Boolean);
-    }
-    function uniqueMerge(baseText, stagedArr){
-      var base = lines(baseText);
-      var staged = Array.isArray(stagedArr) ? stagedArr : [];
-      var out=[], seen=Object.create(null);
-      for (var i=0;i<base.length;i++){ var s=base[i]; if (!s||seen[s]) continue; seen[s]=1; out.push(s); }
-      for (var j=0;j<staged.length;j++){ var t=staged[j]; if (!t||seen[t]) continue; seen[t]=1; out.push(t); }
-      return out.join("\n");
-    }
-
-    // --- writers with change detection ---
-    var _lastTextarea = null, _lastPre = null;
-    function mergeIntoTextarea(){
-      var el = document.getElementById("consoleText");
-      if (!el) return;
-      var merged = shortifyText(uniqueMerge(el.value, window.STAGED_CMDS||[]));
-      if (merged !== _lastTextarea){
-        el.value = merged;
-        _lastTextarea = merged;
-      }
-    }
-    function mergeIntoDepsOverlay(){
-      var pre = document.getElementById("depCmdPre");
-      if (!pre) return;
-      var merged = shortifyText(uniqueMerge(pre.textContent||"", window.STAGED_CMDS||[]));
-      if (merged !== _lastPre){
-        pre.textContent = merged;
-        _lastPre = merged;
-      }
-    }
-
-    // --- debounced runner ---
-    var _t = null, _queued = false;
-    function scheduleMerge(delay){
-      if (_queued) return;
-      _queued = true;
-      if (_t) clearTimeout(_t);
-      _t = setTimeout(function(){
-        _queued = false;
-        try{ mergeIntoTextarea(); mergeIntoDepsOverlay(); }catch(_){}
-      }, Math.max(50, delay|0)); // ~20fps
-    }
-
-    // --- wrap updateConsole once (after any other wrappers) ---
-    if (!window.updateConsole){
-      window.updateConsole = function(){ scheduleMerge(50); };
-    }else if (!window.updateConsole.__mergeV3){
-      var orig = window.updateConsole;
-      window.updateConsole = function(){ var rv = orig.apply(this, arguments); scheduleMerge(50); return rv; };
-      window.updateConsole.__mergeV3 = true;
-    }
-
-    // initial paint
-    scheduleMerge(0);
-  })();</script>
-  """.strip("\n")
-
-
-    # ============= MODIFY injector (normalize + short IDs; robust anchor) =============
-    MODIFY_MARK = "/* __PATCH_MODIFY_STAGE_TO_CONSOLE__ */"
-    SNIP_MODIFY = r"""
-          /* __PATCH_MODIFY_STAGE_TO_CONSOLE__ */
-          try{
-            (function(){
-              console.log("[hover/console] modify injector active");
-              function normalizeMods(arr){
-                var out = [], lastIdx = Object.create(null);
-                for (var i=0;i<arr.length;i++){
-                  var tok = String(arr[i]||'').trim(); if (!tok) continue;
-                  var m = tok.match(/^([^:\s]+):(.*)$/);
-                  if (m){
-                    var key = m[1].toLowerCase();
-                    if (lastIdx[key] != null){ out[lastIdx[key]] = tok; }
-                    else { lastIdx[key] = out.length; out.push(tok); }
-                  }else{
-                    out.push(tok);
-                  }
-                }
-                return out;
-              }
-              function toShortId(x){
-                try{
-                  var n = document.querySelector('#builderStage [data-uuid="'+x+'"]');
-                  if (n) return n.getAttribute('data-short') || String(x).slice(0,8);
-                }catch(_){}
-                var s = String(x||''); return s.length>8 ? s.slice(0,8) : s;
-              }
-              var sid = toShortId(id);
-              var modsArr = (Array.isArray(merged) ? merged.slice() : []);
-              if (!sid || !modsArr.length) return;
-              modsArr = normalizeMods(modsArr);
-              var line = 'task '+sid+' modify '+modsArr.join(' ');
-              var A = (window.STAGED_CMDS = window.STAGED_CMDS || []);
-              for (var i=A.length-1;i>=0;i--){
-                var s = String(A[i]||'');
-                if (s.indexOf('task '+sid+' modify ') === 0){ A.splice(i,1); }
-              }
-              A.push(line);
-              try{ if (typeof window.updateConsole==='function') setTimeout(window.updateConsole, 0); }catch(_){}
-              try{ if (typeof window.__depsOverlayRender==='function') setTimeout(window.__depsOverlayRender, 0); }catch(_){}
-            })();
-          }catch(_){}
-""".strip("\n")
+    modify_mark = "/* __PATCH_MODIFY_STAGE_TO_CONSOLE__ */"
 
     # Robust anchor for: ops.mods = merged;  (allows dot or ["mods"])
     pattern = r"(ops\s*(?:\.\s*|\[\s*['\"]\s*)mods(?:\s*['\"]\s*\])?\s*=\s*merged\s*;\s*)"
 
-    if MODIFY_MARK in html:
+    if modify_mark in html:
         logp("[gen] modify injector: already present (marker).")
     else:
         hit_count = [0]
+
         def _repl(m):
             hit_count[0] += 1
-            return m.group(1) + "\n" + SNIP_MODIFY + "\n"
+            return m.group(1) + "\n" + snip_modify + "\n"
+
         new_html = re.sub(pattern, _repl, html)
         if hit_count[0] > 0:
             logp(f"[gen] modify injector: anchored ({hit_count[0]} site(s)).")
             html = new_html
         else:
             # Fallback: append at </body> so it still works if the anchor shifts/minifies away
-            html = append_before_body(html, "<script>"+SNIP_MODIFY+"</script>\n")
+            html = append_before_body(html, "<script>" + snip_modify + "</script>\n")
             logp("[gen] modify injector: fallback appended at </body>.")
 
     # Ensure observer present
     if "FEATURE_HOVER_STAGE_OBSERVER_V1" not in html:
-        html = append_before_body(html, SNIP_OBS + "\n")
+        html = append_before_body(html, snip_obs + "\n")
         logp("[gen] observer: appended.")
     else:
         logp("[gen] observer: already present.")
 
     # Ensure shortify present
     if "FEATURE_SHORTIFY_RENDER_V1" not in html:
-        html = append_before_body(html, SNIP_SHORTIFY + "\n")
+        html = append_before_body(html, snip_shortify + "\n")
         logp("[gen] shortify: appended.")
     else:
         logp("[gen] shortify: already present.")
 
     # Ensure merge wrapper present
     if "FEATURE_CONSOLE_MERGE_V3" not in html:
-        html = append_before_body(html, SNIP_MERGE + "\n")
+        html = append_before_body(html, snip_merge + "\n")
         logp("[gen] merge wrapper: appended.")
     else:
         logp("[gen] merge wrapper: already present.")
@@ -784,204 +544,7 @@ def inject_multiline_add(html: str) -> str:
       - Rebinds interactions (twdata + per-node attachers)
     """
     JS_ID = "FEATURE_MULTILINE_ADD_V1"
-
-    js = r"""
-<script id="FEATURE_MULTILINE_ADD_V1">(function(){
-  if (window.__ML_ADD_V1__) return; window.__ML_ADD_V1__ = true;
-
-  // -------- UI: multiline textarea modal --------
-  function multilineDialog(title, placeholder){
-    return new Promise((resolve)=>{
-      const wrap = document.createElement('div');
-      wrap.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:999999;';
-      wrap.innerHTML = `
-        <div style="position:absolute;inset:0;background:rgba(0,0,0,.36)"></div>
-        <div style="position:relative;max-width:720px;width:92%;background:#111;color:#eee;border-radius:12px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.4)">
-          <div style="font-weight:700;margin-bottom:8px">${title||'Add tasks (one per line)'}</div>
-          <textarea id="mlAddTa" rows="8" autofocus
-            style="width:100%;background:#0c0f16;color:#e7e7ee;border:1px solid #2a3344;border-radius:10px;padding:10px;resize:vertical;line-height:1.3;"
-            placeholder="${placeholder||'One task per line…'}"></textarea>
-          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
-            <button id="mlAddCancel" style="padding:6px 12px;border:1px solid #333;background:#1a1f2b;color:#bbb;border-radius:8px;cursor:pointer">Cancel</button>
-            <button id="mlAddOk" style="padding:6px 12px;border:1px solid #3b82f6;background:#2563eb;color:#fff;border-radius:8px;cursor:pointer">Add</button>
-          </div>
-          <div style="font-size:12px;opacity:.7;margin-top:6px">Tip: Ctrl/⌘+Enter to submit</div>
-        </div>`;
-      document.body.appendChild(wrap);
-      const ta = wrap.querySelector('#mlAddTa');
-      const done = (ok)=>{ const v = ta.value; wrap.remove(); resolve(ok ? v : null); };
-      wrap.querySelector('#mlAddOk').onclick = ()=>done(true);
-      wrap.querySelector('#mlAddCancel').onclick = ()=>done(false);
-      wrap.addEventListener('keydown', (ev)=>{
-        if (ev.key==='Escape') { ev.preventDefault(); done(false); }
-        if ((ev.ctrlKey||ev.metaKey) && ev.key==='Enter') { ev.preventDefault(); done(true); }
-      });
-      setTimeout(()=>ta.focus(),0);
-    });
-  }
-
-  // -------- IDs: 'new-' UUID + independent 8-hex short --------
-  function randHex(n){
-    if (window.crypto && crypto.getRandomValues){
-      const arr = new Uint8Array(n/2); crypto.getRandomValues(arr);
-      return Array.from(arr, b=>b.toString(16).padStart(2,'0')).join('');
-    }
-    return Array.from({length:n},()=>Math.floor(Math.random()*16).toString(16)).join('');
-  }
-  function genNewIds(){
-    // uuid prefix signals "new task" to your app's staging; short remains classic 8-hex for DnD
-    const uuid = 'new-' + randHex(16);      // e.g., new-a1b2c3d4e5f67890
-    const short = 'n-' + randHex(6);               // e.g., 7f9e02
-    return { uuid, short };
-  }
-  function makeNewTask(desc, project, tagsArr){
-    const ids = genNewIds();
-    return { uuid: ids.uuid, short: ids.short, desc, project, tags: tagsArr, has_depends:false };
-  }
-  function firstTag(t){ return (t.tags && t.tags.length) ? t.tags[0] : "(no tag)"; }
-
-  // -------- Rebinding: per-node + global --------
-  function rebindForNode(nodeEl){
-    try{
-      if (typeof attachDepHandleToNode === 'function') attachDepHandleToNode(nodeEl);
-      if (typeof __depHandleAuthorV6 === 'function') __depHandleAuthorV6(nodeEl);
-      if (typeof __depHandleAuthorDedupV6b === 'function') __depHandleAuthorDedupV6b(nodeEl);
-      nodeEl.setAttribute('draggable', 'true');    // harmless hint
-      nodeEl.classList.add('draggable-node');      // benign class for delegated DnD
-    }catch(_){}
-  }
-  function fireGlobalRebind(){
-    try{ document.dispatchEvent(new Event('twdata')); }catch(_){}
-  }
-
-  // -------- Place one task using app internals --------
-  function pushAndPlaceTask(t){
-    // model
-    window.TASKS.push(t);
-    try{ window.TASK_BY_SHORT[t.short] = t; }catch(_){}
-    // list
-    try{ renderList(); }catch(_){}
-    // builder + node enforcement
-    try{
-      const proj = t.project || "(no project)";
-      const tag  = firstTag(t);
-      if (typeof ensureTagArea==='function') ensureTagArea(proj, tag);
-      let el = null;
-      if (typeof addToBuilder==='function'){
-        el = addToBuilder(t, null, null);
-      }
-      // ensure DOM carries correct identifiers (some paths may skip data-short)
-      try{
-        if (!el || el.nodeType !== 1){
-          el = document.querySelector(`[data-uuid="${t.uuid}"]`) ||
-               document.querySelector(`#builderStage .node[data-short="${t.short}"]`);
-        }
-        if (el && el.nodeType === 1){
-          el.setAttribute('data-uuid', t.uuid);
-          el.setAttribute('data-short', t.short);  // keep 8-hex for DnD logic
-          rebindForNode(el);
-        }
-      }catch(_){}
-    }catch(_){}
-    try{ if (typeof updateConsole==='function') updateConsole(); }catch(_){}
-  }
-
-  // -------- 1) Intercept per-tag ＋ (.tagAddBtn) --------
-  document.addEventListener('click', async function(ev){
-    const btn = ev.target && ev.target.closest && ev.target.closest('.tagAddBtn');
-    if (!btn) return;
-
-    ev.preventDefault(); ev.stopImmediatePropagation();
-
-    const area  = btn.closest('.tagArea');
-    const project = area?.getAttribute('data-proj') || "(no project)";
-    const tag     = area?.getAttribute('data-tag')  || "(no tag)";
-
-    const val = await multilineDialog(`Add tasks to “${tag}” in ${project}`, 'One task per line…');
-    if (val==null) return;
-    const lines = String(val).split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-    if (!lines.length) return;
-
-    const tagsArr = (tag && tag !== "(no tag)") ? [tag] : [];
-    for (let i=0;i<lines.length;i++){
-      pushAndPlaceTask(makeNewTask(lines[i], project, tagsArr));
-      if (i && i%25===0) await new Promise(r=>setTimeout(r,0)); // yield on large batches
-    }
-    fireGlobalRebind(); // ensure DnD/hover binders include new nodes
-    console.log('[ml-add] added', lines.length, 'tasks to', project, '/', tag);
-  }, true);
-
-  // -------- 2) Intercept FAB (#fabAddNew) --------
-  (function(){
-    const fabBtn = document.getElementById('fabAddNew');
-    if (!fabBtn) return;
-    fabBtn.addEventListener('click', async function(ev){
-      ev.preventDefault(); ev.stopImmediatePropagation();
-
-      const descs = await multilineDialog('Add new tasks (one per line)', 'One task per line…');
-      if (descs==null) return;
-      const lines = String(descs).split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-      if (!lines.length) return;
-
-      // Ask once for project/tags (mirrors original flow)
-      const projs = (function(){
-        const set={}, arr=[];
-        try{
-          for (let i=0;i<(window.TASKS||[]).length;i++){
-            const p=(window.TASKS[i].project||"(no project)");
-            if(!set[p]){ set[p]=1; arr.push(p); }
-          }
-        }catch(_){}
-        arr.sort(); return arr;
-      })();
-
-      const defProj = projs[0] || "(no project)";
-      const project = prompt("Project (existing or new):", defProj) || "(no project)";
-      const tagsIn  = prompt("Tags (comma-separated):", "") || "";
-      const tagsArr = tagsIn.split(",").map(s=>s.trim()).filter(Boolean);
-
-      const onCanvas = (function(){
-        try{ return (window.projectAreas && typeof projectAreas.has==='function') ? projectAreas.has(project) : false; }catch(_){ return false; }
-      })();
-
-      for (let i=0;i<lines.length;i++){
-        const t = makeNewTask(lines[i], project, tagsArr);
-        window.TASKS.push(t);
-        try{ window.TASK_BY_SHORT[t.short] = t; }catch(_){}
-        try{ renderList(); }catch(_){}
-        if (onCanvas){
-          try{
-            if (typeof ensureTagArea==='function') ensureTagArea(project, firstTag(t));
-            if (typeof addToBuilder==='function'){
-              let el = addToBuilder(t, null, null) || null;
-              if (!el || el.nodeType !== 1){
-                el = document.querySelector(`[data-uuid="${t.uuid}"]`) ||
-                     document.querySelector(`#builderStage .node[data-short="${t.short}"]`);
-              }
-              if (el && el.nodeType === 1){
-                el.setAttribute('data-uuid', t.uuid);
-                el.setAttribute('data-short', t.short);
-                rebindForNode(el);
-              }
-            }
-          }catch(_){}
-        }
-        if (i && i%25===0) await new Promise(r=>setTimeout(r,0));
-      }
-
-      if (!onCanvas){
-        try{ alert(`Created ${lines.length} task(s). Add the project (“${project}”) to the canvas to place them.`); }catch(_){}
-      }
-      try{ if (typeof updateConsole==='function') updateConsole(); }catch(_){}
-      fireGlobalRebind();
-
-      console.log('[ml-add] added', lines.length, 'new task(s) to project', project);
-    }, true);
-  })();
-
-  console.log('[ml-add] multiline add enabled (new-uuid + 8hex short + rebind)');
-})();</script>
-""".strip("\n")
+    js = _load_runtime_asset("injector_multiline_add.js.html")
 
     if JS_ID not in html:
         html = html.replace("</body>", js + "\n</body>")
@@ -998,229 +561,7 @@ def inject_newtask_console_sync(html: str) -> str:
     Idempotent via <script id="FEATURE_NEW_TASK_CONSOLE_SYNC_V2">.
     """
     JS_ID = "FEATURE_NEW_TASK_CONSOLE_SYNC_V2"
-    js = r"""
-<script id="FEATURE_NEW_TASK_CONSOLE_SYNC_V2">(function(){
-  if (window.__NEW_TASK_SYNC_V2__) return; window.__NEW_TASK_SYNC_V2__ = true;
-
-  // --- 1) New-ID detection: uuid 'new-*' or short 'n-<6hex>'
-  window.isNewId = window.isNewId || function(x){
-    if (!x) return false;
-    var s = String(x);
-    return /^new-/.test(s) || /^n-[0-9a-f]{6}$/i.test(s);
-  };
-
-  // --- 2) Fold holder for per-new-task state (mods, tags, done/deleted)
-  function ensureFOLD(){ if (!window.FOLD) window.FOLD = Object.create(null); return window.FOLD; }
-  function ensureFold(id){
-    var F = ensureFOLD();
-    var f = F[id] || (F[id]={});
-    if (!f.tags) f.tags = Object.create(null);
-    if (!Array.isArray(f.extra)) f.extra = [];
-    return f;
-  }
-  function parseModsToFold(f, modsTokens){
-    if (!Array.isArray(modsTokens)) return;
-    var seenIdx = Object.create(null), extra = [];
-    for (var i=0;i<modsTokens.length;i++){
-      var tok = String(modsTokens[i]||'').trim(); if (!tok) continue;
-      if (tok[0]==='+' && tok.length>1){ f.tags[tok.slice(1)] = true; continue; }
-      if (tok[0]==='-' && tok.length>1){ delete f.tags[tok.slice(1)]; continue; }
-      var m = tok.match(/^([^:\s]+):(.*)$/);
-      if (m){
-        var k = m[1].toLowerCase(), v = m[2];
-        if (k==='project'){ f.project = v || "(no project)"; continue; }
-        if (k==='due'){ f.due = v; continue; }
-        if (seenIdx[k]!=null){ extra[seenIdx[k]] = tok; } else { seenIdx[k]=extra.length; extra.push(tok); }
-      } else {
-        extra.push(tok);
-      }
-    }
-    f.extra = extra;
-  }
-
-  // --- 3) Pull staged lines that (accidentally) target new IDs into FOLD and remove them
-  function reconcileNewStaged(){
-    var A = Array.isArray(window.STAGED_CMDS) ? window.STAGED_CMDS : (window.STAGED_CMDS = []);
-    for (var i=A.length-1;i>=0;i--){
-      var s = String(A[i]||'').trim();
-      var m = s.match(/^task\s+(\S+)\s+(done|delete|modify)\b(?:\s+(.*))?$/i);
-      if (!m) continue;
-      var id = m[1], verb = (m[2]||'').toLowerCase(), rest = (m[3]||'').trim();
-      if (!window.isNewId(id)) continue;
-      var f = ensureFold(id);
-      if (verb==='done'){ f.done = true; }
-      else if (verb==='delete'){ f.deleted = true; }
-      else if (verb==='modify'){ parseModsToFold(f, rest ? rest.split(/\s+/) : []); }
-      A.splice(i,1);
-    }
-  }
-
-  // --- 4) Build canonical lines for all NEW tasks (one line each; add OR log)
-  function newTaskConsoleLines(){
-    var out = [];
-    var T = Array.isArray(window.TASKS) ? window.TASKS : [];
-    for (var i=0;i<T.length;i++){
-      var t = T[i]; if (!t) continue;
-      var id = t.uuid || t.short; if (!window.isNewId(id)) continue;
-
-      // read current hover state from DOM
-      var nd = document.querySelector('.node[data-uuid="'+id+'"], .node[data-short="'+id+'"]');
-      var done = false, deleted = false;
-      if (nd){
-        done    = nd.classList.contains('stagedDone') || nd.classList.contains('completed') || nd.getAttribute('data-done')==='1';
-        deleted = nd.classList.contains('stagedDel')  || nd.getAttribute('data-deleted')==='1';
-      }
-
-      // merge with FOLD (which also tracks staged ops we absorbed)
-      var f = (ensureFOLD()[t.uuid] || ensureFOLD()[t.short] || {});
-      if (f.done) done = true;
-      if (f.deleted) deleted = true;
-      if (deleted) continue; // delete removes any new-task line
-
-      var parts = [ done ? "task log" : "task add", (t.desc||"(no description)") ];
-
-      var proj = (typeof f.project!=='undefined') ? f.project : (t.project || "(no project)");
-      if (proj && proj!=="(no project)") parts.push("project:"+proj);
-
-      var tagset = Object.create(null);
-      if (Array.isArray(t.tags)) for (var k=0;k<t.tags.length;k++){ var tg=t.tags[k]; if (tg && tg!=="(no tag)") tagset[tg]=true; }
-      if (f.tags) for (var tg in f.tags){ if (f.tags[tg]) tagset[tg]=true; else delete tagset[tg]; }
-      Object.keys(tagset).forEach(function(tg){ parts.push("+"+tg); });
-
-      var due = (typeof f.due!=='undefined') ? f.due : t.due;
-      if (due) parts.push("due:"+due);
-
-      if (Array.isArray(f.extra)) for (var q=0;q<f.extra.length;q++){ parts.push(f.extra[q]); }
-
-      out.push(parts.join(" "));
-    }
-    return out;
-  }
-
-  // --- 5) Helpers for merging & filtering
-  function splitLines(s){
-    if (!s) return [];
-    return String(s).replace(/\r\n/g,"\n").split("\n").map(function(x){return x.trim();}).filter(Boolean);
-  }
-  function writeConsole(lines){
-    try{
-      var txt = (lines||[]).join("\n");
-      var ta = document.getElementById('consoleText');
-      if (ta && typeof ta.value==='string') ta.value = txt;
-      var pre = document.getElementById('depCmdPre');
-      if (pre) pre.textContent = txt;
-    }catch(_){}
-  }
-  function newTaskDescriptors(){
-    var set = Object.create(null);
-    var T = Array.isArray(window.TASKS) ? window.TASKS : [];
-    for (var i=0;i<T.length;i++){
-      var t=T[i]; if (!t) continue;
-      var id = t.uuid || t.short; if (!window.isNewId(id)) continue;
-      var d = (t.desc||"").trim();
-      if (d) set[d]=1;
-    }
-    return set;
-  }
-  // Remove any “task add …” or “task log …” lines that appear to belong to NEW tasks (by description match)
-  function stripCurrentNewTaskLines(currentLines){
-    var descs = newTaskDescriptors();
-    return currentLines.filter(function(line){
-      var m = line.match(/^(task\s+(?:add|log)\s+)(.*)$/i);
-      if (!m) return true;
-      var rest = m[2]||"";
-      // basic containment check on the description token
-      for (var d in descs){ if (descs[d] && rest.indexOf(d) !== -1) return false; }
-      return true;
-    });
-  }
-  // If both "task add X" and "task log X" exist, keep only log
-  function preferLogOverAdd(lines){
-    var bestByRest = Object.create(null), order=[];
-    for (var i=0;i<lines.length;i++){
-      var s = lines[i], m = s.match(/^(task\s+(add|log)\s+)(.*)$/i);
-      if (!m){ if (!bestByRest["__misc__"]) { bestByRest["__misc__"]=[]; order.push("__misc__"); } bestByRest["__misc__"].push(s); continue; }
-      var verb = (m[2]||"").toLowerCase();
-      var rest = m[3]||"";
-      var key = "REST::"+rest;
-      if (!(key in bestByRest)){ bestByRest[key] = s; order.push(key); }
-      else {
-        var prev = bestByRest[key];
-        if (/^task\s+add\s+/i.test(prev) && verb === "log"){ bestByRest[key] = s; } // upgrade to log
-      }
-    }
-    var out=[];
-    for (var j=0;j<order.length;j++){
-      var k = order[j], v = bestByRest[k];
-      if (Array.isArray(v)) out = out.concat(v);
-      else out.push(v);
-    }
-    return out;
-  }
-
-  // --- 6) Wrap updateConsole: rebuild with strict new-task policy + dedupe
-  (function(){
-    var _u = window.updateConsole;
-    window.updateConsole = function(){
-      try{ reconcileNewStaged(); }catch(_){}
-      var rv = (typeof _u==='function') ? _u.apply(this, arguments) : undefined;
-
-      try{
-        var ta = document.getElementById('consoleText');
-        var currentText = (ta && typeof ta.value==='string') ? ta.value : '';
-        var current = splitLines(currentText);
-
-        // Strip any old add/log lines for NEW tasks first
-        var currentSansNew = stripCurrentNewTaskLines(current);
-
-        // Recompute canonical NEW lines + add any non-new staged lines (if any)
-        var newLines = newTaskConsoleLines();
-        var staged  = Array.isArray(window.STAGED_CMDS) ? window.STAGED_CMDS.slice() : [];
-
-        // Merge: (current minus old new-lines) + new-lines + staged; then prefer log over add
-        var merged = currentSansNew.concat(newLines).concat(staged);
-
-        var finalLines = preferLogOverAdd(merged);
-        var finalText  = finalLines.join("\n");
-        if (finalText !== currentText){
-          writeConsole(finalLines);
-        }
-      }catch(_){}
-
-      return rv;
-    };
-    window.updateConsole.__newTaskSyncWrap = true;
-  })();
-
-  // --- 7) Track hover class flips to keep FOLD up to date → refresh console
-  (function(){
-    var root = document.getElementById('builderStage') || document.body;
-    if (!root) return;
-    var obs = new MutationObserver(function(recs){
-      var touch = false;
-      for (var r of recs){
-        if (r.type!=='attributes' || r.attributeName!=='class') continue;
-        var el = r.target; if (!el || !el.classList) continue;
-        var id = el.getAttribute('data-uuid') || el.getAttribute('data-short'); if (!window.isNewId(id)) continue;
-        var f = ensureFold(id);
-        var hadDone = /\bstagedDone\b/.test(r.oldValue||''), hasDone = el.classList.contains('stagedDone');
-        var hadDel  = /\bstagedDel\b/.test(r.oldValue||''),  hasDel  = el.classList.contains('stagedDel');
-        if (hasDone) f.done = true;  if (hadDone && !hasDone) f.done = false;
-        if (hasDel)  f.deleted = true; if (hadDel && !hasDel)  f.deleted = false;
-        touch = true;
-      }
-      if (touch){ try{ setTimeout(updateConsole, 0); }catch(_){} }
-    });
-    obs.observe(root, {subtree:true, attributes:true, attributeFilter:['class'], attributeOldValue:true});
-  })();
-
-  // --- 8) First paint
-  try{ reconcileNewStaged(); }catch(_){}
-  try{ setTimeout(function(){ if (typeof updateConsole==='function') updateConsole(); }, 0); }catch(_){}
-  console.log('[new-task-console-sync] v2.2 active');
-})();</script>
-
-""".strip("\n")
+    js = _load_runtime_asset("injector_new_task_console_sync_v2.js.html")
 
     if JS_ID not in html:
         html = html.replace("</body>", js + "\n</body>")

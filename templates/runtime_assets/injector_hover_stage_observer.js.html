@@ -1,0 +1,88 @@
+<script id="FEATURE_HOVER_STAGE_OBSERVER_V1">(function(){
+  if (window.__HOVER_STAGE_OBSERVER_V1__) return;
+  window.__HOVER_STAGE_OBSERVER_V1__ = true;
+
+  function resolveUUID(node){
+    if (!node) return "";
+    var uid = node.getAttribute && (node.getAttribute('data-uuid') || node.getAttribute('data-short')) || "";
+    if (!uid){
+      try{ var s = node.querySelector('.short'); if (s && s.textContent) uid = s.textContent.trim(); }catch(_){}
+    }
+    return uid || "";
+  }
+  function toShort(uid){
+    if (!uid) return "";
+    if (/^[0-9a-f]{6,8}$/i.test(uid)) return uid.slice(0,8);
+    try{
+      if (window.TASKS) for (var i=0;i<TASKS.length;i++) if (TASKS[i]?.uuid===uid) return TASKS[i].short || uid.slice(0,8);
+      if (window.TASK_BY_SHORT){ for (var k in TASK_BY_SHORT) if (TASK_BY_SHORT[k]?.uuid===uid) return k; }
+    }catch(_){}
+    return uid.slice(0,8);
+  }
+  function ensureArray(){ return (window.STAGED_CMDS = Array.isArray(window.STAGED_CMDS) ? window.STAGED_CMDS : []); }
+  function stage(kind, node){
+    var uid = resolveUUID(node); if (!uid) return;
+    var sid = toShort(uid);
+    var cmd = 'task '+sid+' '+(kind==='modify'?'modify':kind);
+    var A = ensureArray();
+    var opp = cmd.replace(/\b(done|delete)\b/, kind==='done'?'delete':'done');
+    for (var i=A.length-1;i>=0;i--){
+      var s = String(A[i]||'');
+      if (s === opp) A.splice(i,1);
+      if (s === cmd) return;
+    }
+    A.push(cmd);
+    try{ if (typeof updateConsole==='function') setTimeout(updateConsole,0); }catch(_){}
+    try{ if (typeof __depsOverlayRender==='function') setTimeout(__depsOverlayRender,0); }catch(_){}
+  }
+  function unstage(kind, node){
+    var uid = resolveUUID(node); if (!uid) return;
+    var sid = toShort(uid);
+    var cmd = 'task '+sid+' '+(kind==='modify'?'modify':kind);
+    var A = ensureArray();
+    for (var i=A.length-1;i>=0;i--){
+      if (String(A[i]||'') === cmd) A.splice(i,1);
+    }
+    try{ if (typeof updateConsole==='function') setTimeout(updateConsole,0); }catch(_){}
+    try{ if (typeof __depsOverlayRender==='function') setTimeout(__depsOverlayRender,0); }catch(_){}
+  }
+  function startObserver(){
+    var root = document.getElementById('builderStage') || document.body;
+    if (!root || root.__hoverObserver) return;
+    var obs = new MutationObserver(function(records){
+      for (var r of records){
+        if (r.type === 'attributes' && r.attributeName === 'class'){
+          var el = r.target; if (!el || !el.classList) continue;
+          // additions
+          if (el.classList.contains('stagedDone'))  stage('done',   el);
+          if (el.classList.contains('stagedDel'))   stage('delete', el);
+          // removals (using oldValue)
+          var ov = r.oldValue || "";
+          var hadDone = /\bstagedDone\b/.test(ov), hasDone = el.classList.contains('stagedDone');
+          var hadDel  = /\bstagedDel\b/.test(ov),  hasDel  = el.classList.contains('stagedDel');
+          if (hadDone && !hasDone) unstage('done', el);
+          if (hadDel  && !hasDel ) unstage('delete', el);
+        } else if (r.type === 'childList'){
+          r.removedNodes && r.removedNodes.forEach(function(n){
+            try{
+              if (n.nodeType !== 1) return;
+              if (n.classList && (n.classList.contains('stagedDone') || n.classList.contains('stagedDel'))){
+                unstage(n.classList.contains('stagedDone') ? 'done' : 'delete', n);
+              }
+              var marked = n.querySelectorAll && n.querySelectorAll('.stagedDone, .stagedDel');
+              if (marked && marked.length){ marked.forEach(function(m){
+                unstage(m.classList.contains('stagedDone') ? 'done' : 'delete', m);
+              });}
+            }catch(_){}
+          });
+        }
+      }
+    });
+    obs.observe(root, { subtree:true, attributes:true, attributeFilter:['class'], attributeOldValue:true, childList:true });
+    root.__hoverObserver = obs;
+  }
+  startObserver();
+  document.addEventListener('twdata', function(){ setTimeout(startObserver, 0); });
+  window.addEventListener('load', function(){ setTimeout(startObserver, 60); });
+  console.log('[observer] hover stage observer active (toggle-aware)');
+})();</script>
