@@ -1,0 +1,107 @@
+<script id="PATCH_FOLLOW_EDGES_ON_MOVE_V1">(function(){
+  if (window.__FOLLOW_EDGES_ON_MOVE_V1__) return; window.__FOLLOW_EDGES_ON_MOVE_V1__ = true;
+
+  function stageRoot(){ return document.getElementById('builderStage') || document.body; }
+  function linksRoot(){ return document.getElementById('builderLinks') || document; }
+  function px(n){ return (typeof n==='number' && isFinite(n)) ? n : 0; }
+
+  function nodeCenter(node){
+    var st = stageRoot();
+    var nb = node.getBoundingClientRect();
+    var sb = st.getBoundingClientRect ? st.getBoundingClientRect() : {left:0,top:0};
+    var x = nb.left - sb.left + nb.width/2;
+    var y = nb.top  - sb.top  + nb.height/2;
+    return {x: px(x), y: px(y)};
+  }
+  function findNodeById(id){
+    if (!id) return null;
+    var sel = `[data-short="${CSS.escape(id)}"], [data-uuid="${CSS.escape(id)}"]`;
+    return stageRoot().querySelector(sel);
+  }
+  function cubicPath(p1, p2){
+    var dx = Math.max(40, Math.abs(p2.x - p1.x) * 0.5);
+    var c1 = {x: p1.x + dx, y: p1.y};
+    var c2 = {x: p2.x - dx, y: p2.y};
+    return `M ${p1.x} ${p1.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${p2.x} ${p2.y}`;
+  }
+
+  function recomputeEdge(el){
+    try{
+      var from = el.getAttribute('data-from');
+      var to   = el.getAttribute('data-to');
+      if (!from || !to) return;
+      var n1 = findNodeById(from), n2 = findNodeById(to);
+      if (!n1 || !n2) return;
+
+      var p1 = nodeCenter(n1), p2 = nodeCenter(n2);
+
+      if (el.tagName.toLowerCase() === 'line'){
+        el.setAttribute('x1', p1.x); el.setAttribute('y1', p1.y);
+        el.setAttribute('x2', p2.x); el.setAttribute('y2', p2.y);
+      } else {
+        el.setAttribute('d', cubicPath(p1,p2));
+        el.setAttribute('fill','none');
+      }
+      // No arrows on staged/animated dashes
+      el.removeAttribute('marker-end');
+    }catch(_){}
+  }
+
+  function recomputeAll(){
+    var root = linksRoot();
+    var sel = [
+      '#builderLinks path[data-from][data-to]',
+      '#builderLinks line[data-from][data-to]',
+      'svg path[data-from][data-to]',
+      'svg line[data-from][data-to]'
+    ].join(',');
+    root.querySelectorAll(sel).forEach(recomputeEdge);
+  }
+
+  var raf = 0, queued = false;
+  function scheduleRecompute(){
+    if (queued) return;
+    queued = true;
+    if (raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(function(){ queued = false; recomputeAll(); });
+  }
+
+  // Hook your common render/link functions
+  ;['drawLinks','renderStagedOverlay','renderDepsOverlay','__depsOverlayRender',
+    'updateLinks','redrawLinks'].forEach(function(name){
+    var fn = window[name];
+    if (typeof fn === 'function' && !fn.__followEdgesWrap){
+      var orig = fn;
+      window[name] = function(){ var rv = orig.apply(this, arguments); scheduleRecompute(); return rv; };
+      window[name].__followEdgesWrap = true;
+    }
+  });
+
+  // Observe node pos/cls changes
+  try{
+    var mo = new MutationObserver(function(list){
+      for (var m of list){
+        if (m.type === 'attributes' && m.target && m.target.classList && m.target.classList.contains('node')){
+          scheduleRecompute(); break;
+        }
+      }
+    });
+    mo.observe(stageRoot(), {subtree:true, attributes:true, attributeFilter:['style','transform','class']});
+  }catch(_){}
+
+  // Drag feedback
+  var dragging = false;
+  document.addEventListener('mousedown', function(ev){
+    if (ev.target && (ev.target.closest('.node') || ev.target.classList.contains('node'))){ dragging = true; }
+  }, true);
+  document.addEventListener('mouseup', function(){ dragging = false; scheduleRecompute(); }, true);
+  document.addEventListener('mousemove', function(){ if (dragging) scheduleRecompute(); }, true);
+
+  // App refresh signal
+  document.addEventListener('twdata', function(){ scheduleRecompute(); });
+
+  // Initial passes
+  scheduleRecompute();
+  setTimeout(scheduleRecompute, 80);
+  setTimeout(scheduleRecompute, 300);
+})();</script>

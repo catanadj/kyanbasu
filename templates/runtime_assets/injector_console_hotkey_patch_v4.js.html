@@ -1,0 +1,57 @@
+<script id="FEATURE_CONSOLE_HOTKEY_PATCH_V4">(function(){
+  if (window.__HOTKEY_PATCH_V4__) return; window.__HOTKEY_PATCH_V4__ = true;
+
+  var BYPASS = false; // let our synthetic events through
+
+  function isKeyD(ev){
+    return (ev.key||'').toLowerCase() === 'd';
+  }
+  function isAllowedCombo(ev){
+    // ONLY Ctrl+Shift+D (or Cmd+Shift+D); Alt must NOT be pressed
+    return isKeyD(ev) && ev.shiftKey && (ev.ctrlKey || ev.metaKey) && !ev.altKey;
+  }
+
+  // Block any 'd' / 'D' that is NOT the allowed combo.
+  function makeBlocker(){
+    return function(ev){
+      if (BYPASS) return;              // let our synthetic press pass
+      if (!isKeyD(ev)) return;         // not D/d
+      if (isAllowedCombo(ev)) return;  // allow the combo (we’ll remap below)
+      // Stop reaching legacy handlers everywhere (capture), but don't preventDefault,
+      // so typing still inserts the character in inputs/textareas.
+      ev.stopImmediatePropagation();
+    };
+  }
+
+  var blocker = makeBlocker();
+
+  // Install capture blockers on all key roots and all phases
+  var targets = [window, document];
+  try { targets.push(document.documentElement); } catch(_) {}
+  try { targets.push(document.body); } catch(_) {}
+  ['keydown','keypress','keyup'].forEach(function(type){
+    targets.forEach(function(t){
+      try { t.addEventListener(type, blocker, true); } catch(_) {}
+    });
+  });
+
+  // Remap Ctrl/Cmd+Shift+D → synthesize one 'd' sequence so the old toggle still works
+  function onRemap(ev){
+    if (!isAllowedCombo(ev)) return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    BYPASS = true;
+    try{
+      var opts = {bubbles:true};
+      document.dispatchEvent(new KeyboardEvent('keydown',  Object.assign({key:'d', code:'KeyD'}, opts)));
+      document.dispatchEvent(new KeyboardEvent('keypress', Object.assign({key:'d', code:'KeyD'}, opts)));
+      document.dispatchEvent(new KeyboardEvent('keyup',    Object.assign({key:'d', code:'KeyD'}, opts)));
+    } finally {
+      setTimeout(function(){ BYPASS = false; }, 0);
+    }
+  }
+  // Listen early so we own the combo
+  window.addEventListener('keydown', onRemap, true);
+
+  console.log('[hotkey] ONLY Ctrl+Shift+D toggles console; plain/Shift D suppressed');
+})();</script>

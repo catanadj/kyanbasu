@@ -1,0 +1,51 @@
+<style id="PATCH_STAGED_LINE_ANIM_V1">
+/* Animate staged dependency lines in red and remove arrows */
+@keyframes energyFlow {
+  from { stroke-dashoffset: 48; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* EXISTING/STAGED edges (completed dependencies) - RED */
+#builderLinks path.dep-edge.existing,
+#builderLinks line.dep-edge.existing,
+#builderLinks path.link-existing,
+#builderLinks line.link-existing,
+#depExistingEdges path,
+#depExistingEdges line,
+path.dep-edge.staged,
+line.dep-edge.staged,
+path.existing[class*="dep"],
+line.existing[class*="dep"] {
+  stroke: #ec4899 !important;  /* Pink */
+  filter: drop-shadow(0 0 3px rgba(236,72,153,.70)) !important;
+  stroke-width: 2.25px !important;
+  fill: none !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+  stroke-dasharray: 6 6 !important;
+  animation: energyFlow 900ms linear infinite !important;
+  marker-end: none !important;
+  filter: drop-shadow(0 0 3px rgba(239,68,68,.70)) !important;
+}
+
+/* STAGING edges (preview while dragging) - BLUE - keep existing system */
+#builderStage path.staged-energy-edge,
+#builderStage line.staged-energy-edge {
+  stroke: #60a5fa !important;
+  stroke-width: 2.25px !important;
+  fill: none !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+  stroke-dasharray: 6 6 !important;
+  animation: energyFlow 900ms linear infinite !important;
+  marker-end: none !important;
+  filter: drop-shadow(0 0 3px rgba(96,165,250,.70)) !important;
+}
+
+/* Hide dots in staging area */
+#builderStage circle,
+#builderStage .energy-dot,
+#builderStage .pulse-dot {
+  display: none !important;
+}
+</style>

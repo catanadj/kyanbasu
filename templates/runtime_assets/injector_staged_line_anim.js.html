@@ -1,0 +1,109 @@
+<script id="PATCH_STAGED_LINE_ANIM_JS_V1">(function(){
+  if (window.__PATCH_STAGED_LINE_ANIM__) return; window.__PATCH_STAGED_LINE_ANIM__ = true;
+
+  // Process EXISTING/STAGED edges (RED) - completed dependencies
+  function restyleExistingEdges(root){
+    var r = root || document;
+    var existingSelectors = [
+      '#builderLinks path.dep-edge.existing',
+      '#builderLinks line.dep-edge.existing',
+      '#builderLinks path.link-existing',
+      '#builderLinks line.link-existing',
+      '#depExistingEdges path',
+      '#depExistingEdges line',
+      'path.dep-edge.staged',
+      'line.dep-edge.staged',
+      'path.existing[class*="dep"]',
+      'line.existing[class*="dep"]'
+    ];
+    
+    existingSelectors.forEach(function(sel){
+      r.querySelectorAll(sel).forEach(function(el){
+        // Skip if this is in the staging area (preview)
+        if (el.closest('#builderStage')) return;
+        
+        // Remove arrow marker
+        if (el.getAttribute('marker-end')) el.removeAttribute('marker-end');
+        
+        // Ensure fill is none for proper stroke rendering
+        if (el.getAttribute('fill') !== 'none') el.setAttribute('fill','none');
+        
+        // Force RED stroke-dasharray
+        el.style.strokeDasharray = '6 6';
+        el.style.animation = 'energyFlow 900ms linear infinite';
+        
+        // Mark as processed
+        el.setAttribute('data-existing-animated', 'true');
+      });
+    });
+  }
+
+  // DON'T touch staging edges - let the existing __ENERGY_ARROW_JS__ handle them
+  // Just ensure their marker-end is removed if present
+  function ensureStagingNoArrows(root){
+    var r = root || document;
+    r.querySelectorAll('#builderStage path, #builderStage line').forEach(function(el){
+      if (el.getAttribute('marker-end')) el.removeAttribute('marker-end');
+    });
+  }
+
+  function restyleAll(){
+    try{ 
+      restyleExistingEdges(document);
+      ensureStagingNoArrows(document);
+    }catch(_){}
+  }
+
+  var __restyleScheduled = false;
+  function scheduleRestyle(delay){
+    if (__restyleScheduled) return;
+    __restyleScheduled = true;
+    setTimeout(function(){
+      __restyleScheduled = false;
+      if (document.hidden) return;
+      restyleAll();
+    }, delay || 10);
+  }
+
+  // Hook common renderers
+  ['drawLinks','renderStagedOverlay','renderDepsOverlay','__depsOverlayRender','updateLinks','redrawLinks'].forEach(function(name){
+    var fn = window[name];
+    if (typeof fn === 'function' && !fn.__stagedAnimWrap){
+      var orig = fn;
+      window[name] = function(){
+        var rv = orig.apply(this, arguments);
+        scheduleRestyle(10);
+        return rv;
+      };
+      window[name].__stagedAnimWrap = true;
+    }
+  });
+
+  // Slow fallback sweep; primary updates are hook/observer driven.
+  setInterval(function(){
+    if (document.hidden) return;
+    scheduleRestyle(40);
+  }, 2800);
+
+  // Watch for DOM changes
+  try {
+    var observer = new MutationObserver(function(mutations){
+      var shouldRestyle = false;
+      mutations.forEach(function(mut){
+        if (mut.type === 'childList' && mut.addedNodes.length > 0) {
+          shouldRestyle = true;
+        }
+      });
+      if (shouldRestyle) {
+        scheduleRestyle(10);
+      }
+    });
+    observer.observe(document.body, {childList: true, subtree: true});
+  } catch(_){}
+
+  // Initial passes
+  scheduleRestyle(10);
+  scheduleRestyle(100);
+  scheduleRestyle(500);
+  scheduleRestyle(1000);
+})();</script>
