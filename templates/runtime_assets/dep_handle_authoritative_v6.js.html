@@ -1,0 +1,187 @@
+<script>
+/* === dep handle authoritative v6 ========================================== */
+(function(){
+  if (window.__depHandleAuthorV6) return;
+
+  function qsa(sel, root){ return (root||document).querySelectorAll(sel); }
+  function $(sel, root){ return (root||document).querySelector(sel); }
+
+  // Map ids -> shorts using DOM (works with duplicates)
+  function domMaps(){
+var els = qsa('#builderStage [data-short]');
+var shortSet = Object.create(null), uuid2short = Object.create(null);
+for (var i=0;i<els.length;i++){
+  var el=els[i], s=el.getAttribute('data-short'), u=el.getAttribute('data-uuid');
+  if (s) shortSet[s] = true;
+  if (u && s) uuid2short[String(u).toLowerCase()] = s;
+}
+return { shortSet:shortSet, uuid2short:uuid2short };
+  }
+  function first8(x){ return String(x||'').replace(/[^0-9a-fA-F-]/g,'').slice(0,8); }
+  function toShort(id, maps){
+if (!id) return null;
+var idstr = String(id);
+if (maps.shortSet[idstr]) return idstr;
+var low = idstr.toLowerCase();
+if (maps.uuid2short[low]) return maps.uuid2short[low];
+var f8 = first8(idstr);
+return maps.shortSet[f8] ? f8 : null;
+  }
+
+  // Build combined edge list in SHORT ids (existing + staged)
+  function gatherEdgesShort(){
+var maps = domMaps(), out=[], i, e;
+var ex = window.EXIST_EDGES || [];
+for (i=0;i<ex.length;i++){
+  e = ex[i]; if (!e) continue;
+  var fs = toShort(e.from, maps), ts = toShort(e.to, maps);
+  if (fs && ts) out.push({from:fs, to:ts});
+}
+var st = window.stagedAdd || [];
+for (i=0;i<st.length;i++){
+  e = st[i]; if (!e) continue;
+  var f2 = toShort(e.from, maps), t2 = toShort(e.to, maps);
+  if (f2 && t2) out.push({from:f2, to:t2});
+}
+return out;
+  }
+
+  // Topo letters (A..Z wrap)
+  function topoLetters(){
+var E = gatherEdgesShort();
+var nodes = Object.create(null), adj = Object.create(null), indeg = Object.create(null);
+var cards = qsa('#builderStage [data-short]'), i, n, u, v;
+for (i=0;i<cards.length;i++){ nodes[cards[i].getAttribute('data-short')] = 1; }
+for (i=0;i<E.length;i++){ nodes[E[i].from]=1; nodes[E[i].to]=1; }
+for (n in nodes){ adj[n]=[]; indeg[n]=0; }
+for (i=0;i<E.length;i++){ u=E[i].from; v=E[i].to; adj[u].push(v); indeg[v]++; }
+var q=[], level=Object.create(null);
+for (n in nodes){ if (!indeg[n]) q.push(n); level[n]=0; }
+while(q.length){
+  u=q.shift(); var lu=level[u]||0, a=adj[u]||[];
+  for (i=0;i<a.length;i++){
+    v=a[i];
+    if ((level[v]||0) < lu+1) level[v] = lu+1;
+    indeg[v]--; if (!indeg[v]) q.push(v);
+  }
+}
+var L=Object.create(null);
+for (n in nodes){ var lv=level[n]||0; L[n] = String.fromCharCode(65 + (lv % 26)); }
+return L;
+  }
+
+  // Degree counts per short
+  function countsOutIn(){
+var E = gatherEdgesShort();
+var out = Object.create(null), inc = Object.create(null), i, e;
+for (i=0;i<E.length;i++){
+  e = E[i];
+  out[e.from] = (out[e.from]||0) + 1;
+  inc[e.to]   = (inc[e.to]  ||0) + 1;
+}
+return {out:out, inc:inc};
+  }
+
+  // Ensure a handle exists inside the card (don’t duplicate if present)
+  function ensureHandle(card){
+var h = card.querySelector('.depHandle');
+if (h) return h;
+try{
+  h = document.createElement('div');
+  h.className = 'depHandle';
+  var s = card.getAttribute('data-short'); if (s) h.setAttribute('data-short', s);
+  card.appendChild(h);
+}catch(_){}
+return h;
+  }
+
+  // Write authoritative text and visibility for all cards
+  function writeHandles(){
+var L = topoLetters();
+var C = countsOutIn();
+var cards = qsa('#builderStage [data-short]');
+for (var i=0;i<cards.length;i++){
+  var el = cards[i];
+  var s  = el.getAttribute('data-short');
+  var h  = ensureHandle(el);
+  if (!h) continue;
+
+  var base = L[s] || 'A';
+  var o = C.out[s] || 0, d = C.inc[s] || 0;
+  var next = base + String(o) + "/" + String(d);
+
+  if (h.textContent !== next) h.textContent = next;
+  // visible only if participates (has any degree)
+  if (o>0 || d>0){ h.classList.add('dep-hasdeps'); }
+  else{ h.classList.remove('dep-hasdeps'); }
+}
+  }
+
+  // Keep staged overlay paths tagged so pulses & tools can follow
+  function tagStagedPaths(){
+var over = document.getElementById('depStagedOverlay');
+if (!over) return;
+var paths = over.querySelectorAll('path');
+var st = window.stagedAdd || [];
+for (var i=0;i<paths.length && i<st.length; i++){
+  var p = paths[i], e = st[i]; if (!e) continue;
+  if (!p.hasAttribute('data-from')) p.setAttribute('data-from', String(e.from||''));
+  if (!p.hasAttribute('data-to'))   p.setAttribute('data-to',   String(e.to||''));
+}
+  }
+
+  // Wire up: after native refresh/draw, we write authoritative handles
+  (function(){
+var _refresh = window.refreshDepHandleLetters;
+window.refreshDepHandleLetters = function(){
+  if (typeof _refresh === 'function') try{ _refresh.apply(this, arguments); }catch(_){}
+  setTimeout(function(){ try{ writeHandles(); }catch(_){ } }, 0);
+};
+  })();
+
+  (function(){
+var _draw = window.drawLinks;
+window.drawLinks = function(){
+  if (typeof _draw === 'function') try{ _draw.apply(this, arguments); }catch(_){}
+  try{ tagStagedPaths(); }catch(_){}
+  // write after overlay settles
+  setTimeout(function(){ try{ writeHandles(); }catch(_){ } }, 0);
+};
+  })();
+
+  // stagedAdd changes
+  (function(){
+try{
+  if (!('stagedAdd' in window)) window.stagedAdd = [];
+  var a = window.stagedAdd;
+  if (!a.__authorV6){
+    var _p=a.push, _s=a.splice;
+    a.push = function(e){ var r=_p.apply(this, arguments); setTimeout(function(){ try{ writeHandles(); }catch(_){ } }, 0); return r; };
+    a.splice = function(){ var r=_s.apply(this, arguments); setTimeout(function(){ try{ writeHandles(); }catch(_){ } }, 0); return r; };
+    a.__authorV6 = true;
+  }
+}catch(_){}
+  })();
+
+  // mutations (style/class/childList) on stage
+  (function(){
+var stage = $('#builderStage'); if (!stage) return;
+var t=null;
+var obs = new MutationObserver(function(){
+  if (t) return;
+  t = setTimeout(function(){ t=null; try{ writeHandles(); }catch(_){ } }, 40);
+});
+obs.observe(stage, {subtree:true, childList:true, attributes:true, attributeFilter:['style','class']});
+window.__depHandleAuthorV6Observer = obs;
+  })();
+
+  // resize
+  window.addEventListener('resize', function(){ try{ writeHandles(); }catch(_){ } }, {passive:true});
+
+  // initial paints
+  setTimeout(function(){ try{ writeHandles(); }catch(_){ } }, 0);
+  setTimeout(function(){ try{ writeHandles(); }catch(_){ } }, 120);
+
+  window.__depHandleAuthorV6 = true;
+})();
+</script>

@@ -1,0 +1,423 @@
+<script id="FEATURE_DUEBADGE2">(function(){
+  if (window.__FEATURE_DUEBADGE2__) return; window.__FEATURE_DUEBADGE2__=true;
+  function tasksArray(){
+    try{
+      if (window.DATA && Array.isArray(window.DATA.tasks)) return window.DATA.tasks;
+      if (Array.isArray(window.TASKS)) return window.TASKS;
+    }catch(_){}
+    return [];
+  }
+  function taskByShort(s){
+    var arr = tasksArray();
+    for (var i=0;i<arr.length;i++) if (arr[i].short===s) return arr[i];
+    return null;
+  }
+  function parseTWDue(s){
+    if (!s || typeof s!=='string') return null;
+    try{
+      var m;
+      if ((m = s.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})Z)?$/))){
+        var Y=+m[1], M=+m[2]-1, D=+m[3], h=+(m[4]||'0'), mi=+(m[5]||'0'), se=+(m[6]||'0');
+        if (m[4]) return new Date(Date.UTC(Y,M,D,h,mi,se));
+        return new Date(Y, M, D, 0, 0, 0);
+      }
+      if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?Z)?$/))){
+        var Y=+m[1], M=+m[2]-1, D=+m[3], h=+(m[4]||'0'), mi=+(m[5]||'0'), se=+(m[6]||'0');
+        if (m[4]) return new Date(Date.UTC(Y,M,D,h,mi,se));
+        return new Date(Y, M, D, 0, 0, 0);
+      }
+      var d = new Date(s);
+      if (!isNaN(d.getTime())) return d;
+    }catch(_){}
+    return null;
+  }
+  function pad(n){ return (n<10?'0':'')+n; }
+  function fmtLocal(dt){
+    try{
+      return dt.getFullYear()+'-'+pad(dt.getMonth()+1)+'-'+pad(dt.getDate())+' '+pad(dt.getHours())+':'+pad(dt.getMinutes());
+    }catch(_){ return '—'; }
+  }
+  function deltaString(due){
+    var now = new Date();
+    var ms = now.getTime() - due.getTime(); // overdue -> positive
+    var sign = ms>=0 ? '+' : '-';
+    var abs = Math.abs(ms);
+    var mins = Math.floor(abs/60000);
+    var txt;
+    if (mins >= 1440){
+      txt = Math.round(mins/1440) + 'd';
+    } else if (mins >= 60){
+      txt = Math.round(mins/60) + 'h';
+    } else {
+      txt = mins + 'm';
+    }
+    return { sign: sign, text: sign+txt, ms: ms };
+  }
+  function classForDelta(ms){
+    if (ms >= 0) return 'dueOverdue';
+    if (Math.abs(ms) <= 72*3600*1000) return 'dueSoon';
+    return 'dueFuture';
+  }
+  function ensureDueBadgeTop(node, task){
+    try{
+      if (!node) return;
+      var t = task || (function(){ var s = node.getAttribute('data-short'); return taskByShort(s); })();
+      if (!t || !t.due) { node.classList.remove('hasDue'); return; }
+      var due = parseTWDue(String(t.due));
+      if (!due) { node.classList.remove('hasDue'); return; }
+      var info = deltaString(due);
+      var existing = node.querySelector('.dueBadge');
+      var cls = classForDelta(info.ms);
+      var label = '⏰';
+      if (!existing){
+        var b = document.createElement('div');
+        b.className = 'dueBadge '+cls;
+        b.innerHTML = '<span class="clock">'+label+'</span>'
+                    + '<span class="when">'+fmtLocal(due)+'</span>'
+                    + '<span class="delta">· '+info.text+'</span>';
+        node.insertBefore(b, node.firstChild);
+      } else {
+        existing.classList.remove('dueOverdue','dueSoon','dueFuture');
+        existing.classList.add(cls);
+        var w = existing.querySelector('.when'), d = existing.querySelector('.delta');
+        if (w) w.textContent = fmtLocal(due);
+        if (d) d.textContent = '· '+info.text;
+        if (existing.previousSibling){ try{ node.insertBefore(existing, node.firstChild); }catch(_){} }
+      }
+      node.classList.add('hasDue');
+    }catch(e){}
+  }
+  (function(){
+    if (!window.__DUE_NODE_WRAP2__ && typeof window.addNodeForTask === 'function'){
+      window.__DUE_NODE_WRAP2__ = true;
+      var old = window.addNodeForTask;
+      window.addNodeForTask = function(task, cx, cy, opts){
+        var n = old.apply(this, arguments);
+        try{ ensureDueBadgeTop(n, task); }catch(_){}
+        return n;
+      };
+    }
+  })();
+  function runAll(){ try{ var nodes=document.querySelectorAll('.node'); for (var i=0;i<nodes.length;i++) ensureDueBadgeTop(nodes[i], null); }catch(_){}}  
+  document.addEventListener('twdata', function(){ setTimeout(runAll, 0); });
+  window.addEventListener('load', function(){ setTimeout(runAll, 60); });
+  var oldRe = window.recomputeAreasAndTags;
+  if (typeof oldRe === 'function'){
+    window.recomputeAreasAndTags = function(){
+      var r = oldRe.apply(this, arguments);
+      try{ runAll(); }catch(_){}
+      return r;
+    };
+  }
+})();</script><script id="FEATURE_UNIFIED_ACTIONS_V1">(function(){
+  if (window.__FEATURE_UNIFIED_ACTIONS_V1__) return; window.__FEATURE_UNIFIED_ACTIONS_V1__=true;
+
+  // ===== utils =====
+  function isNewId(u){ u=String(u||''); return /^new-/.test(u) || /^n-/.test(u); }
+  function uuidFromNode(nd){
+if (!nd) return null;
+var u = nd.getAttribute && nd.getAttribute('data-uuid'); if (u) return u;
+var s = nd.getAttribute && nd.getAttribute('data-short'); if (s) return s;
+return null;
+  }
+  function firstTag(t){
+if (!t || !Array.isArray(t.tags) || !t.tags.length) return "(no tag)";
+return t.tags[0] || "(no tag)";
+  }
+  function oldTagOf(t){ try{ return (window.INIT_MAIN_TAG && INIT_MAIN_TAG[t.short]) || "(no tag)"; }catch(_){ return "(no tag)"; } }
+  function oldProjOf(t){ try{ return (window.INIT_PROJECT && INIT_PROJECT[t.short]) || "(no project)"; }catch(_){ return "(no project)"; } }
+  function taskById(id){
+id = String(id||'');
+if (!Array.isArray(window.TASKS)) return null;
+for (var i=0;i<TASKS.length;i++){
+  var t = TASKS[i]; if (!t) continue;
+  if (String(t.uuid||'')===id) return t;
+  if (String(t.short||'')===id) return t;
+}
+return null;
+  }
+  function genToken(){
+try{ return (Date.now().toString(36)+Math.random().toString(36).slice(2,8)).toLowerCase().replace(/[^a-z0-9]/g,''); }
+catch(_){ return String(Math.random()).slice(2,10); }
+  }
+  function newIdPair(){ var t=genToken(); return {uuid:'new-'+t, short:'n-'+t}; }
+
+  // ===== ensure unique & synced ids for new tasks =====
+  function rekeySync(){
+try{
+  var dNew = Array.prototype.slice.call(document.querySelectorAll('.node'))
+    .filter(function(nd){ return isNewId(uuidFromNode(nd)); });
+  var tNew = Array.isArray(window.TASKS) ? TASKS.filter(function(t){ return isNewId(t && (t.uuid||t.short)); }) : [];
+  if (!dNew.length && !tNew.length) return;
+  var used = Object.create(null);
+  function claim(id){ if (id) used[id]=1; }
+  dNew.forEach(function(nd){ claim(uuidFromNode(nd)); });
+  tNew.forEach(function(t){ claim(t.uuid); claim(t.short); });
+  var n = Math.min(dNew.length, tNew.length);
+  for (var i=0;i<n;i++){
+    var nd = dNew[i], t = tNew[i];
+    var nid = uuidFromNode(nd);
+    var tid = String(t.uuid||t.short||'');
+    var need = (!isNewId(nid) || !isNewId(tid) || nid!==tid || used[nid]>1 || used[tid]>1);
+    if (need){
+      var pair, tries=0;
+      do{ pair = newIdPair(); tries++; } while((used[pair.uuid] || used[pair.short]) && tries<50);
+      nd.setAttribute('data-uuid', pair.uuid);
+      nd.setAttribute('data-short', pair.short);
+      t.uuid = pair.uuid; t.short = pair.short;
+      claim(pair.uuid); claim(pair.short);
+    }
+    if (!nd.hasAttribute('data-created-ts')) nd.setAttribute('data-created-ts', String(Date.now()-i));
+  }
+}catch(_){}
+  }
+  var __rekeyTimer = 0;
+  function scheduleRekey(delay){
+if (__rekeyTimer) return;
+__rekeyTimer = setTimeout(function(){
+  __rekeyTimer = 0;
+  if (document.hidden) return;
+  rekeySync();
+}, Math.max(30, delay||60));
+  }
+  setInterval(function(){
+if (document.hidden) return;
+scheduleRekey(120);
+  }, 3000);
+  try{
+var __rekeyRoot = document.getElementById('builderStage') || document.body;
+var __rekeyObs = new MutationObserver(function(muts){
+  for (var i=0;i<muts.length;i++){
+    var m = muts[i];
+    if (m.type === 'childList' || m.type === 'attributes'){
+      scheduleRekey(40); break;
+    }
+  }
+});
+__rekeyObs.observe(__rekeyRoot, {subtree:true, childList:true, attributes:true, attributeFilter:['class','style','data-uuid','data-short']});
+  }catch(_){}
+  document.addEventListener('visibilitychange', function(){
+if (!document.hidden) scheduleRekey(30);
+  });
+  window.addEventListener('load', function(){ scheduleRekey(140); });
+
+  // ===== state =====
+  var FOLD = window.__FOLD_STATE__ || Object.create(null);  // for new tasks
+  window.__FOLD_STATE__ = FOLD;
+  var EX_OPS = window.__EXISTING_OPS__ || Object.create(null); // for existing tasks
+  window.__EXISTING_OPS__ = EX_OPS;
+
+  function ensureFold(id){
+var t = taskById(id); if (!t) return null;
+return FOLD[t.uuid] || (FOLD[t.uuid] = {extra:[]});
+  }
+  function ensureOps(id){
+return EX_OPS[id] || (EX_OPS[id] = {done:false, deleted:false, mods:[]});
+  }
+
+  // ===== apply modifiers to new tasks =====
+  function applyModsToNew(id, modStr){
+var t = taskById(id); if (!t) return;
+var f = ensureFold(id); if (!f) return;
+var toks = String(modStr||'').trim().split(/\s+/);
+for (var i=0;i<toks.length;i++){
+  var tk = toks[i]; if (!tk) continue;
+  if (tk[0]==='+'){
+    var tag = tk.slice(1);
+    if (tag && tag!=='(no tag)'){
+      t.tags = Array.isArray(t.tags) ? t.tags : [];
+      if (t.tags.indexOf(tag)===-1) t.tags.push(tag);
+    }
+    continue;
+  }
+  if (tk[0]==='-'){
+    var tag2 = tk.slice(1);
+    if (Array.isArray(t.tags)){ t.tags = t.tags.filter(function(x){ return x!==tag2; }); }
+    continue;
+  }
+  var kv = /^([a-z0-9_.-]+):(.*)$/i.exec(tk);
+  if (kv){
+    var k=kv[1].toLowerCase(), v=kv[2];
+    if (k==='project'){ t.project = v || '(no project)'; f.project = t.project; }
+    else if (k==='due'){ t.due = v; f.due = v; }
+    else { f.extra.push(k+':'+v); }
+  } else {
+    f.extra.push(tk);
+  }
+}
+  }
+
+  // ===== button detection =====
+  function isModBtn(el){
+return !!(el && (el.closest('.btnMod')
+  || el.closest('[data-action="modify"]')
+  || el.closest('[title*="odif"]')
+  || el.closest('[aria-label*="odif"]')));
+  }
+  function isDoneBtn(el){
+return !!(el && (el.closest('.btnDone')
+  || el.closest('[data-action="done"]')
+  || el.closest('[title*="omplet"]')
+  || el.closest('[aria-label*="omplet"]')));
+  }
+  function isDelBtn(el){
+return !!(el && (el.closest('.btnDel')
+  || el.closest('[data-action="delete"]')
+  || el.closest('[title*="elete"]')
+  || el.closest('[aria-label*="elete"]')));
+  }
+
+  // ===== unified click capture (new + existing) =====
+  document.addEventListener('click', function(ev){
+var el = ev.target; if (!el) return;
+if (!(isModBtn(el) || isDoneBtn(el) || isDelBtn(el))) return;
+var nd = el.closest && el.closest('.node'); if (!nd) return;
+var id = uuidFromNode(nd); if (!id) return;
+
+// Only intercept staging; allow UI to also do its visuals
+ev.stopImmediatePropagation(); ev.preventDefault();
+
+if (isNewId(id)){
+  // NEW TASKS
+  if (isModBtn(el)){
+    var val = window.prompt('Modifiers (e.g. due:3d +tag -old):','');
+    if (typeof val === 'string' && val.trim()){
+      applyModsToNew(id, val.trim());
+    }
+  } else if (isDoneBtn(el)){
+    var nowDone = !nd.classList.contains('stagedDone');
+    if (nowDone) nd.classList.add('stagedDone'); else nd.classList.remove('stagedDone');
+    var f = ensureFold(id); if (f) f.done = nowDone;
+  } else if (isDelBtn(el)){
+    var nowDel = !nd.classList.contains('stagedDel');
+    if (nowDel) nd.classList.add('stagedDel'); else nd.classList.remove('stagedDel');
+    var f2 = ensureFold(id); if (f2) f2.deleted = nowDel;
+  }
+} else {
+  // EXISTING TASKS
+  var ops = ensureOps(id);
+  if (isModBtn(el)){
+    var val2 = window.prompt('Modifiers (e.g., pri:H due:2025-09-20 +tag -oldtag):','');
+    if (typeof val2 === 'string' && val2.trim()){
+      var add = val2.trim().split(/\s+/).filter(Boolean);
+      var seen = Object.create(null), merged = [];
+      ops.mods.concat(add).forEach(function(tk){ if (!seen[tk]){ seen[tk]=1; merged.push(tk); } });
+      ops.mods = merged;
+    }
+  } else if (isDoneBtn(el)){
+    ops.done = !ops.done; ops.deleted = false;
+    // reflect immediately in UI
+    nd.classList.toggle('stagedDone', ops.done);
+    nd.classList.remove('stagedDel');
+  } else if (isDelBtn(el)){
+    ops.deleted = !ops.deleted; ops.done = false;
+    // reflect immediately in UI
+    nd.classList.toggle('stagedDel', ops.deleted);
+    nd.classList.remove('stagedDone');
+  }
+
+}
+
+try{ if (typeof updateConsole==='function') setTimeout(updateConsole, 30); }catch(_){}
+  }, true);
+
+  // ===== console builder =====
+  function buildConsole(){
+try{
+  if (!Array.isArray(window.TASKS)) return "";
+  var lines = [];
+  for (var i=0;i<TASKS.length;i++){
+    var t = TASKS[i]; if (!t) continue;
+    var id = t.uuid || t.short;
+
+    if (isNewId(id)){
+      // fold new tasks
+      var nd = document.querySelector('.node[data-uuid="'+id+'"], .node[data-short="'+id+'"]');
+      var done=false, deleted=false;
+      if (nd){
+        done = nd.classList.contains('stagedDone') || nd.classList.contains('completed') || nd.getAttribute('data-done')==='1';
+        deleted = nd.classList.contains('stagedDel') || nd.getAttribute('data-deleted')==='1';
+      }
+      var f = FOLD[t.uuid] || FOLD[t.short] || {};
+      if (f.done) done=true;
+      if (f.deleted) deleted=true;
+      if (deleted) continue;
+      var verb = done ? "task log" : "task add";
+      var parts = [verb, (t.desc||"(no description)")];
+      var proj = (typeof f.project!=='undefined') ? f.project : (t.project || "(no project)");
+      if (proj && proj!=="(no project)") parts.push("project:"+proj);
+      var tagset = Object.create(null);
+      if (Array.isArray(t.tags)){ for (var k=0;k<t.tags.length;k++){ var tg=t.tags[k]; if (tg && tg!=="(no tag)") tagset[tg]=true; } }
+      if (f.tags){ for (var tg in f.tags){ if (f.tags[tg]) tagset[tg]=true; else delete tagset[tg]; } }
+      Object.keys(tagset).forEach(function(tg){ parts.push("+"+tg); });
+      var due = (typeof f.due!=='undefined') ? f.due : t.due;
+      if (due) parts.push("due:"+due);
+      if (Array.isArray(f.extra)){ for (var q=0;q<f.extra.length;q++){ parts.push(f.extra[q]); } }
+      lines.push(parts.join(" "));
+    } else {
+      // existing tasks — merge diffs + EX_OPS
+      var ex = EX_OPS[id] || {};
+      if (ex.deleted){ lines.push("task "+t.uuid+" delete"); continue; }
+      if (ex.done){ lines.push("task "+t.uuid+" done"); continue; }
+      var oT = oldTagOf(t), nT = firstTag(t);
+      var oP = oldProjOf(t), nP = t.project || "(no project)";
+      var ops = [];
+      if (oT !== nT){
+        if (oT !== "(no tag)") ops.push("-"+oT);
+        if (nT !== "(no tag)") ops.push("+"+nT);
+      }
+      var projPart = null;
+      if (oP !== nP){ projPart = (nP === "(no project)") ? "project:" : "project:"+nP; }
+      var mods = [];
+      if (projPart) mods.push(projPart);
+      if (ops.length) Array.prototype.push.apply(mods, ops);
+      if (ex.mods && ex.mods.length){
+        var seen = Object.create(null);
+        mods.forEach(function(m){ seen[m]=1; });
+        ex.mods.forEach(function(m){ if (!seen[m]){ seen[m]=1; mods.push(m); } });
+      }
+      if (mods.length){ lines.push(("task "+t.uuid+" modify " + mods.join(" ")).trim()); }
+    }
+  }
+  return lines.join("\\n");
+}catch(_){ return ""; }
+  }
+  function tick(){
+try{
+  var ta = document.getElementById('consoleText');
+  if (!ta) return;
+  var v = buildConsole();
+  if (ta.value !== v) ta.value = v;
+}catch(_){}
+  }
+  var __tickTimer = 0;
+  function scheduleTick(delay){
+if (__tickTimer) return;
+__tickTimer = setTimeout(function(){
+  __tickTimer = 0;
+  if (document.hidden) return;
+  tick();
+}, Math.max(30, delay||50));
+  }
+  setInterval(function(){
+if (document.hidden) return;
+scheduleTick(100);
+  }, 2500);
+  try{
+var __tickRoot = document.getElementById('builderStage') || document.body;
+var __tickObs = new MutationObserver(function(muts){
+  for (var i=0;i<muts.length;i++){
+    var m = muts[i];
+    if (m.type === 'childList' || m.type === 'attributes'){
+      scheduleTick(40); break;
+    }
+  }
+});
+__tickObs.observe(__tickRoot, {subtree:true, childList:true, attributes:true, attributeFilter:['class','style','data-proj','data-tag']});
+  }catch(_){}
+  document.addEventListener('visibilitychange', function(){
+if (!document.hidden) scheduleTick(30);
+  });
+  window.addEventListener('load', function(){ scheduleTick(180); });
+
+})();</script>

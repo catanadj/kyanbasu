@@ -1,0 +1,96 @@
+<script>
+/* === dep handle authoritative dedup v6b =================================== */
+(function(){
+  if (window.__depHandleAuthorDedupV6b) return;
+
+  function qsa(sel, root){ return (root||document).querySelectorAll(sel); }
+  function $(sel, root){ return (root||document).querySelector(sel); }
+
+  function choosePrimary(list){
+if (!list || !list.length) return null;
+if (list.length === 1) return list[0];
+// prefer one marked participating
+for (var i=0;i<list.length;i++){
+  var h=list[i]; if (h.classList && h.classList.contains('dep-hasdeps')) return h;
+}
+// else longest text (usually includes full counts)
+var best=list[0], maxLen=(String(list[0].textContent||'').length|0);
+for (var j=1;j<list.length;j++){
+  var len=(String(list[j].textContent||'').length|0);
+  if (len>maxLen){ best=list[j]; maxLen=len; }
+}
+return best;
+  }
+
+  // Normalize to exactly one "A12/3"
+  function sanitizeOne(txt){
+txt = String(txt||'').trim();
+// pick *first* leading letter (A..Z) if any
+var lead = (txt.match(/[A-Z]/) || [""])[0];
+// pick the *last* trailing counts pattern (d+ or d+/d+)
+var counts = (txt.match(/\d+(?:\/\d+)?(?!.*\d)/) || [""])[0];
+return (lead||"") + (counts ? counts : (lead ? "0/0" : ""));
+  }
+
+  function dedupOneCard(card){
+var hs = card.querySelectorAll('.depHandle');
+if (!hs || hs.length===0) return;
+// mark all non-primary for CSS hiding; set one primary
+var primary = choosePrimary(hs) || hs[0];
+for (var i=0;i<hs.length;i++){
+  var h = hs[i];
+  if (h === primary) h.classList.add('__primary');
+  else h.classList.remove('__primary');
+}
+// sanitize text on primary
+var norm = sanitizeOne(primary.textContent);
+if (primary.textContent !== norm) primary.textContent = norm;
+// remove extras
+for (var j=0;j<hs.length;j++){
+  var h2 = hs[j];
+  if (h2 === primary) continue;
+  try { h2.remove(); } catch(_){}
+}
+  }
+
+  function runDedup(){
+var cards = qsa('#builderStage [data-short]');
+for (var i=0;i<cards.length;i++) dedupOneCard(cards[i]);
+  }
+
+  // hook: if v6 writer exists, run dedup after it writes
+  (function(){
+// detect v6 by presence of the observer symbol or writer wrapper
+var _refresh = window.refreshDepHandleLetters;
+window.refreshDepHandleLetters = function(){
+  if (typeof _refresh === 'function') try{ _refresh.apply(this, arguments); }catch(_){}
+  setTimeout(function(){ try{ runDedup(); }catch(_){ } }, 0);
+};
+  })();
+
+  // observe the stage for late insertions/mutations
+  (function(){
+var stage = $('#builderStage'); if (!stage) return;
+var t=null;
+var obs = new MutationObserver(function(){
+  if (t) return;
+  t = setTimeout(function(){ t=null; try{ runDedup(); }catch(_){ } }, 30);
+});
+obs.observe(stage, {subtree:true, childList:true, attributes:true, attributeFilter:['class','style']});
+window.__depHandleAuthorDedupV6bObserver = obs;
+  })();
+
+  // resize can cause reinserts
+  window.addEventListener('resize', function(){ try{ runDedup(); }catch(_){ } }, {passive:true});
+
+  // first passes
+  setTimeout(function(){ try{ runDedup(); }catch(_){ } }, 0);
+  setTimeout(function(){ try{ runDedup(); }catch(_){ } }, 120);
+
+  // manual helper
+  window.depFix = window.depFix || {};
+  window.depFix.dedup = runDedup;
+
+  window.__depHandleAuthorDedupV6b = true;
+})();
+</script>

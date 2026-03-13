@@ -1,0 +1,8 @@
+<style id="feature-hover-css">
+  .node:hover .nodeActions{opacity:1; pointer-events:auto}
+  .nodeActions{position:absolute; right:6px; bottom:6px; display:flex; gap:6px; opacity:0; pointer-events:none;}
+  .nodeActions button{border:1px solid #2a3344; background:#1b2230; color:var(--fg); border-radius:8px; padding:2px 6px; font-size:12px; cursor:pointer}
+  .stagedDone{ outline:2px solid rgba(34,197,94,.95); box-shadow:0 0 0 5px rgba(34,197,94,.24) inset; background:linear-gradient(180deg, rgba(34,197,94,.10), rgba(34,197,94,.06)); }
+  .stagedDel{ outline:4px solid #ef4444; box-shadow:0 0 0 7px rgba(239,68,68,.34) inset; background:linear-gradient(180deg, rgba(239,68,68,.28), rgba(239,68,68,.14)); }
+  .stagedDone .title, .stagedDel .title{ text-decoration:line-through; opacity:.94 }
+</style>
