@@ -1,0 +1,59 @@
+<script id="FEATURE_ACTIONABLE_BEACON_V7B_JS">
+(function(){
+  if (window.__ACT_BEACON_V7B__) return; window.__ACT_BEACON_V7B__ = true;
+
+  function collectEdgeSets(){
+    var havePrereq = Object.create(null), inChain = Object.create(null);
+    function add(e){ if(!e) return; var f=e.from, t=e.to; if(f){havePrereq[f]=1; inChain[f]=1;} if(t){inChain[t]=1;} }
+    try{ (window.EXIST_EDGES||[]).forEach(add); }catch(_){}
+    try{ (window.stagedAdd  ||[]).forEach(add); }catch(_){}
+    return {havePrereq,inChain};
+  }
+  function isCompletedOrDeleted(n){
+    return !!(n && (n.classList.contains('completed') ||
+                    n.classList.contains('stagedDel') ||
+                    n.getAttribute('data-deleted')==='1'));
+  }
+  function ensureBeacon(node){
+    var wrap = node.querySelector(':scope > .act-beacon-wrap');
+    if (!wrap){
+      wrap = document.createElement('div');
+      wrap.className = 'act-beacon-wrap';
+      var dot = document.createElement('div');
+      dot.className = 'act-beacon';
+      wrap.appendChild(dot);
+      try{ var pos = getComputedStyle(node).position; if (pos==='static') node.style.position='relative'; }catch(_){}
+      node.appendChild(wrap);
+    }
+  }
+  function removeBeacon(node){
+    var wrap = node.querySelector(':scope > .act-beacon-wrap');
+    if (wrap) wrap.remove();
+  }
+
+  function recompute(){
+    var edgeSets = collectEdgeSets();
+    var havePrereq = edgeSets.havePrereq;
+    var inChain = edgeSets.inChain;
+    (document.querySelectorAll('#builderStage .node')||[]).forEach(function(nd){
+      var short = nd.getAttribute('data-short')||'';
+      var uuid  = nd.getAttribute('data-uuid') ||'';
+      if (isCompletedOrDeleted(nd)){ removeBeacon(nd); return; }
+      var hasReq   = !!(havePrereq[short] || havePrereq[uuid]);
+      var involved = !!(inChain[short]    || inChain[uuid]);
+      if (!hasReq && involved) ensureBeacon(nd); else removeBeacon(nd);
+    });
+  }
+  function schedule(){ if (schedule._raf) cancelAnimationFrame(schedule._raf); schedule._raf = requestAnimationFrame(recompute); }
+
+  ['drawLinks','renderStagedOverlay','renderDepsOverlay','__depsOverlayRender','renderList','updateConsole']
+    .forEach(function(n){ var fn=window[n]; if(typeof fn==='function' && !fn.__actBeaconV7B){ var o=fn; window[n]=function(){var r=o.apply(this,arguments); schedule(); return r;}; window[n].__actBeaconV7B=true; }});
+
+  try{ var root = document.getElementById('builderStage') || document.body;
+       new MutationObserver(function(){ schedule(); })
+       .observe(root, {subtree:true, childList:true, attributes:true, attributeFilter:['class','style']}); }catch(_){}
+  document.addEventListener('twdata', schedule);
+
+  schedule(); setTimeout(schedule,140); setTimeout(schedule,420);
+})();
+</script>

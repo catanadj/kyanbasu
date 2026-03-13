@@ -1,0 +1,37 @@
+<style id="FEATURE_ACTIONABLE_BEACON_V7B_CSS">
+@keyframes beaconPulseV7B {
+  0%   { transform: scale(0.9);  opacity: .35; filter: drop-shadow(0 0 0px rgba(34,211,238,.00)); }
+  45%  { transform: scale(1.05); opacity: .95; filter: drop-shadow(0 0 6px rgba(34,211,238,.50)); }
+  100% { transform: scale(0.9);  opacity: .35; filter: drop-shadow(0 0 0px rgba(34,211,238,.00)); }
+}
+/* 6px beacon in top-right */
+.node .act-beacon-wrap {
+  position: absolute;
+  top: 6px; right: 6px;
+  width: 6px; height: 6px;
+  pointer-events: none; z-index: 2;
+}
+.node .act-beacon {
+  width: 100%; height: 100%;
+  border-radius: 999px;
+  /* lively cyan/teal core with soft falloff */
+  background: radial-gradient(closest-side,
+              rgba(224, 255, 255, .95),
+              rgba(34, 211, 238, .70) 55%,
+              rgba(34, 211, 238, 0) 100%);
+  animation: beaconPulseV7B 2.2s ease-in-out infinite;
+  will-change: transform, opacity, filter;
+}
+/* ambient halo (very soft) */
+.node .act-beacon::after {
+  content: "";
+  position: absolute; inset: -3px;
+  border-radius: 999px;
+  background: radial-gradient(closest-side,
+              rgba(34,211,238,.22),
+              rgba(34,211,238,0) 70%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .node .act-beacon { animation: none; }
+}
+</style>

@@ -1,0 +1,56 @@
+<script id="FEATURE_RUNTIME_DIAGNOSTICS_V1">
+(function(){
+  if (window.__RUNTIME_DIAGNOSTICS_V1__) return; window.__RUNTIME_DIAGNOSTICS_V1__ = true;
+
+  var diag = window.__TASKCANVAS_DIAG__ || {
+    errors: 0,
+    rejections: 0,
+    events: []
+  };
+  window.__TASKCANVAS_DIAG__ = diag;
+
+  function push(kind, msg, extra){
+    var entry = {
+      ts: new Date().toISOString(),
+      kind: String(kind || 'error'),
+      msg: String(msg || '(no message)')
+    };
+    if (extra && typeof extra === 'object'){
+      for (var k in extra){
+        if (!Object.prototype.hasOwnProperty.call(extra, k)) continue;
+        entry[k] = extra[k];
+      }
+    }
+    diag.events.push(entry);
+    if (diag.events.length > 50) diag.events.shift();
+    try{ console.warn('[TaskCanvas][diag]', entry.kind + ':', entry.msg, entry); }catch(_){}
+  }
+
+  window.addEventListener('error', function(ev){
+    try{
+      diag.errors += 1;
+      var msg = (ev && ev.message) ? ev.message : 'window error';
+      push('error', msg, {
+        file: ev && ev.filename ? ev.filename : '',
+        line: ev && ev.lineno ? ev.lineno : 0,
+        col: ev && ev.colno ? ev.colno : 0
+      });
+    }catch(_){}
+  });
+
+  window.addEventListener('unhandledrejection', function(ev){
+    try{
+      diag.rejections += 1;
+      var reason = ev ? ev.reason : '';
+      var msg = '';
+      if (reason && typeof reason === 'object' && reason.message) msg = reason.message;
+      else msg = String(reason || 'unhandled rejection');
+      push('unhandledrejection', msg, {});
+    }catch(_){}
+  });
+
+  window.TaskCanvasDiagnostics = function(){
+    try{ return JSON.parse(JSON.stringify(diag)); }catch(_){ return diag; }
+  };
+})();
+</script>

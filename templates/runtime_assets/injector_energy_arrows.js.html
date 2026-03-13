@@ -1,0 +1,48 @@
+<script id="__ENERGY_ARROW_JS__">
+(function(){
+  if (window.__ENERGY_ARROWS__) return; window.__ENERGY_ARROWS__ = true;
+
+  // Apply animation to staged edges and hide dots (no arrowheads)
+  function restyleStaging(){
+    var svg = document.querySelector('#builderStage svg, svg');
+    if (!svg) return;
+
+    // Hide any dots that might have been recreated
+    document.querySelectorAll('#builderStage circle, #builderStage .energy-dot, #builderStage .pulse-dot')
+      .forEach(function(dot){ dot.style.display = 'none'; });
+
+    // Heuristics: most builds draw staged links as <path> or <line> within #builderStage
+    var stagedLines = document.querySelectorAll('#builderStage path, #builderStage line');
+    stagedLines.forEach(function(el){
+      // Only touch geometric edges (skip hidden/zero-length)
+      // Also avoid re-marking same element
+      if (!el.__energyArrowsApplied){
+        // No arrowhead marker applied
+        el.classList.add('staged-energy-edge');
+        el.__energyArrowsApplied = true;
+      }
+    });
+  }
+
+  // Slow fallback sweep; primary updates are event-driven via observers/hooks below.
+  var t = setInterval(function(){
+    if (document.hidden) return;
+    restyleStaging();
+  }, 2800);
+
+  // Also react to DOM changes inside the staging layer
+  try{
+    var root = document.getElementById('builderStage') || document.body;
+    var mo = new MutationObserver(function(){
+      if (document.hidden) return;
+      restyleStaging();
+    });
+    mo.observe(root, {subtree:true, childList:true, attributes:true});
+  }catch(_){}
+
+  // First paints
+  setTimeout(restyleStaging, 60);
+  setTimeout(restyleStaging, 300);
+  setTimeout(restyleStaging, 1200);
+})();
+</script>
