@@ -1,7 +1,4 @@
 from collections.abc import Callable
-from functools import lru_cache
-from pathlib import Path
-
 from taskcanvas.injectors import (
     _append_remove_mode,
     inject_actionable_beacon,
@@ -18,36 +15,7 @@ from taskcanvas.injectors import (
     inject_undo_redo,
     inject_wire_deps_as_main,
 )
-
-RUNTIME_ASSETS_DIR = Path(__file__).resolve().parent.parent / "templates" / "runtime_assets"
-
-
-@lru_cache(maxsize=None)
-def _load_runtime_snippet(name: str) -> str:
-    path = RUNTIME_ASSETS_DIR / name
-    try:
-        return path.read_text(encoding="utf-8")
-    except OSError as e:
-        raise RuntimeError(f"Failed to load runtime asset: {path} ({e})") from e
-
-
-def _inject_before_close(html: str, closing_tag: str, snippet: str, *, fallback: str) -> str:
-    lower_html = html.lower()
-    lower_tag = closing_tag.lower()
-    idx = lower_html.rfind(lower_tag)
-    if idx == -1:
-        if fallback == "prepend":
-            return snippet + html
-        return html + snippet
-    return html[:idx] + snippet + html[idx:]
-
-
-def _inject_head(html: str, snippet: str) -> str:
-    return _inject_before_close(html, "</head>", snippet, fallback="prepend")
-
-
-def _inject_body(html: str, snippet: str) -> str:
-    return _inject_before_close(html, "</body>", snippet, fallback="append")
+from taskcanvas.runtime_support import inject_body, inject_head, load_runtime_asset
 
 
 def build_runtime_html(
@@ -84,7 +52,7 @@ def build_runtime_html(
       }
     })();</script>
     """
-    html = _inject_body(html, payload_tag + runner)
+    html = inject_body(html, payload_tag + runner)
 
     head_snippets = [
         ("feature-hover-css", "feature_hover.css.html"),
@@ -98,15 +66,15 @@ def build_runtime_html(
 
     for marker, asset_name in head_snippets:
         if marker not in html:
-            html = _inject_head(html, _load_runtime_snippet(asset_name))
+            html = inject_head(html, load_runtime_asset(asset_name))
 
     for marker, asset_name in body_snippets:
         if marker not in html:
-            html = _inject_body(html, _load_runtime_snippet(asset_name))
+            html = inject_body(html, load_runtime_asset(asset_name))
 
     if "__DEP_HANDLE_V6B_DEDUP__" not in html and "dep handle authoritative dedup v6b" not in html:
-        html = _inject_head(html, _load_runtime_snippet("dep_handle_authoritative_v6b.css.html"))
-        html = _inject_body(html, _load_runtime_snippet("dep_handle_authoritative_v6b.js.html"))
+        html = inject_head(html, load_runtime_asset("dep_handle_authoritative_v6b.css.html"))
+        html = inject_body(html, load_runtime_asset("dep_handle_authoritative_v6b.js.html"))
 
     html = inject_energy_arrows(html)
 

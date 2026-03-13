@@ -1,33 +1,29 @@
 import re
 import sys
-from functools import lru_cache
 from pathlib import Path
 from typing import Callable
 
-RUNTIME_ASSETS_DIR = Path(__file__).resolve().parent.parent / "templates" / "runtime_assets"
+from taskcanvas.runtime_support import (
+    inject_body,
+    inject_body_once,
+    inject_head,
+    inject_head_once,
+    load_runtime_asset,
+)
+
+ENERGY_ARROW_CSS = load_runtime_asset("injector_energy_arrows.css.html")
 
 
-@lru_cache(maxsize=None)
-def _load_runtime_asset(name: str) -> str:
-    path = RUNTIME_ASSETS_DIR / name
-    try:
-        return path.read_text(encoding="utf-8")
-    except OSError as e:
-        raise RuntimeError(f"Failed to load runtime asset: {path} ({e})") from e
-
-ENERGY_ARROW_CSS = _load_runtime_asset("injector_energy_arrows.css.html")
+ENERGY_ARROW_JS = load_runtime_asset("injector_energy_arrows.js.html")
 
 
-ENERGY_ARROW_JS = _load_runtime_asset("injector_energy_arrows.js.html")
+CSS_WIRE_DEPS_AS_MAIN = load_runtime_asset("injector_wire_deps_as_main.css.html")
 
 
-CSS_WIRE_DEPS_AS_MAIN = _load_runtime_asset("injector_wire_deps_as_main.css.html")
+JS_WIRE_DEPS_AS_MAIN = load_runtime_asset("injector_wire_deps_as_main.js.html")
 
 
-JS_WIRE_DEPS_AS_MAIN = _load_runtime_asset("injector_wire_deps_as_main.js.html")
-
-
-REMOVE_MODE_JS = _load_runtime_asset("injector_remove_mode_v61.js.txt")
+REMOVE_MODE_JS = load_runtime_asset("injector_remove_mode_v61.js.txt")
 
 
 def inject_hover_console_features(html: str, *, log=True) -> str:
@@ -43,15 +39,12 @@ def inject_hover_console_features(html: str, *, log=True) -> str:
         if log: print(*a, file=sys.stderr)
 
     def append_before_body(doc: str, snippet: str) -> str:
-        low = doc.lower()
-        idx = low.rfind("</body>")
-        if idx == -1:
-            return doc + snippet
-        return doc[:idx] + snippet + doc[idx:]
-    snip_obs = _load_runtime_asset("injector_hover_stage_observer.js.html")
-    snip_shortify = _load_runtime_asset("injector_shortify_render.js.html")
-    snip_merge = _load_runtime_asset("injector_console_merge_v3.js.html")
-    snip_modify = _load_runtime_asset("injector_modify_stage_to_console.js.txt")
+        return inject_body(doc, snippet)
+
+    snip_obs = load_runtime_asset("injector_hover_stage_observer.js.html")
+    snip_shortify = load_runtime_asset("injector_shortify_render.js.html")
+    snip_merge = load_runtime_asset("injector_console_merge_v3.js.html")
+    snip_modify = load_runtime_asset("injector_modify_stage_to_console.js.txt")
 
     modify_mark = "/* __PATCH_MODIFY_STAGE_TO_CONSOLE__ */"
 
@@ -111,11 +104,8 @@ def inject_multiline_add(html: str) -> str:
       - Rebinds interactions (twdata + per-node attachers)
     """
     JS_ID = "FEATURE_MULTILINE_ADD_V1"
-    js = _load_runtime_asset("injector_multiline_add.js.html")
-
-    if JS_ID not in html:
-        html = html.replace("</body>", js + "\n</body>")
-    return html
+    js = load_runtime_asset("injector_multiline_add.js.html")
+    return inject_body_once(html, JS_ID, js + "\n")
 
 
 def inject_newtask_console_sync(html: str) -> str:
@@ -128,70 +118,47 @@ def inject_newtask_console_sync(html: str) -> str:
     Idempotent via <script id="FEATURE_NEW_TASK_CONSOLE_SYNC_V2">.
     """
     JS_ID = "FEATURE_NEW_TASK_CONSOLE_SYNC_V2"
-    js = _load_runtime_asset("injector_new_task_console_sync_v2.js.html")
-
-    if JS_ID not in html:
-        html = html.replace("</body>", js + "\n</body>")
-    return html
+    js = load_runtime_asset("injector_new_task_console_sync_v2.js.html")
+    return inject_body_once(html, JS_ID, js + "\n")
 
 
 def inject_console_hotkey_patch(html: str) -> str:
     JS_ID = "FEATURE_CONSOLE_HOTKEY_PATCH_V4"
-    js = _load_runtime_asset("injector_console_hotkey_patch_v4.js.html")
-
-    if JS_ID not in html:
-        html = html.replace("</body>", js + "\n</body>")
-    return html
+    js = load_runtime_asset("injector_console_hotkey_patch_v4.js.html")
+    return inject_body_once(html, JS_ID, js + "\n")
 
 
 def inject_staged_deps_color_split(html: str) -> str:
-    css = _load_runtime_asset("injector_staged_line_anim.css.html")
-    js = _load_runtime_asset("injector_staged_line_anim.js.html")
+    css = load_runtime_asset("injector_staged_line_anim.css.html")
+    js = load_runtime_asset("injector_staged_line_anim.js.html")
 
-    if 'id="PATCH_STAGED_LINE_ANIM_V1"' not in html:
-        html = re.sub(r'</head>', css + '\n</head>', html, count=1, flags=re.I)
-    if 'id="PATCH_STAGED_LINE_ANIM_JS_V1"' not in html:
-        html = re.sub(r'</body>', js + '\n</body>', html, count=1, flags=re.I)
+    html = inject_head_once(html, 'id="PATCH_STAGED_LINE_ANIM_V1"', css + "\n")
+    html = inject_body_once(html, 'id="PATCH_STAGED_LINE_ANIM_JS_V1"', js + "\n")
     return html
 
 
 def inject_follow_edges_on_move(html: str) -> str:
-    js = _load_runtime_asset("injector_follow_edges_on_move_v1.js.html")
-
-    if 'id="PATCH_FOLLOW_EDGES_ON_MOVE_V1"' not in html:
-        html = re.sub(r'</body>', js + '\n</body>', html, count=1, flags=re.I)
-    return html
+    js = load_runtime_asset("injector_follow_edges_on_move_v1.js.html")
+    return inject_body_once(html, 'id="PATCH_FOLLOW_EDGES_ON_MOVE_V1"', js + "\n")
 
 
 def inject_actionable_beacon(html: str) -> str:
-    css = _load_runtime_asset("injector_actionable_beacon.css.html")
-    js = _load_runtime_asset("injector_actionable_beacon.js.html")
+    css = load_runtime_asset("injector_actionable_beacon.css.html")
+    js = load_runtime_asset("injector_actionable_beacon.js.html")
 
-    if 'id="FEATURE_ACTIONABLE_BEACON_V7B_CSS"' not in html:
-        html = re.sub(r'</head>', css + '\n</head>', html, count=1, flags=re.I)
-    if 'id="FEATURE_ACTIONABLE_BEACON_V7B_JS"' not in html:
-        html = re.sub(r'</body>', js + '\n</body>', html, count=1, flags=re.I)
+    html = inject_head_once(html, 'id="FEATURE_ACTIONABLE_BEACON_V7B_CSS"', css + "\n")
+    html = inject_body_once(html, 'id="FEATURE_ACTIONABLE_BEACON_V7B_JS"', js + "\n")
     return html
 
 
 def inject_layout_persistence(html: str) -> str:
-    js = _load_runtime_asset("injector_layout_persist_v1.js.html")
-
-    if 'id="FEATURE_LAYOUT_PERSIST_V1"' in html:
-        return html
-    if re.search(r"</body\s*>", html, flags=re.I):
-        return re.sub(r"</body\s*>", lambda m: js + "\n" + m.group(0), html, count=1, flags=re.I)
-    return html + "\n" + js
+    js = load_runtime_asset("injector_layout_persist_v1.js.html")
+    return inject_body_once(html, 'id="FEATURE_LAYOUT_PERSIST_V1"', js + "\n")
 
 
 def inject_undo_redo(html: str) -> str:
-    js = _load_runtime_asset("injector_undo_redo_v1.js.html")
-
-    if 'id="FEATURE_UNDO_REDO_V1"' in html:
-        return html
-    if re.search(r"</body\s*>", html, flags=re.I):
-        return re.sub(r"</body\s*>", lambda m: js + "\n" + m.group(0), html, count=1, flags=re.I)
-    return html + "\n" + js
+    js = load_runtime_asset("injector_undo_redo_v1.js.html")
+    return inject_body_once(html, 'id="FEATURE_UNDO_REDO_V1"', js + "\n")
 
 
 def _append_remove_mode(html):
@@ -199,25 +166,16 @@ def _append_remove_mode(html):
     try:
         if not isinstance(html, str):
             return html
-            
-        low = html.lower()
-        
+
         # Check if already injected
         if '__FIXPACK_V61__' in html:
             return html
-        
-        # Inject before closing body tag if it exists
-        if '</body>' in low:
-            idx = low.rfind('</body>')
-            return (html[:idx] + 
-                   '\n<script id="__FIXPACK_V61__">\n' + 
-                   REMOVE_MODE_JS + 
-                   '\n</script>\n' + 
-                   html[idx:])
-        else:
-            # If no body tag, append at the end
-            return html + '\n<script id="__FIXPACK_V61__">\n' + REMOVE_MODE_JS + '\n</script>\n'
-            
+
+        return inject_body(
+            html,
+            '\n<script id="__FIXPACK_V61__">\n' + REMOVE_MODE_JS + '\n</script>\n',
+        )
+
     except Exception as e:
         # Log error but don't break the build
         print(f"Warning: Failed to inject working JS for remove mode: {e}")
@@ -225,14 +183,8 @@ def _append_remove_mode(html):
 
 
 def inject_wire_deps_as_main(html: str) -> str:
-    # CSS into </head>
-    if "__ONLY_DEPS_CONSOLE_CSS__" not in html:
-        html = (re.sub(r'</head\s*>', lambda m: CSS_WIRE_DEPS_AS_MAIN + '\n' + m.group(0), html, count=1, flags=re.I)
-                if re.search(r'</head\s*>', html, flags=re.I) else CSS_WIRE_DEPS_AS_MAIN + html)
-    # JS into </body>
-    if "__ONLY_DEPS_CONSOLE_JS__" not in html:
-        html = (re.sub(r'</body\s*>', lambda m: JS_WIRE_DEPS_AS_MAIN + '\n' + m.group(0), html, count=1, flags=re.I)
-                if re.search(r'</body\s*>', html, flags=re.I) else html + '\n' + JS_WIRE_DEPS_AS_MAIN)
+    html = inject_head_once(html, "__ONLY_DEPS_CONSOLE_CSS__", CSS_WIRE_DEPS_AS_MAIN + "\n")
+    html = inject_body_once(html, "__ONLY_DEPS_CONSOLE_JS__", JS_WIRE_DEPS_AS_MAIN + "\n")
     return html
 
 
@@ -297,10 +249,7 @@ def inject_custom_background(
   }}
   .app{{position:relative; z-index:1;}}
 </style>""".strip()
-        if re.search(r'</head\s*>', html, flags=re.I):
-            return re.sub(r'</head\s*>', css + '\n</head>', html, count=1, flags=re.I)
-        else:
-            return css + html
+        return inject_head(html, css + "\n")
     except Exception as e:
         if log_fn:
             log_fn(f"[TaskCanvas] custom bg inject failed: {e}")
@@ -308,18 +257,8 @@ def inject_custom_background(
 
 
 def inject_energy_arrows(html: str) -> str:
-    if "__ENERGY_ARROW_CSS__" not in html:
-        html = (
-            re.sub(r'</head\s*>', lambda m: ENERGY_ARROW_CSS + '\n' + m.group(0), html, count=1, flags=re.I)
-            if re.search(r'</head\s*>', html, flags=re.I)
-            else ENERGY_ARROW_CSS + html
-        )
-    if "__ENERGY_ARROW_JS__" not in html:
-        html = (
-            re.sub(r'</body\s*>', lambda m: ENERGY_ARROW_JS + '\n' + m.group(0), html, count=1, flags=re.I)
-            if re.search(r'</body\s*>', html, flags=re.I)
-            else html + '\n' + ENERGY_ARROW_JS
-        )
+    html = inject_head_once(html, "__ENERGY_ARROW_CSS__", ENERGY_ARROW_CSS + "\n")
+    html = inject_body_once(html, "__ENERGY_ARROW_JS__", ENERGY_ARROW_JS + "\n")
     return html
 
 
@@ -331,13 +270,8 @@ def inject_command_preflight(html: str) -> str:
       - merges multiple modify commands for the same task into one line
       - shell-quotes generated task command args to avoid shell injection/splitting
     """
-    js = _load_runtime_asset("injector_command_preflight_v1.js.html")
-
-    if 'id="FEATURE_COMMAND_PREFLIGHT_V1"' in html:
-        return html
-    if re.search(r'</body\s*>', html, flags=re.I):
-        return re.sub(r'</body\s*>', lambda m: js + '\n' + m.group(0), html, count=1, flags=re.I)
-    return html + '\n' + js
+    js = load_runtime_asset("injector_command_preflight_v1.js.html")
+    return inject_body_once(html, 'id="FEATURE_COMMAND_PREFLIGHT_V1"', js + "\n")
 
 
 def inject_runtime_diagnostics(html: str) -> str:
@@ -347,10 +281,5 @@ def inject_runtime_diagnostics(html: str) -> str:
       - keeps a bounded in-memory ring buffer
       - exposes snapshot via window.TaskCanvasDiagnostics()
     """
-    js = _load_runtime_asset("injector_runtime_diagnostics_v1.js.html")
-
-    if 'id="FEATURE_RUNTIME_DIAGNOSTICS_V1"' in html:
-        return html
-    if re.search(r"</body\s*>", html, flags=re.I):
-        return re.sub(r"</body\s*>", lambda m: js + "\n" + m.group(0), html, count=1, flags=re.I)
-    return html + "\n" + js
+    js = load_runtime_asset("injector_runtime_diagnostics_v1.js.html")
+    return inject_body_once(html, 'id="FEATURE_RUNTIME_DIAGNOSTICS_V1"', js + "\n")
