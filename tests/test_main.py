@@ -222,6 +222,69 @@ class TestMainFlow(unittest.TestCase):
             for marker in required_markers:
                 self.assertIn(marker, html)
 
+    def test_main_generates_distinct_reset_and_clear_canvas_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_html = Path(tmp) / "TaskCanvas.html"
+            with patch.object(TaskCanvas, "OUT_HTML", out_html), patch.object(
+                TaskCanvas, "fetch_tasks", return_value=[]
+            ), patch.object(
+                TaskCanvas, "_find_bg_file", return_value=None
+            ), patch.object(
+                TaskCanvas, "open_file"
+            ), patch.object(
+                TaskCanvas.sys, "argv", ["TaskCanvas.py"]
+            ):
+                rc = TaskCanvas.main()
+
+            self.assertEqual(rc, 0)
+            html = out_html.read_text(encoding="utf-8")
+            self.assertIn("function snapshotCanvasProjects()", html)
+            self.assertIn("function rebuildCanvasProjects(projectStates)", html)
+            self.assertIn("restoreCanvasSnapshot('reset-projects')", html)
+            self.assertIn("restoreCanvasSnapshot('clear')", html)
+
+    def test_main_generates_compact_task_cards_without_project_tag_caption(self):
+        tasks = [_task("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "Alpha", project="Home")]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out_html = Path(tmp) / "TaskCanvas.html"
+            with patch.object(TaskCanvas, "OUT_HTML", out_html), patch.object(
+                TaskCanvas, "fetch_tasks", return_value=tasks
+            ), patch.object(
+                TaskCanvas, "_find_bg_file", return_value=None
+            ), patch.object(
+                TaskCanvas, "open_file"
+            ), patch.object(
+                TaskCanvas.sys, "argv", ["TaskCanvas.py"]
+            ):
+                rc = TaskCanvas.main()
+
+            self.assertEqual(rc, 0)
+            html = out_html.read_text(encoding="utf-8")
+            self.assertNotIn('<div class="caption">', html)
+
+    def test_main_places_dependency_lines_between_bubbles_and_labels(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_html = Path(tmp) / "TaskCanvas.html"
+            with patch.object(TaskCanvas, "OUT_HTML", out_html), patch.object(
+                TaskCanvas, "fetch_tasks", return_value=[]
+            ), patch.object(
+                TaskCanvas, "_find_bg_file", return_value=None
+            ), patch.object(
+                TaskCanvas, "open_file"
+            ), patch.object(
+                TaskCanvas.sys, "argv", ["TaskCanvas.py"]
+            ):
+                rc = TaskCanvas.main()
+
+            self.assertEqual(rc, 0)
+            html = out_html.read_text(encoding="utf-8")
+            self.assertIn('id="chromeLayer" class="chromeLayer"', html)
+            self.assertIn(".chromeLayer{", html)
+            self.assertIn("z-index:9;", html)
+            self.assertIn(".links{", html)
+            self.assertIn("z-index:7;", html)
+
 
 if __name__ == "__main__":
     unittest.main()

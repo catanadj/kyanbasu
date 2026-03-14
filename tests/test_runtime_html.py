@@ -50,6 +50,5 @@ class TestRuntimeHtml(unittest.TestCase):
         parsed = json.loads(embedded)
         self.assertEqual(parsed["tasks"][0]["desc"], "x</SCRIPT><script>alert(1)</script>")
 
-
 if __name__ == "__main__":
     unittest.main()

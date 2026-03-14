@@ -323,6 +323,16 @@
     z-index:5;
   }
   .areas > div{pointer-events:auto}
+  .chromeLayer{
+    position:absolute;
+    left:0;
+    top:0;
+    right:0;
+    bottom:0;
+    pointer-events:none;
+    z-index:9;
+  }
+  .chromeLayer > *{pointer-events:auto}
   .links{
     position:absolute;
     left:0;
@@ -330,7 +340,7 @@
     width:5000px;
     height:4000px;
     pointer-events:none;
-    z-index:1;
+    z-index:7;
   }
   .node{
     position:absolute;
@@ -368,14 +378,6 @@
     font:700 15px/1.38 var(--font-display);
     color:var(--fg);
     letter-spacing:.01em;
-  }
-  .node .caption{
-    position:relative;
-    margin-top:10px;
-    color:var(--muted);
-    font-size:11px;
-    letter-spacing:.12em;
-    text-transform:uppercase;
   }
   .node.selected{
     outline:2px solid rgba(97,208,255,.72);
@@ -1112,6 +1114,8 @@
         <span id="zoomPct">100%</span>
       </div>
       <button id="toggleConsole" class="btn ghost">Console</button>
+      <button id="resetCanvas" class="btn ghost" title="Reset the current canvas projects to the embedded Taskwarrior snapshot">Reset</button>
+      <button id="clearCanvas" class="btn ghost" title="Clear all projects and tasks from the canvas">Clear</button>
       <button id="copyBtn" class="btn primary" title="Copy Taskwarrior commands">Copy commands</button>
       <label class="btn warningToggle"><input type="checkbox" id="removeMode"> Remove mode</label>
     </div>
@@ -1134,6 +1138,7 @@
         <div id="areasLayer" class="areas"></div>
         <div id="tagsLayer" class="areas"></div>
         <svg id="builderLinks" class="links" viewBox="0 0 5000 4000" preserveAspectRatio="none"></svg>
+        <div id="chromeLayer" class="chromeLayer"></div>
       </div>
     </div>
     <aside id="inspectorPanel" class="inspector">
@@ -1267,12 +1272,15 @@ var builderStage = document.getElementById('builderStage');
 var areasLayer   = document.getElementById('areasLayer');
 var tagsLayer    = document.getElementById('tagsLayer');
 var builderLinks = document.getElementById('builderLinks');
+var chromeLayer  = document.getElementById('chromeLayer');
 var viewerStage  = document.getElementById('viewerStage');
 
 var zoom        = document.getElementById('zoom');
 var zoomPct     = document.getElementById('zoomPct');
 var copyBtn     = document.getElementById('copyBtn');
 var copyBtn2    = document.getElementById('copyBtn2');
+var resetCanvas = document.getElementById('resetCanvas');
+var clearCanvasBtn = document.getElementById('clearCanvas');
 var consolePanel= document.getElementById('consolePanel');
 var toggleConsole=document.getElementById('toggleConsole');
 var consoleText = document.getElementById('consoleText');
@@ -1295,6 +1303,7 @@ var inspectorTimer = 0;
 var selectedProject = null;
 var dragProjMoved = false;
 var lastProjectDragAt = 0;
+var BASE_DATA_SNAPSHOT = null;
 
 /* ===== Drawer collapse/expand ===== */
 function setDrawerWidth(px){ document.documentElement.style.setProperty('--leftW', px + 'px'); }
@@ -1308,6 +1317,191 @@ function collapseInspector(){ document.body.classList.add('inspector-collapsed')
 function expandInspector(){ document.body.classList.remove('inspector-collapsed'); }
 if (hideInspector) hideInspector.addEventListener('click', collapseInspector);
 if (inspectorHandle) inspectorHandle.addEventListener('click', expandInspector);
+
+function cloneJSON(v){
+  try{ return JSON.parse(JSON.stringify(v)); }catch(_){ return v; }
+}
+function layoutBoardKeyFromTasks(tasks){
+  try{
+    var prefix = "taskcanvas:layout:v1:";
+    if (!tasks || !tasks.length) return prefix + "empty";
+    var ids = tasks.map(function(t){
+      return t ? String(t.uuid || t.short || "") : "";
+    }).filter(Boolean).sort().join("|");
+    var h = 2166136261 >>> 0;
+    for (var i=0; i<ids.length; i++){
+      h ^= ids.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return prefix + (h >>> 0).toString(16);
+  }catch(_){
+    return "taskcanvas:layout:v1:fallback";
+  }
+}
+function layoutBoardKey(){
+  var tasks = (window.DATA && Array.isArray(window.DATA.tasks)) ? window.DATA.tasks : TASKS;
+  return layoutBoardKeyFromTasks(tasks);
+}
+function clearPersistedLayout(){
+  try{ localStorage.removeItem(layoutBoardKey()); }catch(_){}
+}
+function clearPersistedLayoutForData(data){
+  try{
+    var tasks = (data && Array.isArray(data.tasks)) ? data.tasks : [];
+    localStorage.removeItem(layoutBoardKeyFromTasks(tasks));
+  }catch(_){}
+}
+function emptyObjectInPlace(obj){
+  if (!obj || typeof obj !== 'object') return obj;
+  Object.keys(obj).forEach(function(k){ delete obj[k]; });
+  return obj;
+}
+function clearRuntimeStageState(){
+  try{
+    window.STAGED_CMDS = Array.isArray(window.STAGED_CMDS) ? window.STAGED_CMDS : [];
+    window.STAGED_CMDS.length = 0;
+  }catch(_){}
+  try{
+    window.STAGED_HUMAN = Array.isArray(window.STAGED_HUMAN) ? window.STAGED_HUMAN : [];
+    window.STAGED_HUMAN.length = 0;
+  }catch(_){}
+  try{
+    window.stagedAdd = Array.isArray(window.stagedAdd) ? window.stagedAdd : [];
+    window.stagedAdd.length = 0;
+  }catch(_){}
+  try{
+    window.__depExtraCmds = Array.isArray(window.__depExtraCmds) ? window.__depExtraCmds : [];
+    window.__depExtraCmds.length = 0;
+  }catch(_){}
+  try{ window.__REMOVED_DEPS = emptyObjectInPlace(window.__REMOVED_DEPS || Object.create(null)); }catch(_){}
+  try{
+    window.__FOLD_STATE__ = emptyObjectInPlace(window.__FOLD_STATE__ || window.FOLD || Object.create(null));
+    window.FOLD = window.__FOLD_STATE__;
+  }catch(_){}
+  try{
+    window.__EXISTING_OPS__ = emptyObjectInPlace(window.__EXISTING_OPS__ || window.EX_OPS || Object.create(null));
+    window.EX_OPS = window.__EXISTING_OPS__;
+  }catch(_){}
+  try{
+    window.EXIST_EDGES = Array.isArray(window.EXIST_EDGES) ? window.EXIST_EDGES : [];
+    window.EXIST_EDGES.length = 0;
+  }catch(_){}
+}
+function clearCanvasDomState(){
+  try{ clearSelection(); }catch(_){}
+  try{ clearProjectSelection(true); }catch(_){}
+  projectAreas = new Map();
+  tagAreas = new Map();
+  try{ builderStage.querySelectorAll('.node').forEach(function(n){ n.remove(); }); }catch(_){}
+  try{ recomputeAreasAndTags(); }catch(_){}
+  try{ drawLinks(); }catch(_){}
+  try{ if (typeof refreshDepHandleLetters === 'function') refreshDepHandleLetters(); }catch(_){}
+}
+function snapshotCanvasProjects(){
+  var items = [];
+  projectAreas.forEach(function(pa, project){
+    if (!pa) return;
+    items.push({
+      project: project || "(no project)",
+      x: parseInt(pa.x || 0, 10) || 0,
+      y: parseInt(pa.y || 0, 10) || 0,
+      tagCols: parseInt(pa.tagCols || LAYOUT.TAG_COLS, 10) || LAYOUT.TAG_COLS,
+      tagW0: parseInt(pa.tagW0 || (LAYOUT.TAG_PAD*2 + LAYOUT.CELL_W), 10) || (LAYOUT.TAG_PAD*2 + LAYOUT.CELL_W),
+      tagH0: parseInt(pa.tagH0 || (LAYOUT.TAG_HEAD + LAYOUT.TAG_PAD + 140), 10) || (LAYOUT.TAG_HEAD + LAYOUT.TAG_PAD + 140)
+    });
+  });
+  items.sort(function(a,b){
+    if (a.y !== b.y) return a.y - b.y;
+    if (a.x !== b.x) return a.x - b.x;
+    return a.project < b.project ? -1 : (a.project > b.project ? 1 : 0);
+  });
+  return items;
+}
+function seedProjectArea(state){
+  var project = (state && state.project) ? state.project : "(no project)";
+  if (projectAreas.has(project)) return projectAreas.get(project);
+  var pa = {
+    x: (state && isFinite(state.x)) ? state.x : 20,
+    y: (state && isFinite(state.y)) ? state.y : 20,
+    w: 280,
+    h: 120,
+    tagCols: (state && isFinite(state.tagCols)) ? state.tagCols : LAYOUT.TAG_COLS,
+    tagW0: (state && isFinite(state.tagW0)) ? state.tagW0 : (LAYOUT.TAG_PAD*2 + LAYOUT.CELL_W),
+    tagH0: (state && isFinite(state.tagH0)) ? state.tagH0 : (LAYOUT.TAG_HEAD + LAYOUT.TAG_PAD + 140),
+    nextTagIndex: 0,
+    el: null
+  };
+  projectAreas.set(project, pa);
+  return pa;
+}
+function rebuildCanvasProjects(projectStates){
+  if (!Array.isArray(projectStates) || !projectStates.length) return 0;
+  var present = Object.create(null);
+  for (var i=0; i<TASKS.length; i++){
+    present[TASKS[i].project || "(no project)"] = 1;
+  }
+  var wanted = projectStates.filter(function(state){
+    var project = (state && state.project) ? state.project : "(no project)";
+    return !!present[project];
+  });
+  if (!wanted.length) return 0;
+
+  wanted.forEach(seedProjectArea);
+  recomputeAreasAndTags();
+
+  var restoredProjects = 0;
+  for (var j=0; j<wanted.length; j++){
+    var project = wanted[j].project || "(no project)";
+    if (addProjectTasks(project) > 0) restoredProjects++;
+  }
+  for (var k=0; k<wanted.length; k++){
+    var state = wanted[k];
+    var projectName = state.project || "(no project)";
+    var pa = projectAreas.get(projectName);
+    if (!pa) continue;
+    var targetX = (state && isFinite(state.x)) ? state.x : pa.x;
+    var targetY = (state && isFinite(state.y)) ? state.y : pa.y;
+    var dx = targetX - pa.x;
+    var dy = targetY - pa.y;
+    if (dx || dy) moveWholeProject(projectName, dx, dy);
+  }
+  recomputeAreasAndTags();
+  drawLinks();
+  updateConsole();
+  try{ if (typeof refreshDepHandleLetters === 'function') refreshDepHandleLetters(); }catch(_){}
+  return restoredProjects;
+}
+function restoreCanvasSnapshot(mode){
+  if (!BASE_DATA_SNAPSHOT) return;
+  var resetCurrentProjects = (mode === 'reset-projects');
+  var currentProjects = resetCurrentProjects ? snapshotCanvasProjects() : [];
+  clearPersistedLayout();
+  clearPersistedLayoutForData(BASE_DATA_SNAPSHOT);
+  clearRuntimeStageState();
+  clearCanvasDomState();
+  window.DATA = cloneJSON(BASE_DATA_SNAPSHOT);
+  if (mode === 'clear'){
+    initFromDATA({ skipInitialPlacement: true });
+  } else if (resetCurrentProjects && currentProjects.length){
+    initFromDATA({ skipInitialPlacement: true });
+    rebuildCanvasProjects(currentProjects);
+  } else {
+    initFromDATA({ skipInitialPlacement: false });
+  }
+  try{
+    if (typeof showToast === 'function'){
+      if (mode === 'clear'){
+        showToast('Canvas cleared.');
+      } else if (resetCurrentProjects && currentProjects.length){
+        showToast('Current canvas projects reset to embedded snapshot.');
+      } else {
+        showToast('Canvas reset to embedded snapshot.');
+      }
+    }
+  }catch(_){}
+}
+if (resetCanvas) resetCanvas.addEventListener('click', function(){ restoreCanvasSnapshot('reset-projects'); });
+if (clearCanvasBtn) clearCanvasBtn.addEventListener('click', function(){ restoreCanvasSnapshot('clear'); });
 
 /* ===== Tabs ===== */
 function setMode(mode){
@@ -1538,6 +1732,7 @@ function resolveTagOverlaps(project){
         if (dy <= 0) dy = (other.h/2 + LAYOUT.ROW_GAP); // fallback
         target.y += dy;
         if (target.el){ target.el.style.top = (target.y|0)+"px"; }
+        if (target.labelEl){ target.labelEl.style.top = ((target.y + 14)|0)+"px"; }
         moveNodesForTag(target.project, target.tag, 0, dy);
         changed=true;
       }
@@ -1551,11 +1746,13 @@ function moveWholeProject(project, dx, dy){
   var pa = projectAreas.get(project); if (!pa) return;
   pa.x += dx; pa.y += dy;
   if (pa.el){ pa.el.style.left=(pa.x|0)+"px"; pa.el.style.top=(pa.y|0)+"px"; }
+  if (pa.labelEl){ pa.labelEl.style.left=((pa.x + 14)|0)+"px"; pa.labelEl.style.top=((pa.y + 14)|0)+"px"; }
   // move children tags and their nodes
   tagAreas.forEach(function(ta){
     if (ta.project !== project) return;
     ta.x += dx; ta.y += dy;
     if (ta.el){ ta.el.style.left=(ta.x|0)+"px"; ta.el.style.top=(ta.y|0)+"px"; }
+    if (ta.labelEl){ ta.labelEl.style.left=((ta.x + 14)|0)+"px"; ta.labelEl.style.top=((ta.y + 14)|0)+"px"; }
     moveNodesForTag(ta.project, ta.tag, dx, dy);
   });
 }
@@ -1625,6 +1822,7 @@ function relayoutTag(project, tag){
 /* ===== Redraw areas with draggable labels ===== */
 function recomputeAreasAndTags(){
   areasLayer.innerHTML=""; tagsLayer.innerHTML="";
+  if (chromeLayer) chromeLayer.innerHTML="";
   // projects
   projectAreas.forEach(function(pa, proj){
     var pd = document.createElement('div');
@@ -1636,11 +1834,12 @@ function recomputeAreasAndTags(){
     pl.className="projAreaLabel"; if (proj==="(no project)") pl.classList.add('none');
     pl.textContent = proj;
     pl.setAttribute('data-proj-label', proj);
+    pl.style.left = ((pa.x + 14)|0)+"px";
+    pl.style.top = ((pa.y + 14)|0)+"px";
     if (selectedProject === proj){
       pd.classList.add('selectedProject');
       pl.classList.add('selectedProjectLabel');
     }
-    pd.appendChild(pl);
     // Apply project palette
     try {
       var ppal = projectPalette(proj);
@@ -1650,7 +1849,9 @@ function recomputeAreasAndTags(){
     } catch(_) {}
 
     areasLayer.appendChild(pd);
+    if (chromeLayer) chromeLayer.appendChild(pl);
     pa.el = pd;
+    pa.labelEl = pl;
     pl.title = 'Drag project';
     pl.addEventListener('mousedown', function(e){
       if (removeMode && removeMode.checked){
@@ -1681,6 +1882,8 @@ function recomputeAreasAndTags(){
     var tl = document.createElement('div');
     tl.className="tagAreaLabel"; if (ta.tag==="(no tag)") tl.classList.add('none');
     tl.textContent = ta.tag;
+    tl.style.left = ((ta.x + 14)|0)+"px";
+    tl.style.top = ((ta.y + 14)|0)+"px";
     // Apply per-tag palette
     var pal = tagPalette(ta.tag);
     td.style.background = pal.bg;
@@ -1719,9 +1922,10 @@ function recomputeAreasAndTags(){
     });
     tl.appendChild(addBtn);
 
-    td.appendChild(tl);
     tagsLayer.appendChild(td);
+    if (chromeLayer) chromeLayer.appendChild(tl);
     ta.el = td;
+    ta.labelEl = tl;
     tl.addEventListener('mousedown', function(e){ startTagDrag(e, ta); });
   });
 
@@ -2195,19 +2399,16 @@ function makeDraggable(node){
           t.tags = (ta.tag==="(no tag)") ? [] : [ta.tag];
           n.setAttribute('data-tag', ta.tag);
         }
-        n.querySelector('.caption').textContent = (t.project + ' • ' + (firstTag(t) || '(no tag)'));
         relayoutTag(ta.project, ta.tag);
       } else if (hit && hit.type==='project'){
         if (hit.project !== oldProj){
           t.project = hit.project; n.setAttribute('data-proj', t.project);
-          n.querySelector('.caption').textContent = (t.project + ' • ' + (firstTag(t) || '(no tag)'));
           // reflow its current tag area under the new project, if present
           relayoutTag(t.project, firstTag(t));
         }
       } else {
         if (oldProj !== "(no project)"){
           t.project = "(no project)"; n.setAttribute('data-proj', t.project);
-          n.querySelector('.caption').textContent = (t.project + ' • ' + (firstTag(t) || '(no tag)'));
           relayoutTag("(no project)", firstTag(t));
         }
       }
@@ -2237,6 +2438,7 @@ function onTagMove(e){
   var nx = dragTagStart.x + dx, ny = dragTagStart.y + dy;
   dragTag.x = nx; dragTag.y = ny;
   if (dragTag.el){ dragTag.el.style.left = (nx|0)+"px"; dragTag.el.style.top = (ny|0)+"px"; }
+  if (dragTag.labelEl){ dragTag.labelEl.style.left = ((nx + 14)|0)+"px"; dragTag.labelEl.style.top = ((ny + 14)|0)+"px"; }
   dragTagNodes.forEach(function(sp){
     sp.n.style.left = ((sp.x + dx)|0) + "px";
     sp.n.style.top  = ((sp.y + dy)|0) + "px";
@@ -2257,7 +2459,6 @@ function onTagUp(e){
       if (!t) return;
       t.project = newProj;
       n.setAttribute('data-proj', newProj);
-      n.querySelector('.caption').textContent = (t.project + ' • ' + (firstTag(t) || '(no tag)'));
     });
     updateProjectBoundsFromTags(oldProj);
     updateProjectBoundsFromTags(newProj);
@@ -2300,10 +2501,12 @@ function onProjMove(e){
   var nx = dragProjStart.x + dx, ny = dragProjStart.y + dy;
   dragProj.x = nx; dragProj.y = ny;
   if (dragProj.el){ dragProj.el.style.left = (nx|0)+"px"; dragProj.el.style.top = (ny|0)+"px"; }
+  if (dragProj.labelEl){ dragProj.labelEl.style.left = ((nx + 14)|0)+"px"; dragProj.labelEl.style.top = ((ny + 14)|0)+"px"; }
 
   dragProjTags.forEach(function(sp){
     sp.ta.x = sp.x + dx; sp.ta.y = sp.y + dy;
     if (sp.ta.el){ sp.ta.el.style.left=(sp.ta.x|0)+"px"; sp.ta.el.style.top=(sp.ta.y|0)+"px"; }
+    if (sp.ta.labelEl){ sp.ta.labelEl.style.left=((sp.ta.x + 14)|0)+"px"; sp.ta.labelEl.style.top=((sp.ta.y + 14)|0)+"px"; }
   });
   dragProjNodes.forEach(function(sp){
     sp.n.style.left = ((sp.x + dx)|0) + "px";
@@ -2339,8 +2542,7 @@ function addNodeForTask(task, cx, cy, opts){
   node.className="node";
   node.innerHTML =
     '<div class="nodeTop"><span class="nodeShortBadge">'+escapeHtml(task.short)+'</span></div>' +
-    '<div class="title">'+escapeHtml(task.desc)+'</div>' +
-    '<div class="caption">'+escapeHtml(proj+' • '+tag)+'</div>';
+    '<div class="title">'+escapeHtml(task.desc)+'</div>';
   node.setAttribute('data-short', task.short);
   node.setAttribute('data-proj', proj);
   node.setAttribute('data-tag', tag);
@@ -2648,9 +2850,13 @@ toggleConsole.addEventListener('click', function(){ consolePanel.classList.toggl
 function drawLinks(){ builderLinks.innerHTML = ""; }
 
 /* ===== Boot ===== */
-function initFromDATA(){
+function initFromDATA(opts){
   try {
     var D = window.DATA || {};
+    var skipInitialPlacement = !!(opts && opts.skipInitialPlacement);
+    if (!BASE_DATA_SNAPSHOT){
+      BASE_DATA_SNAPSHOT = cloneJSON(D);
+    }
     TASKS       = Array.isArray(D.tasks) ? D.tasks.slice() : [];
     TASK_BY_SHORT = {}; INIT_MAIN_TAG = {}; INIT_PROJECT  = {};
     for (var i=0;i<TASKS.length;i++){
@@ -2681,7 +2887,7 @@ projectAreas = new Map(); tagAreas = new Map(); // EMPTY canvas
 
     collapseDrawer();  // start hidden
     // this helps to pre-load projects in the canvas when they are submitted as arguments to the script
-    if (D && Array.isArray(D.init_projects) && D.init_projects.length) {
+    if (!skipInitialPlacement && D && Array.isArray(D.init_projects) && D.init_projects.length) {
       // De-dupe while preserving order-ish
       var seen = Object.create(null);
       var wanted = D.init_projects.filter(function(p){
@@ -2703,7 +2909,7 @@ projectAreas = new Map(); tagAreas = new Map(); // EMPTY canvas
     // --- Auto-place filtered tasks (from -f/--filter) as if added from the drawer
     try {
       var D = window.DATA || {};
-      if (D && Array.isArray(D.init_task_uuids) && D.init_task_uuids.length) {
+      if (!skipInitialPlacement && D && Array.isArray(D.init_task_uuids) && D.init_task_uuids.length) {
         // 1) map uuid->task
         var byUuid = window.UUID2TASK || (function(){
           var m = Object.create(null);
