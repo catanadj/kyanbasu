@@ -4,13 +4,18 @@
   function stageRoot(){ return document.getElementById('builderStage') || document.body; }
   function linksRoot(){ return document.getElementById('builderLinks') || document; }
   function px(n){ return (typeof n==='number' && isFinite(n)) ? n : 0; }
+  function zoomScale(){
+    var z = window.ZSCALE;
+    return (typeof z === 'number' && isFinite(z) && z > 0) ? z : 1;
+  }
 
   function nodeCenter(node){
     var st = stageRoot();
     var nb = node.getBoundingClientRect();
     var sb = st.getBoundingClientRect ? st.getBoundingClientRect() : {left:0,top:0};
-    var x = nb.left - sb.left + nb.width/2;
-    var y = nb.top  - sb.top  + nb.height/2;
+    var zz = zoomScale();
+    var x = (nb.left - sb.left + nb.width/2) / zz;
+    var y = (nb.top  - sb.top  + nb.height/2) / zz;
     return {x: px(x), y: px(y)};
   }
   function findNodeById(id){
@@ -99,6 +104,11 @@
 
   // App refresh signal
   document.addEventListener('twdata', function(){ scheduleRecompute(); });
+  window.addEventListener('resize', scheduleRecompute, {passive:true});
+  try{
+    var zoom = document.getElementById('zoom');
+    if (zoom) zoom.addEventListener('input', scheduleRecompute);
+  }catch(_){}
 
   // Initial passes
   scheduleRecompute();

@@ -285,6 +285,27 @@ class TestMainFlow(unittest.TestCase):
             self.assertIn(".links{", html)
             self.assertIn("z-index:7;", html)
 
+    def test_main_generates_dependency_details_for_task_inspector(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_html = Path(tmp) / "TaskCanvas.html"
+            with patch.object(TaskCanvas, "OUT_HTML", out_html), patch.object(
+                TaskCanvas, "fetch_tasks", return_value=[]
+            ), patch.object(
+                TaskCanvas, "_find_bg_file", return_value=None
+            ), patch.object(
+                TaskCanvas, "open_file"
+            ), patch.object(
+                TaskCanvas.sys, "argv", ["TaskCanvas.py"]
+            ):
+                rc = TaskCanvas.main()
+
+            self.assertEqual(rc, 0)
+            html = out_html.read_text(encoding="utf-8")
+            self.assertIn("function dependencyTaskSummary(shortId)", html)
+            self.assertIn("function renderDependencyItems(ids, emptyText)", html)
+            self.assertIn("This task has no current dependencies.", html)
+            self.assertIn("No tasks currently depend on this task.", html)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -662,6 +662,12 @@
     background:rgba(255,255,255,.03);
     color:var(--fg);
   }
+  .inspectorItemMeta{
+    margin-top:6px;
+    color:var(--muted);
+    font-size:11px;
+    line-height:1.45;
+  }
   .inspectorKV{
     display:grid;
     grid-template-columns:96px 1fr;
@@ -2103,6 +2109,40 @@ function inspectorCommandLines(task){
   });
   return uniqueStrings(lines);
 }
+function dependencyTaskSummary(shortId){
+  var sid = String(shortId || '').trim();
+  if (!sid) return null;
+  var task = (TASK_BY_SHORT && TASK_BY_SHORT[sid]) || null;
+  if (task){
+    return {
+      short: task.short || sid,
+      desc: task.desc || '(no description)',
+      project: task.project || '(no project)',
+      due: task.due || ''
+    };
+  }
+  return {
+    short: sid,
+    desc: 'Task details unavailable in this snapshot.',
+    project: '',
+    due: ''
+  };
+}
+function renderDependencyItems(ids, emptyText){
+  var items = uniqueStrings(ids || []).map(dependencyTaskSummary).filter(Boolean);
+  if (!items.length){
+    return '<div class="inspectorEmpty"><div>'+escapeHtml(emptyText || 'No related tasks.')+'</div></div>';
+  }
+  return '<div class="inspectorList">' + items.map(function(item){
+    var meta = [];
+    if (item.project) meta.push(item.project);
+    if (item.due) meta.push('Due ' + item.due);
+    return '<div class="inspectorListItem"><strong>'+escapeHtml(item.short)+'</strong> '+
+      escapeHtml(item.desc) +
+      (meta.length ? '<div class="inspectorItemMeta">'+escapeHtml(meta.join(' • '))+'</div>' : '') +
+      '</div>';
+  }).join('') + '</div>';
+}
 function projectCommandLines(project){
   var tasks = tasksForProject(project);
   var ids = Object.create(null);
@@ -2309,6 +2349,23 @@ function renderInspector(){
         '<div class="metricCard"><div class="metricValue">'+stagedOut.length+'</div><div class="metricLabel">Staged out</div></div>' +
         '<div class="metricCard"><div class="metricValue">'+stagedIn.length+'</div><div class="metricLabel">Staged in</div></div>' +
       '</div>' +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">Depends on</div>' +
+      renderDependencyItems(depends, 'This task has no current dependencies.') +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">Blocks</div>' +
+      renderDependencyItems(blocks, 'No tasks currently depend on this task.') +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">Staged dependency changes</div>' +
+      (stagedOut.length || stagedIn.length
+        ? '<div class="inspectorList">' +
+            (stagedOut.length ? '<div class="inspectorListItem"><strong>Adds depends on</strong><div class="inspectorItemMeta">'+escapeHtml(stagedOut.join(', '))+'</div></div>' : '') +
+            (stagedIn.length ? '<div class="inspectorListItem"><strong>Will block</strong><div class="inspectorItemMeta">'+escapeHtml(stagedIn.join(', '))+'</div></div>' : '') +
+          '</div>'
+        : '<div class="inspectorEmpty"><div>No dependency changes are staged for this task.</div></div>') +
     '</div>' +
     '<div class="inspectorGroup">' +
       '<div class="inspectorLabel">Pending changes</div>' +

@@ -7,6 +7,7 @@ from taskcanvas.injectors import (
     _find_bg_file,
     inject_hover_console_features,
     inject_layout_persistence,
+    inject_follow_edges_on_move,
     inject_staged_deps_color_split,
     inject_command_preflight,
     inject_custom_background,
@@ -73,6 +74,15 @@ class TestInjectors(unittest.TestCase):
         self.assertIn("boardKey", twice)
         self.assertIn("ensureNodesExistFromState", twice)
         self.assertIn("addNodeForTask", twice)
+
+    def test_inject_follow_edges_on_move_tracks_zoom_scale(self):
+        html = "<html><head></head><body></body></html>"
+        once = inject_follow_edges_on_move(html)
+        twice = inject_follow_edges_on_move(once)
+        self.assertEqual(twice.count('id="PATCH_FOLLOW_EDGES_ON_MOVE_V1"'), 1)
+        self.assertIn("function zoomScale()", twice)
+        self.assertIn("/ zz", twice)
+        self.assertIn("zoom.addEventListener('input', scheduleRecompute)", twice)
 
     def test_inject_undo_redo_idempotent(self):
         html = "<html><head></head><body></body></html>"
