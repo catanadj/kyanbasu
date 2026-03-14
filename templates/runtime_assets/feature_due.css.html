@@ -1,14 +1,15 @@
 <style id="feature-due-css-v2">
-  .node.hasDue{ padding-top: 28px; }
+  .node.hasDue{ padding-top: 52px; }
   .dueBadge{
-    position:absolute; left:6px !important; top:4px !important; bottom:auto !important;
+    position:absolute; right:12px !important; top:12px !important; left:auto !important; bottom:auto !important;
     display:inline-flex; align-items:center; gap:6px;
-    padding:2px 6px; border-radius:8px; font-size:12px;
-    border:1px solid #3a4456; background:rgba(58,68,86,.18); color:#cfd8e3;
-    pointer-events:none; user-select:none; z-index:2;
+    padding:5px 9px; border-radius:999px; font-size:11px;
+    border:1px solid rgba(164,185,214,.18); background:rgba(7,13,22,.78); color:#d7e3f4;
+    pointer-events:none; user-select:none; z-index:3;
+    letter-spacing:.06em; text-transform:uppercase;
   }
   .dueBadge .clock{font-size:12px; opacity:.9}
-  .dueOverdue{ border-color:#ef4444; background:rgba(239,68,68,.16); color:#fecaca; }
-  .dueSoon{ border-color:#f59e0b; background:rgba(245,158,11,.14); color:#fde68a; }
+  .dueOverdue{ border-color:rgba(255,108,124,.34); background:rgba(255,108,124,.12); color:#ffd6db; }
+  .dueSoon{ border-color:rgba(242,177,74,.32); background:rgba(242,177,74,.12); color:#ffe2ad; }
   .dueFuture{ opacity:.9 }
 </style>

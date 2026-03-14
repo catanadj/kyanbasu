@@ -1,8 +1,25 @@
 <style id="feature-hover-css">
   .node:hover .nodeActions{opacity:1; pointer-events:auto}
-  .nodeActions{position:absolute; right:6px; bottom:6px; display:flex; gap:6px; opacity:0; pointer-events:none;}
-  .nodeActions button{border:1px solid #2a3344; background:#1b2230; color:var(--fg); border-radius:8px; padding:2px 6px; font-size:12px; cursor:pointer}
-  .stagedDone{ outline:2px solid rgba(34,197,94,.95); box-shadow:0 0 0 5px rgba(34,197,94,.24) inset; background:linear-gradient(180deg, rgba(34,197,94,.10), rgba(34,197,94,.06)); }
-  .stagedDel{ outline:4px solid #ef4444; box-shadow:0 0 0 7px rgba(239,68,68,.34) inset; background:linear-gradient(180deg, rgba(239,68,68,.28), rgba(239,68,68,.14)); }
+  .nodeActions{
+    position:absolute;
+    right:10px;
+    bottom:10px;
+    display:flex;
+    gap:6px;
+    opacity:0;
+    pointer-events:none;
+  }
+  .nodeActions button{
+    border:1px solid rgba(164,185,214,.18);
+    background:linear-gradient(180deg, rgba(18,29,46,.94), rgba(10,17,28,.94));
+    color:var(--fg);
+    border-radius:10px;
+    padding:4px 8px;
+    font-size:11px;
+    cursor:pointer;
+    box-shadow:0 8px 18px rgba(0,0,0,.22);
+  }
+  .stagedDone{ outline:2px solid rgba(66,212,129,.94); box-shadow:0 0 0 5px rgba(66,212,129,.18) inset, 0 16px 34px rgba(0,0,0,.26); background:linear-gradient(180deg, rgba(66,212,129,.12), rgba(66,212,129,.06)); }
+  .stagedDel{ outline:2px solid rgba(255,108,124,.95); box-shadow:0 0 0 5px rgba(255,108,124,.18) inset, 0 16px 34px rgba(0,0,0,.26); background:linear-gradient(180deg, rgba(255,108,124,.18), rgba(255,108,124,.08)); }
   .stagedDone .title, .stagedDel .title{ text-decoration:line-through; opacity:.94 }
 </style>

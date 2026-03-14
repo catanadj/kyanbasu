@@ -8,42 +8,36 @@
     try{ document.querySelectorAll('.npProjBox, .projGhost').forEach(function(n){ n.remove(); }); }catch(_){}
   }
 
-  // Small, inline-styled modal to avoid needing CSS edits in the template
   function showNewProjectModal(){
     var ov = document.createElement('div');
-    ov.style.position='fixed'; ov.style.left=0; ov.style.top=0; ov.style.right=0; ov.style.bottom=0;
-    ov.style.background='rgba(0,0,0,.45)'; ov.style.zIndex=40010;
-    ov.style.display='flex'; ov.style.alignItems='center'; ov.style.justifyContent='center';
+    ov.className = 'tcModalOverlay';
 
     var box = document.createElement('div');
-    box.style.width='min(560px,92vw)'; box.style.maxWidth='92vw';
-    box.style.background='#0f1525'; box.style.color='var(--fg,#c9d1d9)';
-    box.style.border='1px solid #2a3344'; box.style.borderRadius='12px';
-    box.style.boxShadow='0 18px 48px rgba(0,0,0,.5)'; box.style.overflow='hidden';
+    box.className = 'tcModal';
 
     var head = document.createElement('div');
-    head.textContent='Create new project';
-    head.style.padding='12px'; head.style.borderBottom='1px solid #202736'; head.style.fontWeight='600';
+    head.className = 'tcModalHead';
+    head.innerHTML =
+      '<div class="tcModalEyebrow">Canvas Setup</div>' +
+      '<div class="tcModalTitle">Create a new project</div>';
 
     var body = document.createElement('div');
-    body.style.padding='14px'; body.style.display='flex'; body.style.flexDirection='column'; body.style.gap='10px';
-    var lab = document.createElement('label'); lab.textContent='Project name';
+    body.className = 'tcModalBody';
+    var lab = document.createElement('label');
+    lab.className = 'tcLabel';
+    lab.textContent='Project name';
     var inp = document.createElement('input');
     inp.placeholder='e.g. Home.Renovation';
-    inp.style.padding='10px 12px'; inp.style.borderRadius='8px'; inp.style.border='1px solid #2a3344';
-    inp.style.background='#0e1320'; inp.style.color='inherit';
+    inp.className = 'tcInput';
 
     var foot = document.createElement('div');
-    foot.style.padding='10px 12px'; foot.style.borderTop='1px solid #202736';
-    foot.style.display='flex'; foot.style.justifyContent='flex-end'; foot.style.gap='8px';
+    foot.className = 'tcModalFoot';
     var cancel = document.createElement('button');
+    cancel.className = 'tcBtn';
     cancel.textContent='Cancel';
-    cancel.style.padding='8px 10px'; cancel.style.border='1px solid #2a3344';
-    cancel.style.background='#121a2b'; cancel.style.color='inherit'; cancel.style.borderRadius='8px';
     var create = document.createElement('button');
+    create.className = 'tcBtn primary';
     create.textContent='Create';
-    create.style.padding='8px 10px'; create.style.border='1px solid #2d3a55';
-    create.style.background='#1b2945'; create.style.color='inherit'; create.style.borderRadius='8px';
 
     body.appendChild(lab); body.appendChild(inp);
     foot.appendChild(cancel); foot.appendChild(create);
