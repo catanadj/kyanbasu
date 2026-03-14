@@ -45,7 +45,7 @@
   function toggleOverlay(){ if (overlayVisible()) hideOverlay(); else showOverlay(); }
 
   // Strict Console button matching: only specific selectors
-  var CONSOLE_BTN_SELECTOR = '#consoleBtn, [data-action="toggle-console"], .toggle-console, .console-btn, button[aria-label="Console"]';
+  var CONSOLE_BTN_SELECTOR = '#toggleConsole, #consoleBtn, [data-action="toggle-console"], .toggle-console, .console-btn, button[aria-label="Console"]';
 
   // Intercept ONLY clicks on actual Console buttons (via closest on strict selector)
   document.addEventListener('click', function(e){

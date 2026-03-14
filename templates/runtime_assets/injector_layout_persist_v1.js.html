@@ -171,6 +171,60 @@
     }
   }
 
+  function taskByPersistId(id){
+    var sid = String(id || "");
+    if (!sid) return null;
+    try{
+      if (window.TASK_BY_SHORT && TASK_BY_SHORT[sid]) return TASK_BY_SHORT[sid];
+    }catch(_){}
+    try{
+      if (window.TASKS && Array.isArray(TASKS)){
+        for (var i=0; i<TASKS.length; i++){
+          var t = TASKS[i];
+          if (!t) continue;
+          if (String(t.uuid || "") === sid || String(t.short || "") === sid){
+            return t;
+          }
+        }
+      }
+    }catch(_){}
+    return null;
+  }
+
+  function ensureNodesExistFromState(state){
+    if (!state || !state.nodes || typeof state.nodes !== "object") return false;
+    if (typeof addNodeForTask !== "function") return false;
+    var created = false;
+    var ids = Object.keys(state.nodes);
+    for (var i=0; i<ids.length; i++){
+      var id = ids[i];
+      var exists = document.querySelector(
+        '#builderStage .node[data-uuid="' + escAttr(id) + '"], ' +
+        '#builderStage .node[data-short="' + escAttr(id) + '"]'
+      );
+      if (exists) continue;
+      var t = taskByPersistId(id);
+      if (!t) continue;
+
+      var r = state.nodes[id] || {};
+      var proj = String(r.proj || t.project || "(no project)");
+      var tag = String(r.tag || firstTag(t));
+      t.project = proj;
+      t.tags = (tag && tag !== "(no tag)") ? [tag] : [];
+
+      try{
+        addNodeForTask(
+          t,
+          toInt(r.x, 0),
+          toInt(r.y, 0),
+          {deferLayout: true}
+        );
+        created = true;
+      }catch(_){}
+    }
+    return created;
+  }
+
   function applyNodePositions(state){
     if (!state || !state.nodes || typeof state.nodes !== "object") return false;
     var applied = false;
@@ -230,6 +284,7 @@
     }catch(_){}
 
     if (applyAreaMaps(state)) touched = true;
+    if (ensureNodesExistFromState(state)) touched = true;
     if (applyNodePositions(state)) touched = true;
 
     try{

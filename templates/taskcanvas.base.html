@@ -34,6 +34,7 @@
     --none-label-bg:rgba(78,32,39,.86);
     --none-label-fg:#ffd9de;
     --leftW:380px;
+    --inspectorW:340px;
     --radius-sm:10px;
     --radius-md:16px;
     --radius-lg:22px;
@@ -309,6 +310,8 @@
     background-size:auto, 32px 32px, 32px 32px, auto;
     background-position:0 0, -1px -1px, -1px -1px, 0 0;
   }
+  #builderWrap .canvas{right:var(--inspectorW);border-right:1px solid var(--line)}
+  #viewerWrap .canvas{right:0}
   .stage{position:relative;width:5000px;height:4000px;transform-origin:0 0}
   .areas{
     position:absolute;
@@ -387,6 +390,10 @@
     box-shadow:inset 0 0 0 1px rgba(97,208,255,.08), 0 18px 34px rgba(0,0,0,.18);
     backdrop-filter:blur(8px);
   }
+  .projArea.selectedProject{
+    border-color:rgba(97,208,255,.72);
+    box-shadow:inset 0 0 0 1px rgba(97,208,255,.22), 0 0 0 2px rgba(97,208,255,.14), 0 20px 36px rgba(0,0,0,.22);
+  }
   .projAreaLabel,
   .tagAreaLabel{
     position:absolute;
@@ -409,6 +416,20 @@
     font-size:12px;
     font-weight:900;
     color:var(--proj-label-fg);
+  }
+  .projAreaLabel.selectedProjectLabel{
+    border-color:rgba(97,208,255,.76);
+    background:linear-gradient(180deg, rgba(33,82,128,.98), rgba(20,56,90,.98)) !important;
+    color:#fff;
+  }
+  body.dep-remove-mode .projAreaLabel{
+    cursor:pointer;
+    border-color:rgba(255,108,124,.48);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.07), 0 8px 18px rgba(0,0,0,.18), 0 0 0 1px rgba(255,108,124,.16);
+  }
+  body.dep-remove-mode .projAreaLabel:hover{
+    background:rgba(94,28,40,.92) !important;
+    color:#ffe4e8;
   }
   .projAreaLabel.none{background:var(--none-label-bg);color:var(--none-label-fg);border-color:rgba(255,108,124,.32)}
   .tagArea{
@@ -482,6 +503,221 @@
     white-space:pre;
     box-shadow:inset 0 1px 0 rgba(255,255,255,.03);
   }
+  .inspector{
+    position:absolute;
+    top:0;
+    right:0;
+    bottom:0;
+    width:var(--inspectorW);
+    display:flex;
+    flex-direction:column;
+    background:linear-gradient(180deg, rgba(12,20,33,.98), rgba(7,13,22,.98));
+    backdrop-filter:blur(18px);
+    border-left:1px solid var(--line);
+    overflow:hidden;
+    transition:width .22s ease, opacity .18s ease, transform .18s ease;
+  }
+  .inspectorHead{
+    padding:18px 18px 14px;
+    border-bottom:1px solid var(--line);
+  }
+  .inspectorHeadTop{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+  }
+  .inspectorEyebrow{
+    color:var(--accent);
+    font-size:11px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.16em;
+  }
+  .inspectorHideBtn{
+    appearance:none;
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:6px 10px;
+    color:var(--muted);
+    background:rgba(255,255,255,.04);
+    cursor:pointer;
+  }
+  .inspectorTitle{
+    margin-top:8px;
+    font:700 20px/1.1 var(--font-display);
+  }
+  .inspectorSub{
+    margin-top:6px;
+    color:var(--muted);
+    font-size:12px;
+    line-height:1.45;
+  }
+  .inspectorActions{
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    gap:8px;
+    padding:14px 18px;
+    border-bottom:1px solid var(--line);
+  }
+  .inspectorActions button{
+    appearance:none;
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:10px 12px;
+    color:var(--fg);
+    background:linear-gradient(180deg, rgba(18,29,46,.92), rgba(10,17,28,.92));
+    cursor:pointer;
+    text-align:left;
+  }
+  .inspectorActions button:disabled{
+    opacity:.45;
+    cursor:default;
+    transform:none;
+  }
+  .inspectorBody{
+    flex:1 1 auto;
+    overflow:auto;
+    padding:18px;
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+  }
+  .inspectorEmpty{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    padding:18px;
+    border:1px dashed var(--line-strong);
+    border-radius:20px;
+    color:var(--muted);
+    background:rgba(255,255,255,.02);
+  }
+  .inspectorGroup{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .inspectorLabel{
+    color:var(--muted);
+    font-size:11px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.16em;
+  }
+  .inspectorMetrics{
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    gap:10px;
+  }
+  .metricCard{
+    padding:12px;
+    border:1px solid var(--line);
+    border-radius:16px;
+    background:rgba(255,255,255,.03);
+  }
+  .metricValue{
+    font:700 18px/1 var(--font-display);
+  }
+  .metricLabel{
+    margin-top:6px;
+    color:var(--muted);
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.12em;
+  }
+  .inspectorChips{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .inspectorChip{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:6px 10px;
+    border-radius:999px;
+    border:1px solid var(--line);
+    background:rgba(255,255,255,.04);
+    color:var(--fg);
+    font-size:11px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+  }
+  .inspectorChip.success{border-color:rgba(66,212,129,.28);background:rgba(66,212,129,.12)}
+  .inspectorChip.warn{border-color:rgba(242,177,74,.28);background:rgba(242,177,74,.12)}
+  .inspectorChip.danger{border-color:rgba(255,108,124,.3);background:rgba(255,108,124,.12)}
+  .inspectorChip.info{border-color:rgba(97,208,255,.28);background:rgba(97,208,255,.12)}
+  .inspectorList{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .inspectorListItem{
+    padding:10px 12px;
+    border:1px solid var(--line);
+    border-radius:14px;
+    background:rgba(255,255,255,.03);
+    color:var(--fg);
+  }
+  .inspectorKV{
+    display:grid;
+    grid-template-columns:96px 1fr;
+    gap:10px;
+    align-items:start;
+  }
+  .inspectorKV dt{
+    color:var(--muted);
+    font-size:11px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.14em;
+  }
+  .inspectorKV dd{
+    margin:0;
+    color:var(--fg);
+  }
+  .inspectorCode{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .inspectorCodeLine{
+    margin:0;
+    padding:10px 12px;
+    border:1px solid var(--line);
+    border-radius:14px;
+    background:rgba(7,13,22,.88);
+    color:#bdd4ff;
+    font:12px/1.45 "SFMono-Regular",Menlo,Consolas,monospace;
+    white-space:pre-wrap;
+    word-break:break-word;
+  }
+  body.inspector-collapsed #builderWrap .canvas{right:0;border-right:none}
+  body.inspector-collapsed .inspector{
+    width:0;
+    opacity:0;
+    pointer-events:none;
+    border-left:none;
+  }
+  body.inspector-collapsed .inspector > *{opacity:0}
+  .inspectorHandle{
+    position:fixed;
+    right:0;
+    top:44%;
+    transform:translateY(-50%);
+    display:none;
+    padding:10px 12px;
+    border:1px solid var(--line);
+    border-right:none;
+    border-radius:14px 0 0 14px;
+    background:linear-gradient(180deg, rgba(18,29,46,.98), rgba(10,17,28,.98));
+    color:var(--fg);
+    box-shadow:var(--shadow-1);
+    cursor:pointer;
+    z-index:15000;
+  }
+  body.inspector-collapsed:not(.viewer-mode) .inspectorHandle{display:block}
   .viewerEmpty{
     position:absolute;
     left:40px;
@@ -724,6 +960,7 @@
     header{flex-direction:column;align-items:stretch}
     .shellActions{justify-content:flex-start}
     :root{--leftW:320px}
+    :root{--inspectorW:300px}
   }
   @media (max-width: 760px){
     header{padding:14px}
@@ -742,6 +979,29 @@
     .zoomwrap input[type=range]{width:132px}
     .fab{right:16px;bottom:18px}
     .fabMenu{right:16px;bottom:90px}
+    #builderWrap .canvas{right:0}
+    .inspector{
+      top:auto;
+      left:0;
+      width:auto;
+      height:min(42vh, 380px);
+      border-top:1px solid var(--line);
+      box-shadow:0 -16px 30px rgba(0,0,0,.28);
+    }
+    body.inspector-collapsed .inspector{
+      width:auto;
+      height:0;
+      transform:translateY(100%);
+      border-top:none;
+    }
+    .inspectorHandle{
+      top:auto;
+      bottom:18px;
+      transform:none;
+      border-radius:14px 0 0 14px;
+    }
+    .inspectorActions{grid-template-columns:repeat(4, minmax(0, 1fr))}
+    .inspectorActions button{padding:9px 10px;font-size:12px}
   }
 </style>
 <style id="feature-toast-util-v1-css">
@@ -876,6 +1136,23 @@
         <svg id="builderLinks" class="links" viewBox="0 0 5000 4000" preserveAspectRatio="none"></svg>
       </div>
     </div>
+    <aside id="inspectorPanel" class="inspector">
+      <div class="inspectorHead">
+        <div class="inspectorHeadTop">
+          <div class="inspectorEyebrow">Selection Inspector</div>
+          <button id="hideInspector" class="inspectorHideBtn" type="button">Hide</button>
+        </div>
+        <div id="inspectorTitle" class="inspectorTitle">Nothing selected</div>
+        <div id="inspectorSub" class="inspectorSub">Select a task card to inspect its placement, dependencies, and staged commands.</div>
+      </div>
+      <div class="inspectorActions">
+        <button id="inspectorLocate" type="button">Locate</button>
+        <button id="inspectorDone" type="button">Done</button>
+        <button id="inspectorDelete" type="button">Delete</button>
+        <button id="inspectorModify" type="button">Modify</button>
+      </div>
+      <div id="inspectorBody" class="inspectorBody"></div>
+    </aside>
   </div>
 
   <div id="viewerWrap" class="builder" style="display:none">
@@ -899,6 +1176,7 @@
 
 <!-- Drawer hover handle -->
 <div id="drawerHandle" class="drawerHandle">Tasks ▸</div>
+<div id="inspectorHandle" class="inspectorHandle">◂ Inspector</div>
 
 <!-- Floating Add button and menu -->
 <div id="fab" class="fab" title="Add…">＋</div>
@@ -976,6 +1254,7 @@ var tabBuilder  = document.getElementById('tabBuilder');
 var tabViewer   = document.getElementById('tabViewer');
 var toggleDrawer= document.getElementById('toggleDrawer');
 var drawerHandle= document.getElementById('drawerHandle');
+var inspectorHandle = document.getElementById('inspectorHandle');
 
 var list        = document.getElementById('list');
 var q           = document.getElementById('q');
@@ -1003,6 +1282,19 @@ var fabMenu = document.getElementById('fabMenu');
 var fabAddProject = document.getElementById('fabAddProject');
 var fabAddFiltered = document.getElementById('fabAddFiltered');
 var fabAddNew = document.getElementById('fabAddNew');
+var inspectorPanel = document.getElementById('inspectorPanel');
+var inspectorTitle = document.getElementById('inspectorTitle');
+var inspectorSub = document.getElementById('inspectorSub');
+var inspectorBody = document.getElementById('inspectorBody');
+var inspectorLocate = document.getElementById('inspectorLocate');
+var inspectorDone = document.getElementById('inspectorDone');
+var inspectorDelete = document.getElementById('inspectorDelete');
+var inspectorModify = document.getElementById('inspectorModify');
+var hideInspector = document.getElementById('hideInspector');
+var inspectorTimer = 0;
+var selectedProject = null;
+var dragProjMoved = false;
+var lastProjectDragAt = 0;
 
 /* ===== Drawer collapse/expand ===== */
 function setDrawerWidth(px){ document.documentElement.style.setProperty('--leftW', px + 'px'); }
@@ -1012,15 +1304,22 @@ toggleDrawer.addEventListener('click', function(){ if (DRAWER_PINNED){ collapseD
 drawerHandle.addEventListener('mouseenter', function(){ if (!DRAWER_PINNED) expandDrawer(false); });
 left.addEventListener('mouseleave', function(){ if (!DRAWER_PINNED) collapseDrawer(); });
 
+function collapseInspector(){ document.body.classList.add('inspector-collapsed'); }
+function expandInspector(){ document.body.classList.remove('inspector-collapsed'); }
+if (hideInspector) hideInspector.addEventListener('click', collapseInspector);
+if (inspectorHandle) inspectorHandle.addEventListener('click', expandInspector);
+
 /* ===== Tabs ===== */
 function setMode(mode){
   if(mode==="viewer"){
+    document.body.classList.add('viewer-mode');
     left.style.display='none';
     builderWrap.style.display='none';
     viewerWrap.style.display='block';
     tabViewer.classList.add('active'); tabBuilder.classList.remove('active');
     renderViewer();
   }else{
+    document.body.classList.remove('viewer-mode');
     left.style.display='block';
     builderWrap.style.display='block';
     viewerWrap.style.display='none';
@@ -1028,6 +1327,7 @@ function setMode(mode){
     recomputeAreasAndTags();
     drawLinks();
   }
+  queueInspectorRender(0);
 }
 tabBuilder.addEventListener('click', function(){ setMode('builder'); });
 tabViewer.addEventListener('click', function(){ setMode('viewer'); });
@@ -1178,6 +1478,35 @@ function moveNodesForTag(project, tag, dx, dy){
     n.style.top  = ((y+dy)|0) + "px";
   });
 }
+function removeProjectFromCanvas(project){
+  if (!projectAreas.has(project)) return false;
+  if (selectedProject === project) clearProjectSelection(true);
+  var removedCount = 0;
+
+  Array.from(builderStage.querySelectorAll('.node')).forEach(function(n){
+    if (n.getAttribute('data-proj') !== project) return;
+    if (selected.has(n)){
+      n.classList.remove('selected');
+      selected.delete(n);
+    }
+    try{ n.remove(); }catch(_){}
+    removedCount++;
+  });
+
+  Array.from(tagAreas.keys()).forEach(function(key){
+    var ta = tagAreas.get(key);
+    if (ta && ta.project === project) tagAreas.delete(key);
+  });
+  projectAreas.delete(project);
+
+  recomputeAreasAndTags();
+  drawLinks();
+  try{ if (typeof refreshDepHandleLetters === 'function') refreshDepHandleLetters(); }catch(_){}
+  updateConsole();
+  queueInspectorRender(0);
+  try{ if (typeof showToast === 'function') showToast('Removed project "'+project+'" from canvas ('+removedCount+' task'+(removedCount===1?'':'s')+').'); }catch(_){}
+  return true;
+}
 
 /* ===== Overlap detection & resolution ===== */
 function rectsOverlap(a,b){
@@ -1306,6 +1635,11 @@ function recomputeAreasAndTags(){
     var pl = document.createElement('div');
     pl.className="projAreaLabel"; if (proj==="(no project)") pl.classList.add('none');
     pl.textContent = proj;
+    pl.setAttribute('data-proj-label', proj);
+    if (selectedProject === proj){
+      pd.classList.add('selectedProject');
+      pl.classList.add('selectedProjectLabel');
+    }
     pd.appendChild(pl);
     // Apply project palette
     try {
@@ -1317,7 +1651,23 @@ function recomputeAreasAndTags(){
 
     areasLayer.appendChild(pd);
     pa.el = pd;
-    pl.addEventListener('mousedown', function(e){ startProjectDrag(e, pa); });
+    pl.title = 'Drag project';
+    pl.addEventListener('mousedown', function(e){
+      if (removeMode && removeMode.checked){
+        e.preventDefault();
+        e.stopPropagation();
+        removeProjectFromCanvas(proj);
+        return;
+      }
+      startProjectDrag(e, pa);
+    });
+    pl.addEventListener('click', function(e){
+      if (removeMode && removeMode.checked) return;
+      if (Date.now() - lastProjectDragAt < 220) return;
+      e.preventDefault();
+      e.stopPropagation();
+      selectProject(proj);
+    });
   });
   // tags
   tagAreas.forEach(function(ta){
@@ -1401,11 +1751,405 @@ function projectAtPoint(x, y){
   });
   return found;
 }
+function clearProjectSelection(skipRender){
+  selectedProject = null;
+  document.querySelectorAll('.projArea.selectedProject').forEach(function(el){ el.classList.remove('selectedProject'); });
+  document.querySelectorAll('.projAreaLabel.selectedProjectLabel').forEach(function(el){ el.classList.remove('selectedProjectLabel'); });
+  if (!skipRender) queueInspectorRender(0);
+}
+function syncProjectSelectionUI(){
+  document.querySelectorAll('.projArea.selectedProject').forEach(function(el){ el.classList.remove('selectedProject'); });
+  document.querySelectorAll('.projAreaLabel.selectedProjectLabel').forEach(function(el){ el.classList.remove('selectedProjectLabel'); });
+  if (!selectedProject) return;
+  document.querySelectorAll('.projArea[data-proj]').forEach(function(el){
+    if (el.getAttribute('data-proj') === selectedProject) el.classList.add('selectedProject');
+  });
+  document.querySelectorAll('.projAreaLabel[data-proj-label]').forEach(function(el){
+    if (el.getAttribute('data-proj-label') === selectedProject) el.classList.add('selectedProjectLabel');
+  });
+}
+function selectProject(project){
+  clearSelection();
+  selectedProject = project || null;
+  syncProjectSelectionUI();
+  queueInspectorRender(0);
+}
+
+function queueInspectorRender(delay){
+  if (inspectorTimer) clearTimeout(inspectorTimer);
+  inspectorTimer = setTimeout(function(){
+    inspectorTimer = 0;
+    renderInspector();
+  }, Math.max(0, delay || 0));
+}
+function primarySelectedNode(){
+  var arr = Array.from(selected).filter(function(n){ return n && n.isConnected; });
+  return arr.length ? arr[0] : null;
+}
+function getCanvasScroller(){
+  return document.querySelector('#builderWrap .canvas') || document.querySelector('.canvas');
+}
+function centerNodeIntoView(node){
+  try{
+    var cv = getCanvasScroller();
+    if (!cv || !node) return;
+    var cvr = cv.getBoundingClientRect();
+    var er = node.getBoundingClientRect();
+    var dx = (er.left + er.width/2) - (cvr.left + cvr.width/2);
+    var dy = (er.top + er.height/2) - (cvr.top + cv.clientHeight/2);
+    cv.scrollTo({
+      left: Math.max(0, Math.min(cv.scrollWidth - cv.clientWidth, cv.scrollLeft + dx)),
+      top: Math.max(0, Math.min(cv.scrollHeight - cv.clientHeight, cv.scrollTop + dy)),
+      behavior: 'smooth'
+    });
+    try{ node.classList.add('pulse'); setTimeout(function(){ node.classList.remove('pulse'); }, 820); }catch(_){}
+  }catch(_){}
+}
+function centerProjectIntoView(project){
+  if (!project) return;
+  var el = null;
+  document.querySelectorAll('.projArea[data-proj]').forEach(function(node){
+    if (!el && node.getAttribute('data-proj') === project) el = node;
+  });
+  if (el) centerNodeIntoView(el);
+}
+function taskForNode(node){
+  if (!node) return null;
+  return TASK_BY_SHORT[node.getAttribute('data-short')] || null;
+}
+function tasksForProject(project){
+  return TASKS.filter(function(t){ return (t.project || '(no project)') === project; });
+}
+function canvasTasksForProject(project){
+  var seen = Object.create(null);
+  return Array.from(builderStage.querySelectorAll('.node')).filter(function(n){
+    return n.getAttribute('data-proj') === project;
+  }).map(taskForNode).filter(function(t){
+    if (!t || seen[t.short]) return false;
+    seen[t.short] = 1;
+    return true;
+  });
+}
+function uniqueStrings(arr){
+  var out = [], seen = Object.create(null);
+  (arr || []).forEach(function(v){
+    v = String(v || '');
+    if (!v || seen[v]) return;
+    seen[v] = 1;
+    out.push(v);
+  });
+  return out;
+}
+function isTaskActionable(task){
+  if (!task) return false;
+  var shortId = task.short || '';
+  var deps = uniqueStrings((PARENT_DEPS0 && PARENT_DEPS0[shortId]) || []);
+  var stagedDeps = uniqueStrings((window.stagedAdd || []).filter(function(e){ return e && e.from === shortId; }).map(function(e){ return e.to; }));
+  return deps.length === 0 && stagedDeps.length === 0;
+}
+function inspectorStateChips(task, node){
+  var chips = [];
+  if (!task || !node) return chips;
+  var shortId = task.short || '';
+  var deps = uniqueStrings((PARENT_DEPS0 && PARENT_DEPS0[shortId]) || []);
+  var stagedDeps = uniqueStrings((window.stagedAdd || []).filter(function(e){ return e && e.from === shortId; }).map(function(e){ return e.to; }));
+  if (String(task.uuid || '').indexOf('new-') === 0) chips.push({kind:'info', text:'New task'});
+  if (!deps.length && !stagedDeps.length) chips.push({kind:'success', text:'Actionable'});
+  else chips.push({kind:'warn', text:(deps.length + stagedDeps.length)+' dependencies'});
+  if (task.due) chips.push({kind:'info', text:'Due '+task.due});
+  if (node.classList.contains('stagedDone')) chips.push({kind:'success', text:'Marked done'});
+  if (node.classList.contains('stagedDel')) chips.push({kind:'danger', text:'Marked delete'});
+  return chips;
+}
+function inspectorChangeItems(task, node){
+  var items = [];
+  if (!task || !node) return items;
+  var isNew = String(task.uuid || '').indexOf('new-') === 0;
+  var currentTag = firstTag(task) || '(no tag)';
+  var currentProj = task.project || '(no project)';
+  var initialTag = INIT_MAIN_TAG[task.short] || '(no tag)';
+  var initialProj = INIT_PROJECT[task.short] || '(no project)';
+  var ex = ((window.EX_OPS || window.__EXISTING_OPS__ || {})[task.uuid] || (window.EX_OPS || window.__EXISTING_OPS__ || {})[task.short] || {});
+  var fold = ((window.FOLD || window.__FOLD_STATE__ || {})[task.uuid] || (window.FOLD || window.__FOLD_STATE__ || {})[task.short] || {});
+  if (isNew) items.push('Will be created on apply');
+  if (!isNew && currentProj !== initialProj) items.push('Project: '+initialProj+' -> '+currentProj);
+  if (!isNew && currentTag !== initialTag) items.push('Tag: '+initialTag+' -> '+currentTag);
+  if (Array.isArray(ex.mods)) ex.mods.forEach(function(mod){ items.push('Modify: '+mod); });
+  if (Array.isArray(fold.extra)) fold.extra.forEach(function(mod){ items.push('Modify: '+mod); });
+  if (fold.project && fold.project !== currentProj) items.push('Project: '+currentProj+' -> '+fold.project);
+  if (fold.due && fold.due !== task.due) items.push('Due: '+fold.due);
+  var stagedOut = uniqueStrings((window.stagedAdd || []).filter(function(e){ return e && e.from === task.short; }).map(function(e){ return e.to; }));
+  if (stagedOut.length) items.push('Adds dependencies: '+stagedOut.join(', '));
+  return items;
+}
+function inspectorCommandLines(task){
+  if (!task) return [];
+  var lines = [];
+  var text = (consoleText && consoleText.value) ? consoleText.value : buildCommands();
+  text.split(/\n/).forEach(function(line){
+    var l = String(line || '').trim();
+    if (!l) return;
+    if (l.indexOf(task.uuid) !== -1 || l.indexOf(task.short) !== -1){
+      lines.push(l);
+      return;
+    }
+    if (String(task.uuid || '').indexOf('new-') === 0 && /^task\s+(add|log)\b/i.test(l) && l.indexOf(task.desc) !== -1){
+      lines.push(l);
+    }
+  });
+  return uniqueStrings(lines);
+}
+function projectCommandLines(project){
+  var tasks = tasksForProject(project);
+  var ids = Object.create(null);
+  var descs = [];
+  tasks.forEach(function(t){
+    if (!t) return;
+    if (t.uuid) ids[t.uuid] = 1;
+    if (t.short) ids[t.short] = 1;
+    if (String(t.uuid || '').indexOf('new-') === 0 && t.desc) descs.push(t.desc);
+  });
+  var lines = [];
+  var text = (consoleText && consoleText.value) ? consoleText.value : buildCommands();
+  text.split(/\n/).forEach(function(line){
+    var l = String(line || '').trim();
+    if (!l) return;
+    var matched = false;
+    Object.keys(ids).forEach(function(id){
+      if (!matched && l.indexOf(id) !== -1) matched = true;
+    });
+    if (!matched){
+      for (var i=0; i<descs.length; i++){
+        if (l.indexOf(descs[i]) !== -1){ matched = true; break; }
+      }
+    }
+    if (matched) lines.push(l);
+  });
+  return uniqueStrings(lines);
+}
+function addMissingProjectTasks(project){
+  var tasks = tasksForProject(project);
+  if (!tasks.length) return 0;
+  var existing = Object.create(null);
+  Array.from(builderStage.querySelectorAll('.node')).forEach(function(n){
+    var shortId = n.getAttribute('data-short');
+    if (shortId) existing[shortId] = 1;
+  });
+  var byTag = Object.create(null);
+  tasks.forEach(function(t){
+    if (!t || existing[t.short]) return;
+    var tag = firstTag(t);
+    var key = keyPT(project, tag);
+    (byTag[key] = byTag[key] || []).push(t);
+  });
+  var added = 0;
+  Object.keys(byTag).forEach(function(key){
+    var parts = key.split('||');
+    var p = parts[0], tag = parts[1];
+    ensureTagArea(p, tag);
+    byTag[key].forEach(function(t){
+      addNodeForTask(t, null, null, {deferLayout:true});
+      added++;
+    });
+    relayoutTag(p, tag);
+    resolveTagOverlaps(p);
+  });
+  if (added){
+    resolveProjectOverlaps();
+    drawLinks();
+    updateConsole();
+    queueInspectorRender(0);
+  }
+  return added;
+}
+function renderInspector(){
+  if (!inspectorPanel || !inspectorBody || !inspectorTitle || !inspectorSub) return;
+  if (selectedProject){
+    var project = selectedProject;
+    var allTasks = tasksForProject(project);
+    var projectCanvasTasks = canvasTasksForProject(project);
+    var tagsAll = uniqueStrings(allTasks.map(function(t){ return firstTag(t); }));
+    var tagsCanvas = uniqueStrings(projectCanvasTasks.map(function(t){ return firstTag(t); }));
+    var dueCount = allTasks.filter(function(t){ return !!t.due; }).length;
+    var actionable = allTasks.filter(isTaskActionable).length;
+    var hiddenCount = Math.max(0, allTasks.length - projectCanvasTasks.length);
+    var commandsForProject = projectCommandLines(project);
+    inspectorLocate.disabled = false;
+    inspectorDone.disabled = false;
+    inspectorDelete.disabled = false;
+    inspectorModify.disabled = true;
+    inspectorLocate.textContent = 'Locate';
+    inspectorDone.textContent = 'Add missing';
+    inspectorDelete.textContent = 'Remove';
+    inspectorModify.textContent = 'Details';
+    inspectorTitle.textContent = project;
+    inspectorSub.textContent = 'Canvas project summary';
+    inspectorBody.innerHTML =
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorMetrics">' +
+          '<div class="metricCard"><div class="metricValue">'+projectCanvasTasks.length+'</div><div class="metricLabel">On canvas</div></div>' +
+          '<div class="metricCard"><div class="metricValue">'+hiddenCount+'</div><div class="metricLabel">Still in drawer</div></div>' +
+          '<div class="metricCard"><div class="metricValue">'+tagsAll.length+'</div><div class="metricLabel">Tags</div></div>' +
+          '<div class="metricCard"><div class="metricValue">'+dueCount+'</div><div class="metricLabel">With due</div></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorChips">' +
+          '<span class="inspectorChip info">'+allTasks.length+' tasks total</span>' +
+          '<span class="inspectorChip '+(actionable ? 'success' : 'warn')+'">'+actionable+' actionable</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorLabel">Tags On Canvas</div>' +
+        (tagsCanvas.length
+          ? '<div class="inspectorChips">'+tagsCanvas.map(function(t){ return '<span class="inspectorChip">'+escapeHtml(t)+'</span>'; }).join('')+'</div>'
+          : '<div class="inspectorEmpty"><div>No tasks from this project are currently on the canvas.</div></div>') +
+      '</div>' +
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorLabel">Tasks On Canvas</div>' +
+        (projectCanvasTasks.length
+          ? '<div class="inspectorList">'+projectCanvasTasks.slice(0, 6).map(function(t){ return '<div class="inspectorListItem"><strong>'+escapeHtml(t.short)+'</strong> '+escapeHtml(t.desc)+'</div>'; }).join('')+'</div>'
+          : '<div class="inspectorEmpty"><div>Use "Add missing" to bring this project back onto the canvas.</div></div>') +
+      '</div>' +
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorLabel">Pending commands</div>' +
+        (commandsForProject.length
+          ? '<div class="inspectorCode">'+commandsForProject.map(function(line){ return '<pre class="inspectorCodeLine">'+escapeHtml(line)+'</pre>'; }).join('')+'</div>'
+          : '<div class="inspectorEmpty"><div>No staged commands currently affect this project.</div></div>') +
+      '</div>';
+    return;
+  }
+  var nodes = Array.from(selected).filter(function(n){ return n && n.isConnected; });
+  var single = nodes.length === 1 ? nodes[0] : null;
+  var hasSingle = !!single;
+  inspectorLocate.disabled = !nodes.length;
+  inspectorDone.disabled = !hasSingle;
+  inspectorDelete.disabled = !hasSingle;
+  inspectorModify.disabled = !hasSingle;
+  inspectorLocate.textContent = 'Locate';
+  inspectorDone.textContent = 'Done';
+  inspectorDelete.textContent = 'Delete';
+  inspectorModify.textContent = 'Modify';
+  if (!nodes.length){
+    inspectorTitle.textContent = 'Nothing selected';
+    inspectorSub.textContent = 'Select a task card to inspect its placement, dependencies, and staged commands.';
+    inspectorBody.innerHTML =
+      '<div class="inspectorEmpty">' +
+        '<div>Click a task to inspect it.</div>' +
+        '<div>When a task is selected, this panel shows placement, dependency counts, and the exact commands currently staged for it.</div>' +
+      '</div>';
+    return;
+  }
+  if (nodes.length > 1){
+    var tasks = nodes.map(taskForNode).filter(Boolean);
+    var projs = uniqueStrings(tasks.map(function(t){ return t.project || '(no project)'; }));
+    var tags = uniqueStrings(tasks.map(function(t){ return firstTag(t); }));
+    inspectorTitle.textContent = nodes.length + ' tasks selected';
+    inspectorSub.textContent = 'Group selection is active. Drag to move them together, or select a single task for detailed inspection.';
+    inspectorBody.innerHTML =
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorMetrics">' +
+          '<div class="metricCard"><div class="metricValue">'+nodes.length+'</div><div class="metricLabel">Selected</div></div>' +
+          '<div class="metricCard"><div class="metricValue">'+projs.length+'</div><div class="metricLabel">Projects</div></div>' +
+          '<div class="metricCard"><div class="metricValue">'+tags.length+'</div><div class="metricLabel">Tags</div></div>' +
+          '<div class="metricCard"><div class="metricValue">'+tasks.filter(function(t){ return t && t.due; }).length+'</div><div class="metricLabel">With due</div></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorLabel">Projects</div>' +
+        '<div class="inspectorChips">'+projs.map(function(p){ return '<span class="inspectorChip">'+escapeHtml(p)+'</span>'; }).join('')+'</div>' +
+      '</div>' +
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorLabel">Tags</div>' +
+        '<div class="inspectorChips">'+tags.map(function(t){ return '<span class="inspectorChip">'+escapeHtml(t)+'</span>'; }).join('')+'</div>' +
+      '</div>';
+    return;
+  }
+  var task = taskForNode(single);
+  if (!task){
+    inspectorTitle.textContent = 'Selection unavailable';
+    inspectorSub.textContent = 'The selected card is no longer attached to a task.';
+    inspectorBody.innerHTML = '<div class="inspectorEmpty"><div>Select another task card.</div></div>';
+    return;
+  }
+  var shortId = task.short || '';
+  var depends = uniqueStrings((PARENT_DEPS0 && PARENT_DEPS0[shortId]) || []);
+  var blocks = uniqueStrings((CHILD_TO_PARENTS && CHILD_TO_PARENTS[shortId]) || []);
+  var stagedOut = uniqueStrings((window.stagedAdd || []).filter(function(e){ return e && e.from === shortId; }).map(function(e){ return e.to; }));
+  var stagedIn = uniqueStrings((window.stagedAdd || []).filter(function(e){ return e && e.to === shortId; }).map(function(e){ return e.from; }));
+  var chips = inspectorStateChips(task, single);
+  var changes = inspectorChangeItems(task, single);
+  var commands = inspectorCommandLines(task);
+  inspectorTitle.textContent = (task.short || 'Task') + ' selected';
+  inspectorSub.textContent = task.desc || '(no description)';
+  inspectorBody.innerHTML =
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorChips">' +
+        chips.map(function(chip){ return '<span class="inspectorChip '+chip.kind+'">'+escapeHtml(chip.text)+'</span>'; }).join('') +
+      '</div>' +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">Placement</div>' +
+      '<dl class="inspectorKV">' +
+        '<dt>Project</dt><dd>'+escapeHtml(task.project || '(no project)')+'</dd>' +
+        '<dt>Tag</dt><dd>'+escapeHtml(firstTag(task) || '(no tag)')+'</dd>' +
+        '<dt>Due</dt><dd>'+escapeHtml(task.due || 'No due date')+'</dd>' +
+        '<dt>UUID</dt><dd>'+escapeHtml(task.uuid || '')+'</dd>' +
+      '</dl>' +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">Dependencies</div>' +
+      '<div class="inspectorMetrics">' +
+        '<div class="metricCard"><div class="metricValue">'+depends.length+'</div><div class="metricLabel">Depends on</div></div>' +
+        '<div class="metricCard"><div class="metricValue">'+blocks.length+'</div><div class="metricLabel">Blocks</div></div>' +
+        '<div class="metricCard"><div class="metricValue">'+stagedOut.length+'</div><div class="metricLabel">Staged out</div></div>' +
+        '<div class="metricCard"><div class="metricValue">'+stagedIn.length+'</div><div class="metricLabel">Staged in</div></div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">Pending changes</div>' +
+      (changes.length
+        ? '<div class="inspectorList">'+changes.map(function(item){ return '<div class="inspectorListItem">'+escapeHtml(item)+'</div>'; }).join('')+'</div>'
+        : '<div class="inspectorEmpty"><div>No task-specific changes staged yet.</div></div>') +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">Pending commands</div>' +
+      (commands.length
+        ? '<div class="inspectorCode">'+commands.map(function(line){ return '<pre class="inspectorCodeLine">'+escapeHtml(line)+'</pre>'; }).join('')+'</div>'
+        : '<div class="inspectorEmpty"><div>No commands generated for this task yet.</div></div>') +
+    '</div>';
+}
+function triggerInspectorAction(kind){
+  if (selectedProject){
+    if (kind === 'locate'){ centerProjectIntoView(selectedProject); return; }
+    if (kind === 'done'){
+      var added = addMissingProjectTasks(selectedProject);
+      try{ if (typeof showToast === 'function') showToast(added ? ('Added '+added+' task'+(added===1?'':'s')+' from "'+selectedProject+'".') : ('No missing tasks for "'+selectedProject+'".')); }catch(_){}
+      return;
+    }
+    if (kind === 'delete'){
+      removeProjectFromCanvas(selectedProject);
+      return;
+    }
+    return;
+  }
+  var node = primarySelectedNode();
+  if (!node) return;
+  if (kind === 'locate'){ centerNodeIntoView(node); return; }
+  var selector = kind === 'done' ? '.btnDone' : (kind === 'delete' ? '.btnDel' : '.btnMod');
+  var btn = node.querySelector(selector);
+  if (btn) btn.click();
+  queueInspectorRender(40);
+}
+if (inspectorLocate) inspectorLocate.addEventListener('click', function(){ triggerInspectorAction('locate'); });
+if (inspectorDone) inspectorDone.addEventListener('click', function(){ triggerInspectorAction('done'); });
+if (inspectorDelete) inspectorDelete.addEventListener('click', function(){ triggerInspectorAction('delete'); });
+if (inspectorModify) inspectorModify.addEventListener('click', function(){ triggerInspectorAction('modify'); });
 
 /* ===== Selection & node dragging ===== */
 var selected = new Set();
-function clearSelection(){ selected.forEach(function(n){ n.classList.remove('selected');}); selected.clear(); }
-function selectNode(n){ n.classList.add('selected'); selected.add(n); }
+function clearSelection(){ selected.forEach(function(n){ n.classList.remove('selected');}); selected.clear(); clearProjectSelection(true); queueInspectorRender(0); }
+function selectNode(n){ clearProjectSelection(true); n.classList.add('selected'); selected.add(n); queueInspectorRender(0); }
 
 function makeDraggable(node){
   var dragging=false, group=false, sx=0, sy=0, start=[];
@@ -1470,6 +2214,7 @@ function makeDraggable(node){
     }
     updateConsole();
     drawLinks();
+    queueInspectorRender(0);
   });
 }
 
@@ -1524,6 +2269,7 @@ function onTagUp(e){
 
   dragTag = null; dragTagStart = null; dragTagNodes = null;
   updateConsole();
+  queueInspectorRender(0);
 }
 
 /* ===== Project bubble dragging (snapshot) ===== */
@@ -1531,6 +2277,7 @@ var dragProj = null, dragProjStart = null, dragProjTags = null, dragProjNodes = 
 function startProjectDrag(e, pa){
   e.preventDefault();
   dragProj = pa;
+  dragProjMoved = false;
   dragProjStart = { sx:e.clientX, sy:e.clientY, x:pa.x, y:pa.y };
   dragProjName = getProjName(pa);
   // snapshot child tags & nodes
@@ -1549,6 +2296,7 @@ function startProjectDrag(e, pa){
 function onProjMove(e){
   if (!dragProj) return;
   var dx = (e.clientX - dragProjStart.sx)/ZSCALE, dy = (e.clientY - dragProjStart.sy)/ZSCALE;
+  if (Math.abs(dx) > 2 || Math.abs(dy) > 2) dragProjMoved = true;
   var nx = dragProjStart.x + dx, ny = dragProjStart.y + dy;
   dragProj.x = nx; dragProj.y = ny;
   if (dragProj.el){ dragProj.el.style.left = (nx|0)+"px"; dragProj.el.style.top = (ny|0)+"px"; }
@@ -1566,7 +2314,10 @@ function onProjUp(e){
   document.removeEventListener('mousemove', onProjMove);
   // snap against other projects if overlapping
   resolveProjectOverlaps();
+  if (dragProjMoved) lastProjectDragAt = Date.now();
   dragProj = null; dragProjStart = null; dragProjTags = null; dragProjNodes = null; dragProjName = null;
+  dragProjMoved = false;
+  queueInspectorRender(0);
 }
 
 /* ===== Helpers ===== */
@@ -1605,6 +2356,7 @@ function addNodeForTask(task, cx, cy, opts){
   makeDraggable(node);
   try{queueVirt&&queueVirt();}catch(e){} // Tw Patch hook
   try{ attachDepHandleToNode(node); }catch(_){ }
+  queueInspectorRender(0);
   return node;
 }
 
@@ -1628,6 +2380,7 @@ var marquee=null, mStart=null;
 builderStage.addEventListener('mousedown', function(e){
   if (e.button!==0) return;
   if (e.target.closest('.node')) return;
+  if (e.target.closest('.projAreaLabel') || e.target.closest('.tagAreaLabel') || e.target.closest('.tagAddBtn')) return;
   clearSelection();
   var rect = builderStage.getBoundingClientRect();
   mStart = {x:(e.clientX-rect.left)/ZSCALE, y:(e.clientY-rect.top)/ZSCALE};
@@ -1876,6 +2629,12 @@ function buildCommands(){
   return lines.join("\n");
 }
 function updateConsole(){ consoleText.value = buildCommands(); }
+var __baseUpdateConsole = updateConsole;
+updateConsole = function(){
+  var rv = __baseUpdateConsole.apply(this, arguments);
+  queueInspectorRender(20);
+  return rv;
+};
 copyBtn.addEventListener('click', async function(){
   var cmds = buildCommands();
   if (!cmds){ alert("No changes to copy."); return; }
@@ -2012,6 +2771,7 @@ projectAreas = new Map(); tagAreas = new Map(); // EMPTY canvas
 
 
     updateConsole();
+    queueInspectorRender(0);
   } catch (e) { console.log('[TaskCanvas] initFromDATA error', e); }
 }
 document.addEventListener('twdata', function(){ initFromDATA(); }, { once:true });

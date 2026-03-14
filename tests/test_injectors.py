@@ -31,6 +31,8 @@ class TestInjectors(unittest.TestCase):
         twice = inject_wire_deps_as_main(once)
         self.assertEqual(twice.count("__ONLY_DEPS_CONSOLE_CSS__"), 1)
         self.assertEqual(twice.count("__ONLY_DEPS_CONSOLE_JS__"), 1)
+        self.assertIn("#toggleConsole", twice)
+        self.assertIn("#consolePanel.open", twice)
 
     def test_inject_energy_arrows_idempotent(self):
         html = "<html><head></head><body></body></html>"
@@ -69,6 +71,8 @@ class TestInjectors(unittest.TestCase):
         self.assertEqual(twice.count("FEATURE_LAYOUT_PERSIST_V1"), 1)
         self.assertIn("localStorage", twice)
         self.assertIn("boardKey", twice)
+        self.assertIn("ensureNodesExistFromState", twice)
+        self.assertIn("addNodeForTask", twice)
 
     def test_inject_undo_redo_idempotent(self):
         html = "<html><head></head><body></body></html>"
