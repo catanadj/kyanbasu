@@ -182,6 +182,59 @@ window.addEventListener('load', function(){
         self.assertIn("task 'task-a' modify '+next' 'depends:-task-c'", text)
         self.assertIn("task 'uuid-a' modify 'depends:uuid-b'", text)
 
+    def test_build_commands_includes_staged_dependencies_without_base_monkey_patch(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps(
+            {
+                "tasks": [
+                    {
+                        "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        "short": "aaaaaaaa",
+                        "desc": "Parent",
+                        "project": "Work",
+                        "tags": [],
+                        "has_depends": False,
+                    },
+                    {
+                        "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                        "short": "bbbbbbbb",
+                        "desc": "Child",
+                        "project": "Work",
+                        "tags": [],
+                        "has_depends": False,
+                    },
+                ],
+                "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
+            }
+        )
+        html = build_runtime_html(base_html, payload, 2, lambda *_: None)
+        self.assertNotIn("buildCommands monkey patch to include staged depends", html)
+        self.assertNotIn("__buildCommandsPatched", html)
+
+        harness = """
+<script id="E2E_STAGED_DEP_COMMAND_HARNESS">
+window.addEventListener('load', function(){
+  try{
+    window.stagedAdd = [{from:"aaaaaaaa", to:"bbbbbbbb"}];
+    var out = (typeof buildCommands==='function') ? String(buildCommands()||'') : '';
+    var pre = document.createElement('pre');
+    pre.id = 'e2e-out';
+    pre.textContent = out;
+    document.body.appendChild(pre);
+  }catch(e){
+    var pre2 = document.createElement('pre');
+    pre2.id = 'e2e-out';
+    pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+    document.body.appendChild(pre2);
+  }
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        self.assertIn("task 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' modify 'depends:bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'", raw)
+
 
 if __name__ == "__main__":
     unittest.main()

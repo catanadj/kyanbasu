@@ -4166,36 +4166,6 @@ if(hideHasDeps) hideHasDeps.addEventListener('change', renderList);
 })();
 </script>
 
-<!-- == buildCommands monkey patch to include staged depends ================== -->
-<script>
-(function(){
-  if (window.__buildCommandsPatched) return;
-  if (typeof window.buildCommands !== 'function'){ window.__buildCommandsPatched=true; return; }
-  var _orig = window.buildCommands;
-  function uuidFromShort(short){
-    try{
-      if (window.TASK_BY_SHORT && window.TASK_BY_SHORT[short]) return window.TASK_BY_SHORT[short].uuid || short;
-      var el=document.querySelector('#builderStage [data-short="'+short+'"]');
-      return (el && el.getAttribute('data-uuid')) || short;
-    }catch(_){ return short; }
-  }
-  window.buildCommands = function(){
-    var txt = "";
-    try{ txt = _orig.call(this) || ""; }catch(_){}
-    try{
-      var extras=[];
-      (window.stagedAdd||[]).forEach(function(e){
-        extras.push("task "+uuidFromShort(e.from)+" modify depends:"+uuidFromShort(e.to));
-      });
-      if (extras.length) txt = (txt ? txt+"\n" : "") + extras.join("\n");
-    }catch(_){}
-    return txt;
-  };
-  window.__buildCommandsPatched = true;
-})();
-</script>
-
-
 <script>
 // === Dependency system (v0.7.7 strict) ======================================
 (function(){
@@ -4458,21 +4428,6 @@ if(hideHasDeps) hideHasDeps.addEventListener('change', renderList);
         try{ renderOverlay(); __applyDepHandleVisibilityStrict(); }catch(_){}
       };
       window.__depsOverlayHooked = true;
-    }
-    if (!window.__buildCommandsPatched && typeof window.buildCommands==='function'){
-      var _origBuild = window.buildCommands;
-      window.buildCommands = function(){
-        var txt=""; try{ txt=_origBuild.call(this)||""; }catch(_){}
-        try{
-          var extras=[];
-          (window.stagedAdd||[]).forEach(function(e){
-            extras.push('task '+uuidFromShort(e.from)+' modify depends:'+uuidFromShort(e.to));
-          });
-          if (extras.length) txt = (txt ? txt+'\\n' : '') + extras.join('\\n');
-        }catch(_){}
-        return txt;
-      };
-      window.__buildCommandsPatched = true;
     }
   })();
 
