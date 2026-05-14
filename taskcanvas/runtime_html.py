@@ -52,6 +52,8 @@ def build_runtime_html(
       }
     })();</script>
     """
+    if 'id="COMMANDS_CORE_V1"' not in html:
+        html = inject_body(html, load_runtime_asset("commands_core_v1.js.html") + "\n")
     html = inject_body(html, payload_tag + runner)
 
     head_snippets = [

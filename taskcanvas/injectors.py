@@ -193,14 +193,17 @@ def _find_bg_file(prefer: str | None, base_dir: Path | None = None):
     exts = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg")
     script_dir = (base_dir or Path(__file__).resolve().parent)
     cwd = Path.cwd()
+    repo_root = script_dir.parent if script_dir.name == "taskcanvas" else script_dir
+    demo_dir = repo_root / "demo"
 
     candidates = []
     if prefer:
         p = Path(prefer)
         candidates.append(p if p.is_absolute() else (cwd / p))
         candidates.append(script_dir / p.name)
+        candidates.append(demo_dir / p.name)
     names = ["taskcanvas-bg", "TaskCanvas.bg", "canvas-bg", "background", "bg"]
-    for root in (script_dir, cwd):
+    for root in (script_dir, cwd, demo_dir):
         for name in names:
             for ext in exts:
                 candidates.append(root / f"{name}{ext}")

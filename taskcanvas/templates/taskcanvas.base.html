@@ -2865,27 +2865,13 @@ fabAddNew.addEventListener('click', function(){
 });
 
 /* ===== Command builder + console ===== */
-function quote(s){ return '"' + String(s).replace(/\\/g,'\\\\').replace(/"/g,'\\"') + '"'; }
 function buildCommands(){
-  var lines=[];
-  for (var i=0;i<TASKS.length;i++){
-    var t=TASKS[i]; if (String(t.uuid).startsWith("new-")) continue;
-    var oldTag = INIT_MAIN_TAG[t.short] || "(no tag)";
-    var newTag = firstTag(t) || "(no tag)";
-    var oldProj= INIT_PROJECT[t.short] || "(no project)";
-    var newProj= t.project || "(no project)";
-    var ops=[]; if (oldTag !== newTag){ if (oldTag !== "(no tag)") ops.push("-"+oldTag); if (newTag !== "(no tag)") ops.push("+"+newTag); }
-    var projPart = null; if (oldProj !== newProj){ projPart = (newProj==="(no project)") ? "project:" : "project:"+newProj; }
-    if (ops.length || projPart){ var cmd = "task "+t.uuid+" modify "; if (projPart) cmd += projPart + " "; if (ops.length) cmd += ops.join(" "); lines.push(cmd.trim()); }
-  }
-  for (var j=0;j<TASKS.length;j++){
-    var n=TASKS[j]; if (!String(n.uuid).startsWith("new-")) continue;
-    var parts = ["task add", n.desc];
-    if (n.project && n.project!=="(no project)") parts.push("project:"+n.project);
-    (n.tags||[]).forEach(function(tag){ if (tag && tag !== "(no tag)") parts.push("+"+tag); });
-    lines.push(parts.join(" "));
-  }
-  return lines.join("\n");
+  try{
+    if (window.TaskCanvasCommands && typeof window.TaskCanvasCommands.rawRuntimeText === 'function'){
+      return window.TaskCanvasCommands.rawRuntimeText(window);
+    }
+  }catch(_){}
+  return "";
 }
 function updateConsole(){ consoleText.value = buildCommands(); }
 var __baseUpdateConsole = updateConsole;

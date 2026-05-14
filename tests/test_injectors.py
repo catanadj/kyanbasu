@@ -123,6 +123,20 @@ class TestInjectors(unittest.TestCase):
             found = _find_bg_file(None, base_dir=base)
             self.assertEqual(found, bg)
 
+    def test_find_bg_file_searches_demo_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            package_dir = root / "taskcanvas"
+            demo_dir = root / "demo"
+            package_dir.mkdir()
+            demo_dir.mkdir()
+            bg = demo_dir / "taskcanvas-bg.jpg"
+            bg.write_bytes(b"img")
+
+            found = _find_bg_file(None, base_dir=package_dir)
+
+            self.assertEqual(found, bg)
+
     def test_inject_custom_background_copies_and_injects_style(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

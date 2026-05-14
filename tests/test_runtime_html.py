@@ -31,6 +31,9 @@ class TestRuntimeHtml(unittest.TestCase):
         ]
         for marker in required_markers:
             self.assertIn(marker, out)
+        self.assertIn("rawRuntimeText: rawRuntimeText", out)
+        self.assertIn("rawTaskLines", out)
+        self.assertNotIn("var lines=[]", out)
         self.assertEqual(out.count('id="FEATURE_CONSOLE_MERGE_V3"'), 1)
         self.assertNotIn("<!-- INLINE_PAYLOAD_HERE -->", out)
         self.assertTrue(any("Embedded tasks: 0" in line for line in logs))

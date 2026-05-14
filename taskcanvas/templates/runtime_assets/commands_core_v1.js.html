@@ -153,6 +153,70 @@
     return out;
   }
 
+  function firstTag(task){
+    var tags = task && Array.isArray(task.tags) ? task.tags : [];
+    return tags.length ? tags[0] : "(no tag)";
+  }
+
+  function rawTaskLines(state){
+    state = state || {};
+    var tasks = Array.isArray(state.tasks) ? state.tasks : [];
+    var initMainTag = state.initMainTag || {};
+    var initProject = state.initProject || {};
+    var out = [];
+
+    for (var i=0;i<tasks.length;i++){
+      var t = tasks[i];
+      if (!t || String(t.uuid).startsWith("new-")) continue;
+      var oldTag = initMainTag[t.short] || "(no tag)";
+      var newTag = firstTag(t) || "(no tag)";
+      var oldProj = initProject[t.short] || "(no project)";
+      var newProj = t.project || "(no project)";
+      var ops = [];
+      if (oldTag !== newTag){
+        if (oldTag !== "(no tag)") ops.push("-" + oldTag);
+        if (newTag !== "(no tag)") ops.push("+" + newTag);
+      }
+      var projPart = null;
+      if (oldProj !== newProj){
+        projPart = (newProj === "(no project)") ? "project:" : "project:" + newProj;
+      }
+      if (ops.length || projPart){
+        var cmd = "task " + t.uuid + " modify ";
+        if (projPart) cmd += projPart + " ";
+        if (ops.length) cmd += ops.join(" ");
+        out.push(cmd.trim());
+      }
+    }
+
+    for (var j=0;j<tasks.length;j++){
+      var n = tasks[j];
+      if (!n || !String(n.uuid).startsWith("new-")) continue;
+      var parts = ["task add", n.desc || "(no description)"];
+      if (n.project && n.project !== "(no project)") parts.push("project:" + n.project);
+      (n.tags || []).forEach(function(tag){
+        if (tag && tag !== "(no tag)") parts.push("+" + tag);
+      });
+      out.push(parts.join(" "));
+    }
+    return out;
+  }
+
+  function runtimeState(win){
+    win = win || window;
+    return {
+      tasks: Array.isArray(win.TASKS) ? win.TASKS : [],
+      initMainTag: win.INIT_MAIN_TAG || {},
+      initProject: win.INIT_PROJECT || {},
+      stagedAdd: Array.isArray(win.stagedAdd) ? win.stagedAdd : [],
+      depExtraCmds: Array.isArray(win.__depExtraCmds) ? win.__depExtraCmds : []
+    };
+  }
+
+  function rawRuntimeText(win){
+    return rawTaskLines(runtimeState(win)).join('\n');
+  }
+
   function build(state){
     state = state || {};
     var raw = '';
@@ -160,6 +224,10 @@
       raw = state.raw;
     } else if (typeof state.rawBuilder === 'function'){
       raw = String(state.rawBuilder() || '');
+    } else if (state.runtime){
+      raw = rawTaskLines(runtimeState(state.runtime)).join('\n');
+      state.stagedAdd = Array.isArray(state.stagedAdd) ? state.stagedAdd : runtimeState(state.runtime).stagedAdd;
+      state.depExtraCmds = Array.isArray(state.depExtraCmds) ? state.depExtraCmds : runtimeState(state.runtime).depExtraCmds;
     }
     var deps = dependencyLines(state);
     if (deps.length){
@@ -174,6 +242,9 @@
     isModifierToken: isModifierToken,
     shellQuoteTaskLine: shellQuoteTaskLine,
     normalize: parseAndNormalize,
+    rawTaskLines: rawTaskLines,
+    runtimeState: runtimeState,
+    rawRuntimeText: rawRuntimeText,
     dependencyLines: dependencyLines,
     build: build
   };

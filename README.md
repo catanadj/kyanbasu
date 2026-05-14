@@ -122,7 +122,7 @@ Custom background
 
 - You can give TaskCanvas a custom background image via --bg and --bg-opacity.
 
-- If no flag is provided, it auto-searches for files like taskcanvas-bg.jpg/png/webp in the script directory or current working directory and uses them as a body overlay.
+- If no flag is provided, it auto-searches for files like taskcanvas-bg.jpg/png/webp in the package, current working directory, or demo directory and uses them as a body overlay.
 
 Termux & desktop friendly
 
@@ -235,7 +235,7 @@ taskcanvas --bg=mywall.png --bg-opacity=0.12
 
 TaskCanvas will copy the image next to TaskCanvas.html (same directory) and inject a body::before overlay with the given opacity (default ≈ 0.18).
 
-Without --bg, it tries to locate a file named like taskcanvas-bg.*, canvas-bg.*, background.* or bg.* in either the script directory or current working directory.
+Without --bg, it tries to locate a file named like taskcanvas-bg.*, canvas-bg.*, background.* or bg.* in the package directory, current working directory, or demo directory.
 
 ---
 
