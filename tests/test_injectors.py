@@ -99,7 +99,9 @@ class TestInjectors(unittest.TestCase):
         html = "<html><head></head><body></body></html>"
         once = inject_command_preflight(html)
         twice = inject_command_preflight(once)
+        self.assertEqual(twice.count("COMMANDS_CORE_V1"), 1)
         self.assertEqual(twice.count("FEATURE_COMMAND_PREFLIGHT_V1"), 1)
+        self.assertIn("window.TaskCanvasCommands", twice)
         self.assertIn("function shQuote", twice)
         self.assertIn("function shellQuoteTaskLine", twice)
         self.assertIn("task\\s+(add|log)", twice)

@@ -1,0 +1,150 @@
+<script id="COMMANDS_CORE_V1">
+(function(){
+  if (window.TaskCanvasCommands && window.TaskCanvasCommands.version) return;
+
+  function shQuote(arg){
+    var s = String(arg == null ? '' : arg);
+    return "'" + s.replace(/'/g, "'\"'\"'") + "'";
+  }
+
+  function isModifierToken(tok){
+    var t = String(tok || '').trim();
+    if (!t) return false;
+    if (/^[+-]\S+$/.test(t)) return true;
+    if (/^[A-Za-z0-9_.-]+:.+$/.test(t)) return true;
+    return false;
+  }
+
+  function shellQuoteTaskLine(line){
+    var s = String(line || '').trim();
+    if (!s) return '';
+
+    var mTerm = /^task\s+(\S+)\s+(done|delete)\s*$/i.exec(s);
+    if (mTerm){
+      return 'task ' + shQuote(mTerm[1]) + ' ' + String(mTerm[2] || '').toLowerCase();
+    }
+
+    var mMod = /^task\s+(\S+)\s+modify(?:\s+(.*))?$/i.exec(s);
+    if (mMod){
+      var id = mMod[1];
+      var rest = String(mMod[2] || '').trim();
+      var toks = rest ? rest.split(/\s+/).filter(Boolean) : [];
+      var qmods = toks.map(shQuote);
+      return 'task ' + shQuote(id) + ' modify' + (qmods.length ? (' ' + qmods.join(' ')) : '');
+    }
+
+    var mAddLog = /^task\s+(add|log)\s+(.+)$/i.exec(s);
+    if (mAddLog){
+      var verb = String(mAddLog[1] || '').toLowerCase();
+      var rest2 = String(mAddLog[2] || '').trim();
+      if (!rest2){
+        return 'task ' + verb + ' ' + shQuote('(no description)');
+      }
+      var parts = rest2.split(/\s+/).filter(Boolean);
+      var mods = [];
+      while (parts.length > 1 && isModifierToken(parts[parts.length - 1])){
+        mods.unshift(parts.pop());
+      }
+      var desc = parts.join(' ').trim() || '(no description)';
+      var tail = mods.map(shQuote).join(' ');
+      return 'task ' + verb + ' ' + shQuote(desc) + (tail ? (' ' + tail) : '');
+    }
+
+    return s;
+  }
+
+  function parseAndNormalize(raw){
+    var lines = String(raw||'').split(/\r?\n/).map(function(s){ return s.trim(); }).filter(Boolean);
+    var seenExact = Object.create(null);
+    var passthrough = [];
+    var byTask = Object.create(null);
+    var order = [];
+    var warnings = [];
+
+    function warn(msg){
+      if (warnings.indexOf(msg) === -1) warnings.push(msg);
+    }
+
+    for (var i=0;i<lines.length;i++){
+      var line = lines[i];
+      if (seenExact[line]) continue;
+      seenExact[line] = 1;
+
+      var m = /^task\s+(\S+)\s+(modify|done|delete)\b(?:\s+(.*))?$/i.exec(line);
+      if (!m){
+        passthrough.push(line);
+        continue;
+      }
+
+      var id = m[1];
+      var verb = String(m[2]||'').toLowerCase();
+      var rest = String(m[3]||'').trim();
+
+      if (!byTask[id]){
+        byTask[id] = { terminal:null, mods:[] };
+        order.push(id);
+      }
+      var st = byTask[id];
+
+      if (verb === 'modify'){
+        if (st.terminal){
+          warn('Dropped modify after terminal action for task ' + id);
+          continue;
+        }
+        if (rest) st.mods.push(rest);
+        continue;
+      }
+
+      if (st.terminal && st.terminal !== verb){
+        warn('Conflicting terminal actions for task ' + id + ' (kept last: ' + verb + ')');
+      }
+      st.terminal = verb;
+    }
+
+    var out = passthrough.slice();
+    for (var j=0;j<order.length;j++){
+      var id2 = order[j], s = byTask[id2];
+      if (!s) continue;
+      if (s.terminal){
+        out.push('task ' + id2 + ' ' + s.terminal);
+        continue;
+      }
+      if (s.mods && s.mods.length){
+        var tokSeen = Object.create(null), toks = [];
+        s.mods.join(' ').split(/\s+/).forEach(function(t){
+          if (!t) return;
+          if (tokSeen[t]) return;
+          tokSeen[t] = 1;
+          toks.push(t);
+        });
+        if (toks.length){
+          out.push('task ' + id2 + ' modify ' + toks.join(' '));
+        }
+      }
+    }
+
+    var safe = out.map(shellQuoteTaskLine).filter(Boolean);
+    return { text: safe.join('\n'), warnings: warnings, rawLines: lines, normalizedLines: out };
+  }
+
+  function build(state){
+    state = state || {};
+    var raw = '';
+    if (typeof state.raw === 'string'){
+      raw = state.raw;
+    } else if (typeof state.rawBuilder === 'function'){
+      raw = String(state.rawBuilder() || '');
+    }
+    return parseAndNormalize(raw);
+  }
+
+  window.TaskCanvasCommands = {
+    version: '1',
+    shQuote: shQuote,
+    isModifierToken: isModifierToken,
+    shellQuoteTaskLine: shellQuoteTaskLine,
+    normalize: parseAndNormalize,
+    build: build
+  };
+})();
+</script>

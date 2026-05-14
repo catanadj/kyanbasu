@@ -24,6 +24,7 @@ class TestRuntimeHtml(unittest.TestCase):
             "__FIXPACK_V61__",
             "FEATURE_ACTIONABLE_BEACON_V7B_JS",
             "FEATURE_LAYOUT_PERSIST_V1",
+            "COMMANDS_CORE_V1",
             "FEATURE_COMMAND_PREFLIGHT_V1",
             "FEATURE_RUNTIME_DIAGNOSTICS_V1",
             "FEATURE_UNDO_REDO_V1",

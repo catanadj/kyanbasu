@@ -270,6 +270,8 @@ def inject_command_preflight(html: str) -> str:
       - merges multiple modify commands for the same task into one line
       - shell-quotes generated task command args to avoid shell injection/splitting
     """
+    core = load_runtime_asset("commands_core_v1.js.html")
+    html = inject_body_once(html, 'id="COMMANDS_CORE_V1"', core + "\n")
     js = load_runtime_asset("injector_command_preflight_v1.js.html")
     return inject_body_once(html, 'id="FEATURE_COMMAND_PREFLIGHT_V1"', js + "\n")
 
