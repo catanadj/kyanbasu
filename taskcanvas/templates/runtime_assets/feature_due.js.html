@@ -206,6 +206,7 @@ if (!document.hidden) scheduleRekey(30);
   window.__FOLD_STATE__ = FOLD;
   var EX_OPS = window.__EXISTING_OPS__ || Object.create(null); // for existing tasks
   window.__EXISTING_OPS__ = EX_OPS;
+  window.EX_OPS = EX_OPS;
 
   function ensureFold(id){
 var t = taskById(id); if (!t) return null;
@@ -324,62 +325,11 @@ try{ if (typeof updateConsole==='function') setTimeout(updateConsole, 30); }catc
   // ===== console builder =====
   function buildConsole(){
 try{
-  if (!Array.isArray(window.TASKS)) return "";
-  var lines = [];
-  for (var i=0;i<TASKS.length;i++){
-    var t = TASKS[i]; if (!t) continue;
-    var id = t.uuid || t.short;
-
-    if (isNewId(id)){
-      // fold new tasks
-      var nd = document.querySelector('.node[data-uuid="'+id+'"], .node[data-short="'+id+'"]');
-      var done=false, deleted=false;
-      if (nd){
-        done = nd.classList.contains('stagedDone') || nd.classList.contains('completed') || nd.getAttribute('data-done')==='1';
-        deleted = nd.classList.contains('stagedDel') || nd.getAttribute('data-deleted')==='1';
-      }
-      var f = FOLD[t.uuid] || FOLD[t.short] || {};
-      if (f.done) done=true;
-      if (f.deleted) deleted=true;
-      if (deleted) continue;
-      var verb = done ? "task log" : "task add";
-      var parts = [verb, (t.desc||"(no description)")];
-      var proj = (typeof f.project!=='undefined') ? f.project : (t.project || "(no project)");
-      if (proj && proj!=="(no project)") parts.push("project:"+proj);
-      var tagset = Object.create(null);
-      if (Array.isArray(t.tags)){ for (var k=0;k<t.tags.length;k++){ var tg=t.tags[k]; if (tg && tg!=="(no tag)") tagset[tg]=true; } }
-      if (f.tags){ for (var tg in f.tags){ if (f.tags[tg]) tagset[tg]=true; else delete tagset[tg]; } }
-      Object.keys(tagset).forEach(function(tg){ parts.push("+"+tg); });
-      var due = (typeof f.due!=='undefined') ? f.due : t.due;
-      if (due) parts.push("due:"+due);
-      if (Array.isArray(f.extra)){ for (var q=0;q<f.extra.length;q++){ parts.push(f.extra[q]); } }
-      lines.push(parts.join(" "));
-    } else {
-      // existing tasks — merge diffs + EX_OPS
-      var ex = EX_OPS[id] || {};
-      if (ex.deleted){ lines.push("task "+t.uuid+" delete"); continue; }
-      if (ex.done){ lines.push("task "+t.uuid+" done"); continue; }
-      var oT = oldTagOf(t), nT = firstTag(t);
-      var oP = oldProjOf(t), nP = t.project || "(no project)";
-      var ops = [];
-      if (oT !== nT){
-        if (oT !== "(no tag)") ops.push("-"+oT);
-        if (nT !== "(no tag)") ops.push("+"+nT);
-      }
-      var projPart = null;
-      if (oP !== nP){ projPart = (nP === "(no project)") ? "project:" : "project:"+nP; }
-      var mods = [];
-      if (projPart) mods.push(projPart);
-      if (ops.length) Array.prototype.push.apply(mods, ops);
-      if (ex.mods && ex.mods.length){
-        var seen = Object.create(null);
-        mods.forEach(function(m){ seen[m]=1; });
-        ex.mods.forEach(function(m){ if (!seen[m]){ seen[m]=1; mods.push(m); } });
-      }
-      if (mods.length){ lines.push(("task "+t.uuid+" modify " + mods.join(" ")).trim()); }
-    }
+  if (window.TaskCanvasCommands && typeof window.TaskCanvasCommands.rawRuntimeText === 'function'){
+    return window.TaskCanvasCommands.rawRuntimeText(window);
   }
-  return lines.join("\\n");
+  if (typeof window.buildCommands === 'function') return String(window.buildCommands() || "");
+  return "";
 }catch(_){ return ""; }
   }
   function tick(){

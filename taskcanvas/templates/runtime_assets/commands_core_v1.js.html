@@ -278,11 +278,50 @@
     return parts.join(" ");
   }
 
+  function existingTaskLine(task, state){
+    state = state || {};
+    if (!task) return "";
+    var id = task.uuid || task.short;
+    if (!id || isNewId(id)) return "";
+    var existingOps = state.existingOps || {};
+    var ex = existingOps[task.uuid] || existingOps[task.short] || {};
+    var taskId = task.uuid || task.short;
+    if (ex.deleted) return "task " + taskId + " delete";
+    if (ex.done) return "task " + taskId + " done";
+
+    var initMainTag = state.initMainTag || {};
+    var initProject = state.initProject || {};
+    var oldTag = initMainTag[task.short] || "(no tag)";
+    var newTag = firstTag(task) || "(no tag)";
+    var oldProj = initProject[task.short] || "(no project)";
+    var newProj = task.project || "(no project)";
+    var mods = [];
+
+    if (oldProj !== newProj){
+      mods.push((newProj === "(no project)") ? "project:" : "project:" + newProj);
+    }
+    if (oldTag !== newTag){
+      if (oldTag !== "(no tag)") mods.push("-" + oldTag);
+      if (newTag !== "(no tag)") mods.push("+" + newTag);
+    }
+    if (Array.isArray(ex.mods) && ex.mods.length){
+      var seen = Object.create(null);
+      mods.forEach(function(m){ seen[m] = 1; });
+      ex.mods.forEach(function(m){
+        m = String(m || '').trim();
+        if (m && !seen[m]){
+          seen[m] = 1;
+          mods.push(m);
+        }
+      });
+    }
+    if (!mods.length) return "";
+    return "task " + taskId + " modify " + mods.join(" ");
+  }
+
   function rawTaskLines(state){
     state = state || {};
     var tasks = Array.isArray(state.tasks) ? state.tasks : [];
-    var initMainTag = state.initMainTag || {};
-    var initProject = state.initProject || {};
     var fold = state.fold || {};
     var out = [];
 
@@ -290,25 +329,8 @@
       var t = tasks[i];
       if (!t) continue;
       if (isNewId(t.uuid || t.short)) continue;
-      var oldTag = initMainTag[t.short] || "(no tag)";
-      var newTag = firstTag(t) || "(no tag)";
-      var oldProj = initProject[t.short] || "(no project)";
-      var newProj = t.project || "(no project)";
-      var ops = [];
-      if (oldTag !== newTag){
-        if (oldTag !== "(no tag)") ops.push("-" + oldTag);
-        if (newTag !== "(no tag)") ops.push("+" + newTag);
-      }
-      var projPart = null;
-      if (oldProj !== newProj){
-        projPart = (newProj === "(no project)") ? "project:" : "project:" + newProj;
-      }
-      if (ops.length || projPart){
-        var cmd = "task " + t.uuid + " modify ";
-        if (projPart) cmd += projPart + " ";
-        if (ops.length) cmd += ops.join(" ");
-        out.push(cmd.trim());
-      }
+      var existingLine = existingTaskLine(t, state);
+      if (existingLine) out.push(existingLine);
     }
 
     for (var j=0;j<tasks.length;j++){
@@ -329,6 +351,7 @@
       initMainTag: win.INIT_MAIN_TAG || {},
       initProject: win.INIT_PROJECT || {},
       fold: win.FOLD || win.__FOLD_STATE__ || {},
+      existingOps: win.EX_OPS || win.__EXISTING_OPS__ || {},
       stagedCmds: Array.isArray(win.STAGED_CMDS) ? win.STAGED_CMDS : [],
       stagedAdd: Array.isArray(win.stagedAdd) ? win.stagedAdd : [],
       depExtraCmds: Array.isArray(win.__depExtraCmds) ? win.__depExtraCmds : [],
@@ -377,6 +400,7 @@
     parseModsToFold: parseModsToFold,
     reconcileNewStaged: reconcileNewStaged,
     newTaskLine: newTaskLine,
+    existingTaskLine: existingTaskLine,
     rawTaskLines: rawTaskLines,
     runtimeState: runtimeState,
     rawRuntimeText: rawRuntimeText,

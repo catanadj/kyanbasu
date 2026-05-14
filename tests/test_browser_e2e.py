@@ -270,6 +270,101 @@ window.addEventListener('load', function(){
         self.assertTrue(result["fold"]["done"])
         self.assertIn("task log 'Sync me' 'project:Work' '+old' '+fresh' 'due:tomorrow'", result["text"])
 
+    def test_taskcanvas_commands_core_handles_existing_task_ops(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_EXISTING_TASK_CORE_HARNESS">
+window.addEventListener('load', function(){
+  try{
+    var tasks = [
+      {uuid:"uuid-mod", short:"mod", desc:"Mod", project:"Later", tags:["next"]},
+      {uuid:"uuid-done", short:"done", desc:"Done", project:"Work", tags:["old"]},
+      {uuid:"uuid-del", short:"del", desc:"Delete", project:"Work", tags:["old"]}
+    ];
+    var res = window.TaskCanvasCommands.build({
+      raw: window.TaskCanvasCommands.rawTaskLines({
+        tasks: tasks,
+        initMainTag: {mod:"old", done:"old", del:"old"},
+        initProject: {mod:"Work", done:"Work", del:"Work"},
+        existingOps: {
+          "uuid-mod": {mods:["due:tomorrow", "+next", "priority:H"]},
+          "uuid-done": {done:true, mods:["due:ignored"]},
+          "uuid-del": {deleted:true, mods:["due:ignored"]}
+        }
+      }).join("\\n")
+    });
+    var pre = document.createElement('pre');
+    pre.id = 'e2e-out';
+    pre.textContent = res.text;
+    document.body.appendChild(pre);
+  }catch(e){
+    var pre2 = document.createElement('pre');
+    pre2.id = 'e2e-out';
+    pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+    document.body.appendChild(pre2);
+  }
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        text = self._run_html_harness(html)
+        self.assertNotIn("ERR:", text)
+        self.assertIn("task 'uuid-mod' modify 'project:Later' '-old' '+next' 'due:tomorrow' 'priority:H'", text)
+        self.assertIn("task 'uuid-done' done", text)
+        self.assertIn("task 'uuid-del' delete", text)
+        self.assertNotIn("due:ignored", text)
+
+    def test_runtime_existing_ops_flow_uses_command_core(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps(
+            {
+                "tasks": [
+                    {
+                        "uuid": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+                        "short": "cccccccc",
+                        "desc": "Existing",
+                        "project": "Work",
+                        "tags": ["old"],
+                        "has_depends": False,
+                    }
+                ],
+                "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
+            }
+        )
+        html = build_runtime_html(base_html, payload, 1, lambda *_: None)
+
+        harness = """
+<script id="E2E_EXISTING_OPS_RUNTIME_HARNESS">
+window.addEventListener('load', function(){
+  try{
+    window.__EXISTING_OPS__ = window.EX_OPS = {
+      "cccccccc-cccc-cccc-cccc-cccccccccccc": {done:false, deleted:false, mods:["due:tomorrow", "+focus"]}
+    };
+    window.TASKS[0].project = "Later";
+    window.TASKS[0].tags = ["next"];
+    if (typeof updateConsole === 'function') updateConsole();
+    var out = (document.getElementById('consoleText') || {}).value || "";
+    var pre = document.createElement('pre');
+    pre.id = 'e2e-out';
+    pre.textContent = out;
+    document.body.appendChild(pre);
+  }catch(e){
+    var pre2 = document.createElement('pre');
+    pre2.id = 'e2e-out';
+    pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+    document.body.appendChild(pre2);
+  }
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        text = self._run_html_harness(html)
+        self.assertNotIn("ERR:", text)
+        self.assertIn("task 'cccccccc-cccc-cccc-cccc-cccccccccccc' modify 'project:Later' '-old' '+next' 'due:tomorrow' '+focus'", text)
+
     def test_build_commands_includes_staged_dependencies_without_base_monkey_patch(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps(
