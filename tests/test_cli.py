@@ -1,6 +1,6 @@
 import unittest
 
-from taskcanvas.cli import _extract_bg_args, _extract_filter_arg
+from taskcanvas.cli import _extract_bg_args, _extract_filter_arg, parse_args
 
 
 class TestCliHelpers(unittest.TestCase):
@@ -33,6 +33,36 @@ class TestCliHelpers(unittest.TestCase):
     def test_extract_bg_args_missing_value_raises(self):
         with self.assertRaisesRegex(ValueError, "--bg requires a value"):
             _extract_bg_args(["--bg"])
+
+    def test_parse_args_accepts_current_cli_shape(self):
+        args = parse_args([
+            "--filter",
+            "project:Work +P1",
+            "--selector",
+            "--bg",
+            "wall.jpg",
+            "--bg-opacity=0.22",
+            "Home",
+        ])
+        self.assertEqual(args.filter, "project:Work +P1")
+        self.assertTrue(args.selector)
+        self.assertEqual(args.bg, "wall.jpg")
+        self.assertEqual(args.bg_opacity, "0.22")
+        self.assertEqual(args.projects, ["Home"])
+
+    def test_parse_args_missing_filter_value_raises_value_error(self):
+        with self.assertRaisesRegex(ValueError, "--filter requires a value"):
+            parse_args(["--filter"])
+
+    def test_parse_args_help_exits_zero(self):
+        with self.assertRaises(SystemExit) as cm:
+            parse_args(["--help"])
+        self.assertEqual(cm.exception.code, 0)
+
+    def test_parse_args_version_exits_zero(self):
+        with self.assertRaises(SystemExit) as cm:
+            parse_args(["--version"])
+        self.assertEqual(cm.exception.code, 0)
 
 
 if __name__ == "__main__":

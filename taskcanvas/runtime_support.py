@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-RUNTIME_ASSETS_DIR = Path(__file__).resolve().parent.parent / "templates" / "runtime_assets"
+RUNTIME_ASSETS_DIR = Path(__file__).resolve().parent / "templates" / "runtime_assets"
 
 
 @lru_cache(maxsize=None)

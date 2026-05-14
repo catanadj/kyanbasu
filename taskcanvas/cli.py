@@ -1,6 +1,62 @@
+import argparse
+
+from taskcanvas import __version__
+
+
+class _TaskCanvasParser(argparse.ArgumentParser):
+    def error(self, message):
+        if "argument -f/--filter: expected one argument" in message:
+            raise ValueError("--filter requires a value")
+        if "argument --bg: expected one argument" in message:
+            raise ValueError("--bg requires a value")
+        if "argument --bg-opacity: expected one argument" in message:
+            raise ValueError("--bg-opacity requires a value")
+        raise ValueError(message)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = _TaskCanvasParser(
+        prog="taskcanvas",
+        description="Generate a visual Taskwarrior dependency canvas.",
+    )
+    parser.add_argument(
+        "projects",
+        nargs="*",
+        help="Project names to place on the initial canvas.",
+    )
+    parser.add_argument(
+        "-f",
+        "--filter",
+        help="Taskwarrior filter expression used to place matching tasks initially.",
+    )
+    parser.add_argument(
+        "--selector",
+        action="store_true",
+        help="Open the interactive project selector before generating the canvas.",
+    )
+    parser.add_argument(
+        "--bg",
+        help="Background image to copy next to TaskCanvas.html and use behind the canvas.",
+    )
+    parser.add_argument(
+        "--bg-opacity",
+        help="Background overlay opacity, e.g. 0.18.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"taskcanvas {__version__}",
+    )
+    return parser
+
+
+def parse_args(argv=None):
+    return build_parser().parse_args(argv)
+
+
 def _extract_filter_arg(argv):
     """
-    Returns (filter_str, remaining_args).
+    Compatibility helper returning (filter_str, remaining_args).
     Supports:
       -f "project:Work +P1"
       --filter "due.before:2025-10-01 status:pending"
@@ -14,7 +70,6 @@ def _extract_filter_arg(argv):
             skip_next = False
             continue
         if a == "-f" or a == "--filter":
-            # take the next token as the filter string (user should quote if spaces)
             if i + 1 < len(argv):
                 filt = argv[i + 1]
                 skip_next = True
@@ -28,7 +83,7 @@ def _extract_filter_arg(argv):
 
 
 def _extract_bg_args(argv):
-    """Parse --bg=FILE and --bg-opacity=0.00, return (bg_path_str, opacity_str, remaining_args)."""
+    """Compatibility helper returning (bg_path_str, opacity_str, remaining_args)."""
     bg = None
     opacity = None
     out = []

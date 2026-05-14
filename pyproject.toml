@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "taskwarrior-canvas"
+version = "0.1.0"
+description = "A visual dependency canvas and command generator for Taskwarrior."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [
+  { name = "TaskCanvas contributors" }
+]
+keywords = ["taskwarrior", "tasks", "canvas", "dependencies"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+  "Environment :: Console",
+  "Topic :: Office/Business :: Scheduling",
+]
+
+[project.urls]
+Homepage = "https://github.com/catanadj/taskwarrior-canvas"
+Issues = "https://github.com/catanadj/taskwarrior-canvas/issues"
+
+[project.scripts]
+taskcanvas = "taskcanvas.app:main"
+
+[tool.setuptools]
+packages = ["taskcanvas"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+taskcanvas = [
+  "templates/*.html",
+  "templates/runtime_assets/*.html",
+  "templates/runtime_assets/*.txt",
+]

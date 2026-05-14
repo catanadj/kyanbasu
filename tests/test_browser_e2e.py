@@ -34,7 +34,7 @@ class TestBrowserE2E(unittest.TestCase):
             )
 
     def test_build_commands_shell_quotes_new_task_description_and_modifiers(self):
-        base_html = Path("templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 

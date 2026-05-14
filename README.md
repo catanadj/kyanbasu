@@ -14,7 +14,7 @@ Every action becomes plain task commands that you copy-paste back into your term
 
 ## What it does
 
-TaskCanvas is a Python 3 app (`TaskCanvas.py` + `templates/`) that:
+TaskCanvas is a Python 3 app (`taskcanvas/` + packaged templates) that:
 
 - Calls task status:pending export (or a custom filter) to fetch your tasks.
 
@@ -40,15 +40,15 @@ Inside the browser you get an interactive canvas where you can:
 ## 30-second start
 
 ```bash
-# 1. clone the repo (TaskCanvas.py + templates/)
+# 1. clone the repo
 git clone https://github.com/catanadj/taskwarrior-canvas.git
 cd taskwarrior-canvas
-chmod +x TaskCanvas.py
+python3 -m pip install -e .
 
 # 2. generate the board
-./TaskCanvas.py                    # all pending tasks
-./TaskCanvas.py project:Work       # only Work
-./TaskCanvas.py --filter "due.before:today"  # any filter string
+taskcanvas                    # all pending tasks
+taskcanvas project:Work       # place Work initially
+taskcanvas --filter "due.before:today"  # any filter string
 
 # 3. your browser opens; drag, connect, edit
 # 4. hit “Copy commands” and paste in terminal
@@ -138,7 +138,7 @@ Termux & desktop friendly
 
 - Taskwarrior installed and on your $PATH so the task command works.
 
-- Keep the `templates/` directory next to `TaskCanvas.py` (the script loads UI templates from there at runtime).
+- If running from source, install with `python3 -m pip install -e .` so the console command can find packaged templates.
 
 - A reasonably modern browser (the UI is vanilla HTML/JS/SVG, no external JS dependencies). Chrome is recommended.
 
@@ -146,13 +146,14 @@ Termux & desktop friendly
 
 ## Code layout (for contributors)
 
-- `TaskCanvas.py`: app orchestrator (HTML assembly, feature injection, runtime flow).
+- `TaskCanvas.py`: compatibility wrapper for direct script execution.
+- `taskcanvas/app.py`: app orchestrator (HTML assembly, feature injection, runtime flow).
 - `taskcanvas/task_io.py`: Taskwarrior export execution and parsing.
 - `taskcanvas/payload.py`: task graph payload construction.
 - `taskcanvas/cli.py`: CLI argument extraction helpers (`--filter`, `--bg`, `--bg-opacity`).
 - `taskcanvas/output.py`: cross-platform browser opener.
 - `taskcanvas/injectors.py`: HTML/JS feature injectors and background/overlay patch helpers.
-- `templates/`: base HTML template and modal replacement fragment.
+- `taskcanvas/templates/`: base HTML template, modal replacement fragment, and runtime assets.
 
 ---
 
@@ -180,7 +181,7 @@ Termux & desktop friendly
 You can pass project names as positional arguments; tasks from those projects will be initially placed on the canvas:
 
 ```
-python3 TaskCanvas.py Work Home side.hustle
+taskcanvas Work Home side.hustle
 ```
 
 The rest of your pending tasks remain available in the left-hand drawer for drag-and-drop.
@@ -190,7 +191,7 @@ The rest of your pending tasks remain available in the left-hand drawer for drag
 Use -f / --filter to provide any Taskwarrior filter expression; matching tasks will be auto-placed:
 
 ```
-python3 TaskCanvas.py --filter 'due.before:2026-01-01 status:pending'
+taskcanvas --filter 'due.before:2026-01-01 status:pending'
 ```
 
 The filter is only used to choose which tasks to pre-place; **all** pending tasks still go into the drawer/search payload.
@@ -198,7 +199,7 @@ The filter is only used to choose which tasks to pre-place; **all** pending task
 You can combine projects and a filter:
 
 ```
-python3 TaskCanvas.py -f 'project:Work +P1' Home 'life.admin'
+taskcanvas -f 'project:Work +P1' Home 'life.admin'
 ```
 
 ### Interactive project selector
@@ -206,7 +207,7 @@ python3 TaskCanvas.py -f 'project:Work +P1' Home 'life.admin'
 If you don’t feel like typing project names, use the selector:
 
 ```
-python3 TaskCanvas.py --selector
+taskcanvas --selector
 ```
 
 This starts a curses TUI listing all projects (with counts). Use:
@@ -228,8 +229,8 @@ If curses is not available, it falls back to a numbered prompt.
 To use a specific background image:
 
 ```
-python3 TaskCanvas.py --bg /path/to/image.jpg
-python3 TaskCanvas.py --bg=mywall.png --bg-opacity=0.12
+taskcanvas --bg /path/to/image.jpg
+taskcanvas --bg=mywall.png --bg-opacity=0.12
 ```
 
 TaskCanvas will copy the image next to TaskCanvas.html (same directory) and inject a body::before overlay with the given opacity (default ≈ 0.18).

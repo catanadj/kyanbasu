@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import TaskCanvas
+import taskcanvas.app as TaskCanvas
 
 
 def _task(uuid: str, desc: str, project: str = "Work", depends=None, due=None):
