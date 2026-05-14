@@ -1,211 +1,77 @@
 <script id="FEATURE_NEW_TASK_CONSOLE_SYNC_V2">(function(){
   if (window.__NEW_TASK_SYNC_V2__) return; window.__NEW_TASK_SYNC_V2__ = true;
 
-  // --- 1) New-ID detection: uuid 'new-*' or short 'n-<6hex>'
+  function api(){ return window.TaskCanvasCommands || {}; }
+
   window.isNewId = window.isNewId || function(x){
+    var a = api();
+    if (typeof a.isNewId === 'function') return a.isNewId(x);
     if (!x) return false;
     var s = String(x);
     return /^new-/.test(s) || /^n-[0-9a-f]{6}$/i.test(s);
   };
 
-  // --- 2) Fold holder for per-new-task state (mods, tags, done/deleted)
-  function ensureFOLD(){ if (!window.FOLD) window.FOLD = Object.create(null); return window.FOLD; }
   function ensureFold(id){
-    var F = ensureFOLD();
-    var f = F[id] || (F[id]={});
+    var a = api();
+    if (typeof a.ensureFold === 'function') return a.ensureFold(window, id);
+    if (!window.FOLD) window.FOLD = Object.create(null);
+    var f = window.FOLD[id] || (window.FOLD[id] = {});
     if (!f.tags) f.tags = Object.create(null);
     if (!Array.isArray(f.extra)) f.extra = [];
     return f;
   }
-  function parseModsToFold(f, modsTokens){
-    if (!Array.isArray(modsTokens)) return;
-    var seenIdx = Object.create(null), extra = [];
-    for (var i=0;i<modsTokens.length;i++){
-      var tok = String(modsTokens[i]||'').trim(); if (!tok) continue;
-      if (tok[0]==='+' && tok.length>1){ f.tags[tok.slice(1)] = true; continue; }
-      if (tok[0]==='-' && tok.length>1){ delete f.tags[tok.slice(1)]; continue; }
-      var m = tok.match(/^([^:\s]+):(.*)$/);
-      if (m){
-        var k = m[1].toLowerCase(), v = m[2];
-        if (k==='project'){ f.project = v || "(no project)"; continue; }
-        if (k==='due'){ f.due = v; continue; }
-        if (seenIdx[k]!=null){ extra[seenIdx[k]] = tok; } else { seenIdx[k]=extra.length; extra.push(tok); }
-      } else {
-        extra.push(tok);
-      }
-    }
-    f.extra = extra;
-  }
 
-  // --- 3) Pull staged lines that (accidentally) target new IDs into FOLD and remove them
   function reconcileNewStaged(){
-    var A = Array.isArray(window.STAGED_CMDS) ? window.STAGED_CMDS : (window.STAGED_CMDS = []);
-    for (var i=A.length-1;i>=0;i--){
-      var s = String(A[i]||'').trim();
-      var m = s.match(/^task\s+(\S+)\s+(done|delete|modify)\b(?:\s+(.*))?$/i);
-      if (!m) continue;
-      var id = m[1], verb = (m[2]||'').toLowerCase(), rest = (m[3]||'').trim();
-      if (!window.isNewId(id)) continue;
-      var f = ensureFold(id);
-      if (verb==='done'){ f.done = true; }
-      else if (verb==='delete'){ f.deleted = true; }
-      else if (verb==='modify'){ parseModsToFold(f, rest ? rest.split(/\s+/) : []); }
-      A.splice(i,1);
+    var a = api();
+    if (typeof a.reconcileNewStaged === 'function') return a.reconcileNewStaged(window);
+  }
+
+  function buildLines(){
+    var a = api();
+    if (typeof a.build === 'function'){
+      var res = a.build({ runtime: window });
+      window.__CMD_PREFLIGHT_WARNINGS__ = res.warnings || [];
+      return String(res.text || '').split(/\r?\n/).map(function(s){ return s.trim(); }).filter(Boolean);
     }
+    return [];
   }
 
-  // --- 4) Build canonical lines for all NEW tasks (one line each; add OR log)
-  function newTaskConsoleLines(){
-    var out = [];
-    var T = Array.isArray(window.TASKS) ? window.TASKS : [];
-    for (var i=0;i<T.length;i++){
-      var t = T[i]; if (!t) continue;
-      var id = t.uuid || t.short; if (!window.isNewId(id)) continue;
-
-      // read current hover state from DOM
-      var nd = document.querySelector('.node[data-uuid="'+id+'"], .node[data-short="'+id+'"]');
-      var done = false, deleted = false;
-      if (nd){
-        done    = nd.classList.contains('stagedDone') || nd.classList.contains('completed') || nd.getAttribute('data-done')==='1';
-        deleted = nd.classList.contains('stagedDel')  || nd.getAttribute('data-deleted')==='1';
-      }
-
-      // merge with FOLD (which also tracks staged ops we absorbed)
-      var f = (ensureFOLD()[t.uuid] || ensureFOLD()[t.short] || {});
-      if (f.done) done = true;
-      if (f.deleted) deleted = true;
-      if (deleted) continue; // delete removes any new-task line
-
-      var parts = [ done ? "task log" : "task add", (t.desc||"(no description)") ];
-
-      var proj = (typeof f.project!=='undefined') ? f.project : (t.project || "(no project)");
-      if (proj && proj!=="(no project)") parts.push("project:"+proj);
-
-      var tagset = Object.create(null);
-      if (Array.isArray(t.tags)) for (var k=0;k<t.tags.length;k++){ var tg=t.tags[k]; if (tg && tg!=="(no tag)") tagset[tg]=true; }
-      if (f.tags) for (var tg in f.tags){ if (f.tags[tg]) tagset[tg]=true; else delete tagset[tg]; }
-      Object.keys(tagset).forEach(function(tg){ parts.push("+"+tg); });
-
-      var due = (typeof f.due!=='undefined') ? f.due : t.due;
-      if (due) parts.push("due:"+due);
-
-      if (Array.isArray(f.extra)) for (var q=0;q<f.extra.length;q++){ parts.push(f.extra[q]); }
-
-      out.push(parts.join(" "));
-    }
-    return out;
-  }
-
-  // --- 5) Helpers for merging & filtering
-  function splitLines(s){
-    if (!s) return [];
-    return String(s).replace(/\r\n/g,"\n").split("\n").map(function(x){return x.trim();}).filter(Boolean);
-  }
   function writeConsole(lines){
     try{
-      var txt = (lines||[]).join("\n");
+      var txt = (lines || []).join("\n");
       var ta = document.getElementById('consoleText');
-      if (ta && typeof ta.value==='string') ta.value = txt;
+      if (ta && typeof ta.value === 'string') ta.value = txt;
       var pre = document.getElementById('depCmdPre');
       if (pre) pre.textContent = txt;
     }catch(_){}
   }
-  function newTaskDescriptors(){
-    var set = Object.create(null);
-    var T = Array.isArray(window.TASKS) ? window.TASKS : [];
-    for (var i=0;i<T.length;i++){
-      var t=T[i]; if (!t) continue;
-      var id = t.uuid || t.short; if (!window.isNewId(id)) continue;
-      var d = (t.desc||"").trim();
-      if (d) set[d]=1;
-    }
-    return set;
-  }
-  // Remove any “task add …” or “task log …” lines that appear to belong to NEW tasks (by description match)
-  function stripCurrentNewTaskLines(currentLines){
-    var descs = newTaskDescriptors();
-    return currentLines.filter(function(line){
-      var m = line.match(/^(task\s+(?:add|log)\s+)(.*)$/i);
-      if (!m) return true;
-      var rest = m[2]||"";
-      // basic containment check on the description token
-      for (var d in descs){ if (descs[d] && rest.indexOf(d) !== -1) return false; }
-      return true;
-    });
-  }
-  // If both "task add X" and "task log X" exist, keep only log
-  function preferLogOverAdd(lines){
-    var bestByRest = Object.create(null), order=[];
-    for (var i=0;i<lines.length;i++){
-      var s = lines[i], m = s.match(/^(task\s+(add|log)\s+)(.*)$/i);
-      if (!m){ if (!bestByRest["__misc__"]) { bestByRest["__misc__"]=[]; order.push("__misc__"); } bestByRest["__misc__"].push(s); continue; }
-      var verb = (m[2]||"").toLowerCase();
-      var rest = m[3]||"";
-      var key = "REST::"+rest;
-      if (!(key in bestByRest)){ bestByRest[key] = s; order.push(key); }
-      else {
-        var prev = bestByRest[key];
-        if (/^task\s+add\s+/i.test(prev) && verb === "log"){ bestByRest[key] = s; } // upgrade to log
-      }
-    }
-    var out=[];
-    for (var j=0;j<order.length;j++){
-      var k = order[j], v = bestByRest[k];
-      if (Array.isArray(v)) out = out.concat(v);
-      else out.push(v);
-    }
-    return out;
-  }
 
-  // --- 6) Wrap updateConsole: rebuild with strict new-task policy + dedupe
   (function(){
     var _u = window.updateConsole;
     window.updateConsole = function(){
       try{ reconcileNewStaged(); }catch(_){}
-      var rv = (typeof _u==='function') ? _u.apply(this, arguments) : undefined;
-
-      try{
-        var ta = document.getElementById('consoleText');
-        var currentText = (ta && typeof ta.value==='string') ? ta.value : '';
-        var current = splitLines(currentText);
-
-        // Strip any old add/log lines for NEW tasks first
-        var currentSansNew = stripCurrentNewTaskLines(current);
-
-        // Recompute canonical NEW lines + add any non-new staged lines (if any)
-        var newLines = newTaskConsoleLines();
-        var staged  = Array.isArray(window.STAGED_CMDS) ? window.STAGED_CMDS.slice() : [];
-
-        // Merge: (current minus old new-lines) + new-lines + staged; then prefer log over add
-        var merged = currentSansNew.concat(newLines).concat(staged);
-
-        var finalLines = preferLogOverAdd(merged);
-        var finalText  = finalLines.join("\n");
-        if (finalText !== currentText){
-          writeConsole(finalLines);
-        }
-      }catch(_){}
-
+      var rv = (typeof _u === 'function') ? _u.apply(this, arguments) : undefined;
+      try{ writeConsole(buildLines()); }catch(_){}
       return rv;
     };
     window.updateConsole.__newTaskSyncWrap = true;
   })();
 
-  // --- 7) Track hover class flips to keep FOLD up to date → refresh console
   (function(){
     var root = document.getElementById('builderStage') || document.body;
     if (!root) return;
     var obs = new MutationObserver(function(recs){
       var touch = false;
       for (var r of recs){
-        if (r.type!=='attributes' || r.attributeName!=='class') continue;
+        if (r.type !== 'attributes' || r.attributeName !== 'class') continue;
         var el = r.target; if (!el || !el.classList) continue;
-        var id = el.getAttribute('data-uuid') || el.getAttribute('data-short'); if (!window.isNewId(id)) continue;
+        var id = el.getAttribute('data-uuid') || el.getAttribute('data-short');
+        if (!window.isNewId(id)) continue;
         var f = ensureFold(id);
-        var hadDone = /\bstagedDone\b/.test(r.oldValue||''), hasDone = el.classList.contains('stagedDone');
-        var hadDel  = /\bstagedDel\b/.test(r.oldValue||''),  hasDel  = el.classList.contains('stagedDel');
-        if (hasDone) f.done = true;  if (hadDone && !hasDone) f.done = false;
-        if (hasDel)  f.deleted = true; if (hadDel && !hasDel)  f.deleted = false;
+        var hadDone = /\bstagedDone\b/.test(r.oldValue || ''), hasDone = el.classList.contains('stagedDone');
+        var hadDel = /\bstagedDel\b/.test(r.oldValue || ''), hasDel = el.classList.contains('stagedDel');
+        if (hasDone) f.done = true; if (hadDone && !hasDone) f.done = false;
+        if (hasDel) f.deleted = true; if (hadDel && !hasDel) f.deleted = false;
         touch = true;
       }
       if (touch){ try{ setTimeout(updateConsole, 0); }catch(_){} }
@@ -213,8 +79,7 @@
     obs.observe(root, {subtree:true, attributes:true, attributeFilter:['class'], attributeOldValue:true});
   })();
 
-  // --- 8) First paint
   try{ reconcileNewStaged(); }catch(_){}
-  try{ setTimeout(function(){ if (typeof updateConsole==='function') updateConsole(); }, 0); }catch(_){}
-  console.log('[new-task-console-sync] v2.2 active');
+  try{ setTimeout(function(){ if (typeof updateConsole === 'function') updateConsole(); }, 0); }catch(_){}
+  console.log('[new-task-console-sync] v2.3 active');
 })();</script>

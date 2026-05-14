@@ -70,6 +70,11 @@
       if (seenExact[line]) continue;
       seenExact[line] = 1;
 
+      if (/^task\s+(add|log)\s+/i.test(line)){
+        passthrough.push(line);
+        continue;
+      }
+
       var m = /^task\s+(\S+)\s+(modify|done|delete)\b(?:\s+(.*))?$/i.exec(line);
       if (!m){
         passthrough.push(line);
@@ -158,16 +163,133 @@
     return tags.length ? tags[0] : "(no tag)";
   }
 
+  function isNewId(x){
+    if (!x) return false;
+    var s = String(x);
+    return /^new-/.test(s) || /^n-[0-9a-f]{6}$/i.test(s);
+  }
+
+  function ensureFoldContainer(target){
+    target = target || window;
+    var fold = target.FOLD || target.__FOLD_STATE__ || Object.create(null);
+    target.FOLD = fold;
+    target.__FOLD_STATE__ = fold;
+    return fold;
+  }
+
+  function ensureFold(target, id){
+    var F = ensureFoldContainer(target);
+    var f = F[id] || (F[id] = {});
+    if (!f.tags) f.tags = Object.create(null);
+    if (!Array.isArray(f.extra)) f.extra = [];
+    return f;
+  }
+
+  function parseModsToFold(f, modsTokens){
+    if (!f || !Array.isArray(modsTokens)) return f;
+    if (!f.tags) f.tags = Object.create(null);
+    var seenIdx = Object.create(null), extra = [];
+    for (var i=0;i<modsTokens.length;i++){
+      var tok = String(modsTokens[i]||'').trim();
+      if (!tok) continue;
+      if (tok[0] === '+' && tok.length > 1){ f.tags[tok.slice(1)] = true; continue; }
+      if (tok[0] === '-' && tok.length > 1){ delete f.tags[tok.slice(1)]; continue; }
+      var m = tok.match(/^([^:\s]+):(.*)$/);
+      if (m){
+        var k = m[1].toLowerCase(), v = m[2];
+        if (k === 'project'){ f.project = v || "(no project)"; continue; }
+        if (k === 'due'){ f.due = v; continue; }
+        if (seenIdx[k] != null){ extra[seenIdx[k]] = tok; }
+        else { seenIdx[k] = extra.length; extra.push(tok); }
+      } else {
+        extra.push(tok);
+      }
+    }
+    f.extra = extra;
+    return f;
+  }
+
+  function reconcileNewStaged(target){
+    target = target || window;
+    var A = Array.isArray(target.STAGED_CMDS) ? target.STAGED_CMDS : (target.STAGED_CMDS = []);
+    for (var i=A.length-1;i>=0;i--){
+      var s = String(A[i]||'').trim();
+      var m = s.match(/^task\s+(\S+)\s+(done|delete|modify)\b(?:\s+(.*))?$/i);
+      if (!m) continue;
+      var id = m[1], verb = (m[2]||'').toLowerCase(), rest = (m[3]||'').trim();
+      if (!isNewId(id)) continue;
+      var f = ensureFold(target, id);
+      if (verb === 'done') f.done = true;
+      else if (verb === 'delete') f.deleted = true;
+      else if (verb === 'modify') parseModsToFold(f, rest ? rest.split(/\s+/) : []);
+      A.splice(i, 1);
+    }
+  }
+
+  function defaultNodeStatus(id){
+    try{
+      var nd = document.querySelector('.node[data-uuid="'+id+'"], .node[data-short="'+id+'"]');
+      if (!nd) return {};
+      return {
+        done: nd.classList.contains('stagedDone') || nd.classList.contains('completed') || nd.getAttribute('data-done') === '1',
+        deleted: nd.classList.contains('stagedDel') || nd.getAttribute('data-deleted') === '1'
+      };
+    }catch(_){ return {}; }
+  }
+
+  function newTaskLine(task, state){
+    state = state || {};
+    if (!task) return "";
+    var id = task.uuid || task.short;
+    if (!isNewId(id)) return "";
+    var fold = state.fold || {};
+    var f = fold[task.uuid] || fold[task.short] || {};
+    var status = typeof state.nodeStatus === 'function' ? (state.nodeStatus(id, task) || {}) : defaultNodeStatus(id);
+    var done = !!status.done;
+    var deleted = !!status.deleted;
+    if (f.done) done = true;
+    if (f.deleted) deleted = true;
+    if (deleted) return "";
+
+    var parts = [done ? "task log" : "task add", task.desc || "(no description)"];
+    var proj = (typeof f.project !== 'undefined') ? f.project : (task.project || "(no project)");
+    if (proj && proj !== "(no project)") parts.push("project:" + proj);
+
+    var tagset = Object.create(null);
+    if (Array.isArray(task.tags)){
+      for (var k=0;k<task.tags.length;k++){
+        var tg = task.tags[k];
+        if (tg && tg !== "(no tag)") tagset[tg] = true;
+      }
+    }
+    if (f.tags){
+      for (var ft in f.tags){
+        if (f.tags[ft]) tagset[ft] = true;
+        else delete tagset[ft];
+      }
+    }
+    Object.keys(tagset).forEach(function(tg){ parts.push("+" + tg); });
+
+    var due = (typeof f.due !== 'undefined') ? f.due : task.due;
+    if (due) parts.push("due:" + due);
+    if (Array.isArray(f.extra)){
+      for (var q=0;q<f.extra.length;q++) parts.push(f.extra[q]);
+    }
+    return parts.join(" ");
+  }
+
   function rawTaskLines(state){
     state = state || {};
     var tasks = Array.isArray(state.tasks) ? state.tasks : [];
     var initMainTag = state.initMainTag || {};
     var initProject = state.initProject || {};
+    var fold = state.fold || {};
     var out = [];
 
     for (var i=0;i<tasks.length;i++){
       var t = tasks[i];
-      if (!t || String(t.uuid).startsWith("new-")) continue;
+      if (!t) continue;
+      if (isNewId(t.uuid || t.short)) continue;
       var oldTag = initMainTag[t.short] || "(no tag)";
       var newTag = firstTag(t) || "(no tag)";
       var oldProj = initProject[t.short] || "(no project)";
@@ -191,13 +313,11 @@
 
     for (var j=0;j<tasks.length;j++){
       var n = tasks[j];
-      if (!n || !String(n.uuid).startsWith("new-")) continue;
-      var parts = ["task add", n.desc || "(no description)"];
-      if (n.project && n.project !== "(no project)") parts.push("project:" + n.project);
-      (n.tags || []).forEach(function(tag){
-        if (tag && tag !== "(no tag)") parts.push("+" + tag);
+      var line = newTaskLine(n, {
+        fold: fold,
+        nodeStatus: state.nodeStatus
       });
-      out.push(parts.join(" "));
+      if (line) out.push(line);
     }
     return out;
   }
@@ -208,8 +328,11 @@
       tasks: Array.isArray(win.TASKS) ? win.TASKS : [],
       initMainTag: win.INIT_MAIN_TAG || {},
       initProject: win.INIT_PROJECT || {},
+      fold: win.FOLD || win.__FOLD_STATE__ || {},
+      stagedCmds: Array.isArray(win.STAGED_CMDS) ? win.STAGED_CMDS : [],
       stagedAdd: Array.isArray(win.stagedAdd) ? win.stagedAdd : [],
-      depExtraCmds: Array.isArray(win.__depExtraCmds) ? win.__depExtraCmds : []
+      depExtraCmds: Array.isArray(win.__depExtraCmds) ? win.__depExtraCmds : [],
+      nodeStatus: defaultNodeStatus
     };
   }
 
@@ -225,9 +348,15 @@
     } else if (typeof state.rawBuilder === 'function'){
       raw = String(state.rawBuilder() || '');
     } else if (state.runtime){
-      raw = rawTaskLines(runtimeState(state.runtime)).join('\n');
-      state.stagedAdd = Array.isArray(state.stagedAdd) ? state.stagedAdd : runtimeState(state.runtime).stagedAdd;
-      state.depExtraCmds = Array.isArray(state.depExtraCmds) ? state.depExtraCmds : runtimeState(state.runtime).depExtraCmds;
+      var rs = runtimeState(state.runtime);
+      raw = rawTaskLines(rs).join('\n');
+      state.stagedCmds = Array.isArray(state.stagedCmds) ? state.stagedCmds : rs.stagedCmds;
+      state.stagedAdd = Array.isArray(state.stagedAdd) ? state.stagedAdd : rs.stagedAdd;
+      state.depExtraCmds = Array.isArray(state.depExtraCmds) ? state.depExtraCmds : rs.depExtraCmds;
+    }
+    if (Array.isArray(state.stagedCmds) && state.stagedCmds.length){
+      var staged = state.stagedCmds.map(function(s){ return String(s || '').trim(); }).filter(Boolean);
+      if (staged.length) raw = raw ? (raw + '\n' + staged.join('\n')) : staged.join('\n');
     }
     var deps = dependencyLines(state);
     if (deps.length){
@@ -239,9 +368,15 @@
   window.TaskCanvasCommands = {
     version: '1',
     shQuote: shQuote,
+    isNewId: isNewId,
     isModifierToken: isModifierToken,
     shellQuoteTaskLine: shellQuoteTaskLine,
     normalize: parseAndNormalize,
+    ensureFoldContainer: ensureFoldContainer,
+    ensureFold: ensureFold,
+    parseModsToFold: parseModsToFold,
+    reconcileNewStaged: reconcileNewStaged,
+    newTaskLine: newTaskLine,
     rawTaskLines: rawTaskLines,
     runtimeState: runtimeState,
     rawRuntimeText: rawRuntimeText,

@@ -182,6 +182,94 @@ window.addEventListener('load', function(){
         self.assertIn("task 'task-a' modify '+next' 'depends:-task-c'", text)
         self.assertIn("task 'uuid-a' modify 'depends:uuid-b'", text)
 
+    def test_taskcanvas_commands_core_handles_new_task_fold_states(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_NEW_TASK_CORE_HARNESS">
+window.addEventListener('load', function(){
+  try{
+    var tasks = [
+      {uuid:"new-add", short:"new-add", desc:"Add me", project:"Work", tags:["base"], due:"20260101T000000Z"},
+      {uuid:"new-done", short:"new-done", desc:"Done me", project:"Home", tags:[]},
+      {uuid:"new-del", short:"new-del", desc:"Delete me", project:"Home", tags:[]},
+      {uuid:"new-mod", short:"new-mod", desc:"Mod me", project:"Inbox", tags:["old"]}
+    ];
+    var fold = {
+      "new-done": {done:true, tags:{}, extra:[]},
+      "new-del": {deleted:true, tags:{}, extra:[]},
+      "new-mod": {project:"Later", due:"tomorrow", tags:{fresh:true}, extra:["priority:H"]}
+    };
+    var res = window.TaskCanvasCommands.build({
+      raw: window.TaskCanvasCommands.rawTaskLines({tasks:tasks, fold:fold}).join("\\n")
+    });
+    var pre = document.createElement('pre');
+    pre.id = 'e2e-out';
+    pre.textContent = res.text;
+    document.body.appendChild(pre);
+  }catch(e){
+    var pre2 = document.createElement('pre');
+    pre2.id = 'e2e-out';
+    pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+    document.body.appendChild(pre2);
+  }
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        text = self._run_html_harness(html)
+        self.assertNotIn("ERR:", text)
+        self.assertIn("task add 'Add me' 'project:Work' '+base' 'due:20260101T000000Z'", text)
+        self.assertIn("task log 'Done me' 'project:Home'", text)
+        self.assertNotIn("Delete me", text)
+        self.assertIn("task add 'Mod me' 'project:Later' '+old' '+fresh' 'due:tomorrow' 'priority:H'", text)
+
+    def test_new_task_sync_reconciles_staged_new_task_modifiers_via_command_core(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_NEW_TASK_SYNC_HARNESS">
+window.addEventListener('load', function(){
+  try{
+    window.TASKS.push({
+      uuid:"new-sync",
+      short:"new-sync",
+      desc:"Sync me",
+      project:"Inbox",
+      tags:["old"],
+      has_depends:false
+    });
+    window.STAGED_CMDS = [
+      "task new-sync modify project:Work +fresh due:tomorrow",
+      "task new-sync done"
+    ];
+    if (typeof updateConsole === 'function') updateConsole();
+    var out = (document.getElementById('consoleText') || {}).value || "";
+    var pre = document.createElement('pre');
+    pre.id = 'e2e-out';
+    pre.textContent = JSON.stringify({text:out, staged:window.STAGED_CMDS, fold:window.FOLD && window.FOLD["new-sync"]});
+    document.body.appendChild(pre);
+  }catch(e){
+    var pre2 = document.createElement('pre');
+    pre2.id = 'e2e-out';
+    pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+    document.body.appendChild(pre2);
+  }
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["staged"], [])
+        self.assertTrue(result["fold"]["done"])
+        self.assertIn("task log 'Sync me' 'project:Work' '+old' '+fresh' 'due:tomorrow'", result["text"])
+
     def test_build_commands_includes_staged_dependencies_without_base_monkey_patch(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps(
