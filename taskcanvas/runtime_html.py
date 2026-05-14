@@ -63,6 +63,7 @@ def build_runtime_html(
     body_snippets = [
         ("FEATURE_HOVERSTAGE", "feature_hover.js.html"),
         ("FEATURE_DUEBADGE2", "feature_due.js.html"),
+        ("FEATURE_DEPENDENCY_INTERACTIONS_V1", "dependency_interactions_v1.js.html"),
         ("dep handle authoritative v6", "dep_handle_authoritative_v6.js.html"),
     ]
 
