@@ -22,7 +22,11 @@
       var args = arguments;
       var api = commandsApi();
       if (api && typeof api.build === 'function'){
-        var built = api.build({ rawBuilder: function(){ return orig.apply(self, args); } });
+        var built = api.build({
+          rawBuilder: function(){ return orig.apply(self, args); },
+          stagedAdd: Array.isArray(window.stagedAdd) ? window.stagedAdd : [],
+          depExtraCmds: Array.isArray(window.__depExtraCmds) ? window.__depExtraCmds : []
+        });
         window.__CMD_PREFLIGHT_WARNINGS__ = built.warnings || [];
         return built.text;
       }

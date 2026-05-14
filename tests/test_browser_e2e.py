@@ -148,6 +148,40 @@ window.addEventListener('load', function(){
         self.assertTrue(any("Dropped modify after terminal action for task abc" in w for w in warnings))
         self.assertTrue(any("Conflicting terminal actions for task def" in w for w in warnings))
 
+    def test_taskcanvas_commands_core_includes_dependency_commands(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_DEP_COMMAND_CORE_HARNESS">
+window.addEventListener('load', function(){
+  try{
+    var res = window.TaskCanvasCommands.build({
+      raw: "task task-a modify +next",
+      stagedAdd: [{from:"task-a", to:"task-b"}],
+      depExtraCmds: ["task task-a modify depends:-task-c"],
+      uuidForShort: function(short){ return ({ "task-a":"uuid-a", "task-b":"uuid-b", "task-c":"uuid-c" })[short] || short; }
+    });
+    var pre = document.createElement('pre');
+    pre.id = 'e2e-out';
+    pre.textContent = res.text;
+    document.body.appendChild(pre);
+  }catch(e){
+    var pre2 = document.createElement('pre');
+    pre2.id = 'e2e-out';
+    pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+    document.body.appendChild(pre2);
+  }
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        text = self._run_html_harness(html)
+        self.assertNotIn("ERR:", text)
+        self.assertIn("task 'task-a' modify '+next' 'depends:-task-c'", text)
+        self.assertIn("task 'uuid-a' modify 'depends:uuid-b'", text)
+
 
 if __name__ == "__main__":
     unittest.main()

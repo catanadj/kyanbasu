@@ -127,6 +127,32 @@
     return { text: safe.join('\n'), warnings: warnings, rawLines: lines, normalizedLines: out };
   }
 
+  function defaultUuidForShort(short){
+    try{
+      if (window.TASK_BY_SHORT && window.TASK_BY_SHORT[short]) return window.TASK_BY_SHORT[short].uuid || short;
+      var el = document.querySelector('#builderStage [data-short="'+short+'"]');
+      return (el && el.getAttribute('data-uuid')) || short;
+    }catch(_){ return short; }
+  }
+
+  function dependencyLines(state){
+    state = state || {};
+    var out = [];
+    var resolver = typeof state.uuidForShort === 'function' ? state.uuidForShort : defaultUuidForShort;
+    var stagedAdd = Array.isArray(state.stagedAdd) ? state.stagedAdd : [];
+    var depExtraCmds = Array.isArray(state.depExtraCmds) ? state.depExtraCmds : [];
+
+    stagedAdd.forEach(function(e){
+      if (!e || !e.from || !e.to) return;
+      out.push('task ' + resolver(e.from) + ' modify depends:' + resolver(e.to));
+    });
+    depExtraCmds.forEach(function(cmd){
+      var s = String(cmd || '').trim();
+      if (s) out.push(s);
+    });
+    return out;
+  }
+
   function build(state){
     state = state || {};
     var raw = '';
@@ -134,6 +160,10 @@
       raw = state.raw;
     } else if (typeof state.rawBuilder === 'function'){
       raw = String(state.rawBuilder() || '');
+    }
+    var deps = dependencyLines(state);
+    if (deps.length){
+      raw = raw ? (raw + '\n' + deps.join('\n')) : deps.join('\n');
     }
     return parseAndNormalize(raw);
   }
@@ -144,6 +174,7 @@
     isModifierToken: isModifierToken,
     shellQuoteTaskLine: shellQuoteTaskLine,
     normalize: parseAndNormalize,
+    dependencyLines: dependencyLines,
     build: build
   };
 })();

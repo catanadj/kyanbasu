@@ -104,6 +104,7 @@ class TestInjectors(unittest.TestCase):
         self.assertIn("window.TaskCanvasCommands", twice)
         self.assertIn("function shQuote", twice)
         self.assertIn("function shellQuoteTaskLine", twice)
+        self.assertIn("function dependencyLines", twice)
         self.assertIn("task\\s+(add|log)", twice)
 
     def test_inject_runtime_diagnostics_idempotent(self):

@@ -32,17 +32,8 @@
   }
   if (isOn()) document.body.classList.add('dep-remove-mode');
 
-  // Command Console extender: append extra lines to buildCommands()
+  // Removed dependency commands are consumed by TaskCanvasCommands during preflight.
   if (!window.__depExtraCmds) window.__depExtraCmds = [];
-  if (!window.__depWrapBuild && typeof window.buildCommands === 'function'){
-    window.__depWrapBuild = true;
-    const origBuild = window.buildCommands;
-    window.buildCommands = function(){
-      const base  = origBuild.call(this) || '';
-      const extra = (window.__depExtraCmds||[]).join('\n');
-      return extra ? (base ? base+'\n'+extra : extra) : base;
-    };
-  }
 
   // Keep removed SOLID edges hidden on redraw
   if (!window.__REMOVED_DEPS) window.__REMOVED_DEPS = Object.create(null);
