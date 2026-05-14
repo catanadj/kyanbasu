@@ -1,52 +1,38 @@
   <script id="FEATURE_CONSOLE_MERGE_V3">(function(){
     if (window.__CONSOLE_MERGE_V3__) return; window.__CONSOLE_MERGE_V3__=true;
 
-    // --- util ---
-    function uuidToShort(uuid){
+    function canonicalText(){
       try{
-        if (!uuid) return "";
-        if (window.TASKS) for (var i=0;i<TASKS.length;i++) if (TASKS[i] && TASKS[i].uuid===uuid) return TASKS[i].short||uuid;
-        if (window.TASK_BY_SHORT) for (var k in TASK_BY_SHORT) if (TASK_BY_SHORT[k] && TASK_BY_SHORT[k].uuid===uuid) return k;
+        if (window.TaskCanvasCommands && typeof window.TaskCanvasCommands.runtimeCommandText === 'function'){
+          return window.TaskCanvasCommands.runtimeCommandText(window, {short:true});
+        }
       }catch(_){}
-      return uuid;
-    }
-    var UUID_RE = /\b([0-9a-f]{8}-[0-9a-f-]{13,})\b/ig;
-    function shortifyText(txt){
-      if (!txt || !UUID_RE.test(txt)) return txt||"";
-      UUID_RE.lastIndex = 0;
-      return String(txt).replace(UUID_RE, function(m){ return uuidToShort(m) || m; });
-    }
-    function lines(s){
-      if (!s) return [];
-      return String(s).replace(/\r\n/g,"\n").split("\n").map(function(x){return x.trim();}).filter(Boolean);
-    }
-    function uniqueMerge(baseText, stagedArr){
-      var base = lines(baseText);
-      var staged = Array.isArray(stagedArr) ? stagedArr : [];
-      var out=[], seen=Object.create(null);
-      for (var i=0;i<base.length;i++){ var s=base[i]; if (!s||seen[s]) continue; seen[s]=1; out.push(s); }
-      for (var j=0;j<staged.length;j++){ var t=staged[j]; if (!t||seen[t]) continue; seen[t]=1; out.push(t); }
-      return out.join("\n");
+      try{
+        var txt = (typeof window.buildCommands === 'function') ? String(window.buildCommands() || '') : '';
+        if (window.TaskCanvasCommands && typeof window.TaskCanvasCommands.shortifyText === 'function'){
+          return window.TaskCanvasCommands.shortifyText(txt, window);
+        }
+        return txt;
+      }catch(_){}
+      return '';
     }
 
     // --- writers with change detection ---
     var _lastTextarea = null, _lastPre = null;
-    function mergeIntoTextarea(){
+    function syncTextarea(text){
       var el = document.getElementById("consoleText");
       if (!el) return;
-      var merged = shortifyText(uniqueMerge(el.value, window.STAGED_CMDS||[]));
-      if (merged !== _lastTextarea){
-        el.value = merged;
-        _lastTextarea = merged;
+      if (text !== _lastTextarea || el.value !== text){
+        el.value = text;
+        _lastTextarea = text;
       }
     }
-    function mergeIntoDepsOverlay(){
+    function syncDepsOverlay(text){
       var pre = document.getElementById("depCmdPre");
       if (!pre) return;
-      var merged = shortifyText(uniqueMerge(pre.textContent||"", window.STAGED_CMDS||[]));
-      if (merged !== _lastPre){
-        pre.textContent = merged;
-        _lastPre = merged;
+      if (text !== _lastPre || pre.textContent !== text){
+        pre.textContent = text;
+        _lastPre = text;
       }
     }
 
@@ -58,7 +44,11 @@
       if (_t) clearTimeout(_t);
       _t = setTimeout(function(){
         _queued = false;
-        try{ mergeIntoTextarea(); mergeIntoDepsOverlay(); }catch(_){}
+        try{
+          var text = canonicalText();
+          syncTextarea(text);
+          syncDepsOverlay(text);
+        }catch(_){}
       }, Math.max(50, delay|0)); // ~20fps
     }
 

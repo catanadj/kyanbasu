@@ -140,6 +140,31 @@
     }catch(_){ return short; }
   }
 
+  function uuidToShort(target, uuid){
+    target = target || window;
+    try{
+      if (!uuid) return "";
+      if (Array.isArray(target.TASKS)){
+        for (var i=0;i<target.TASKS.length;i++){
+          if (target.TASKS[i] && target.TASKS[i].uuid === uuid) return target.TASKS[i].short || uuid;
+        }
+      }
+      if (target.TASK_BY_SHORT){
+        for (var k in target.TASK_BY_SHORT){
+          if (target.TASK_BY_SHORT[k] && target.TASK_BY_SHORT[k].uuid === uuid) return k;
+        }
+      }
+    }catch(_){}
+    return uuid;
+  }
+
+  function shortifyText(text, target){
+    if (!text) return text || "";
+    return String(text).replace(/\b([0-9a-f]{8}-[0-9a-f-]{13,})\b/ig, function(m){
+      return uuidToShort(target || window, m) || m;
+    });
+  }
+
   function dependencyLines(state){
     state = state || {};
     var out = [];
@@ -388,10 +413,20 @@
     return parseAndNormalize(raw);
   }
 
+  function runtimeCommandText(target, options){
+    target = target || window;
+    options = options || {};
+    var built = build({ runtime: target });
+    try{ target.__CMD_PREFLIGHT_WARNINGS__ = built.warnings || []; }catch(_){}
+    return options.short ? shortifyText(built.text, target) : built.text;
+  }
+
   window.TaskCanvasCommands = {
     version: '1',
     shQuote: shQuote,
     isNewId: isNewId,
+    uuidToShort: uuidToShort,
+    shortifyText: shortifyText,
     isModifierToken: isModifierToken,
     shellQuoteTaskLine: shellQuoteTaskLine,
     normalize: parseAndNormalize,
@@ -405,6 +440,7 @@
     runtimeState: runtimeState,
     rawRuntimeText: rawRuntimeText,
     dependencyLines: dependencyLines,
+    runtimeCommandText: runtimeCommandText,
     build: build
   };
 })();

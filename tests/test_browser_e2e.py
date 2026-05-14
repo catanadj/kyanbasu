@@ -418,6 +418,83 @@ window.addEventListener('load', function(){
         self.assertNotIn("ERR:", raw)
         self.assertIn("task 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' modify 'depends:bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'", raw)
 
+    def test_dependency_overlay_matches_console_with_deduped_core_text(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps(
+            {
+                "tasks": [
+                    {
+                        "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        "short": "aaaaaaaa",
+                        "desc": "Parent",
+                        "project": "Work",
+                        "tags": [],
+                        "has_depends": False,
+                    },
+                    {
+                        "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                        "short": "bbbbbbbb",
+                        "desc": "Child",
+                        "project": "Work",
+                        "tags": [],
+                        "has_depends": False,
+                    },
+                    {
+                        "uuid": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+                        "short": "cccccccc",
+                        "desc": "Old child",
+                        "project": "Work",
+                        "tags": [],
+                        "has_depends": False,
+                    },
+                ],
+                "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
+            }
+        )
+        html = build_runtime_html(base_html, payload, 3, lambda *_: None)
+
+        harness = """
+<script id="E2E_DEP_OVERLAY_PARITY_HARNESS">
+window.addEventListener('load', function(){
+  try{
+    window.stagedAdd = [
+      {from:"aaaaaaaa", to:"bbbbbbbb"},
+      {from:"aaaaaaaa", to:"bbbbbbbb"}
+    ];
+    window.__depExtraCmds = [
+      "task aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa modify depends:-cccccccc-cccc-cccc-cccc-cccccccccccc"
+    ];
+    window.STAGED_CMDS = [
+      "task aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa modify depends:bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+    ];
+    if (typeof updateConsole === 'function') updateConsole();
+    setTimeout(function(){
+      var out = {
+        console: (document.getElementById('consoleText') || {}).value || "",
+        overlay: (document.getElementById('depCmdPre') || {}).textContent || ""
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out';
+      pre.textContent = JSON.stringify(out);
+      document.body.appendChild(pre);
+    }, 350);
+  }catch(e){
+    var pre2 = document.createElement('pre');
+    pre2.id = 'e2e-out';
+    pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+    document.body.appendChild(pre2);
+  }
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["console"], result["overlay"])
+        self.assertEqual(result["console"].count("depends:bbbbbbbb"), 1)
+        self.assertIn("task 'aaaaaaaa' modify 'depends:bbbbbbbb' 'depends:-cccccccc'", result["console"])
+
 
 if __name__ == "__main__":
     unittest.main()

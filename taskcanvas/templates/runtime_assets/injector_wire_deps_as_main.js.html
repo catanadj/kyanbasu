@@ -82,9 +82,21 @@
 
   // Keep overlay text in sync with buildCommands()
   function getAllCommands(){
-    var txt = '';
-    try{ if (typeof window.buildCommands==='function') txt = String(window.buildCommands()||''); }catch(_){}
-    return shortenUUIDs(txt); // change this to return "txt" if you want the full UUID of the tasks in the commands.
+    try{
+      if (window.TaskCanvasCommands && typeof window.TaskCanvasCommands.runtimeCommandText === 'function'){
+        return window.TaskCanvasCommands.runtimeCommandText(window, {short:true});
+      }
+    }catch(_){}
+    try{
+      if (typeof window.buildCommands==='function'){
+        var txt = String(window.buildCommands()||'');
+        if (window.TaskCanvasCommands && typeof window.TaskCanvasCommands.shortifyText === 'function'){
+          return window.TaskCanvasCommands.shortifyText(txt, window);
+        }
+        return shortenUUIDs(txt);
+      }
+    }catch(_){}
+    return '';
   }
   function setText(el, text){
     if (!el) return;
@@ -94,9 +106,12 @@
   }
   function refreshOverlayText(){
     var pre = document.getElementById('depCmdPre');
-    if (!pre) return;
     var txt = getAllCommands();
-    if (txt!=null) setText(pre, txt);
+    if (pre && txt!=null) setText(pre, txt);
+    try{
+      var ta = document.getElementById('consoleText');
+      if (ta && typeof ta.value === 'string' && txt != null) ta.value = txt;
+    }catch(_){}
   }
   (function hookUpdateConsole(){
     var _upd = window.updateConsole;
