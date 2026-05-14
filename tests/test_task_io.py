@@ -3,7 +3,13 @@ import subprocess
 import unittest
 from unittest.mock import patch
 
-from taskcanvas.task_io import _assign_unique_shorts, _parse_task_export, fetch_tasks, run_quiet
+from taskcanvas.task_io import (
+    _assign_unique_shorts,
+    _normalize_task_row,
+    _parse_task_export,
+    fetch_tasks,
+    run_quiet,
+)
 
 
 class TestTaskIO(unittest.TestCase):
@@ -23,6 +29,25 @@ class TestTaskIO(unittest.TestCase):
         shorts = [out[u] for u in uuids]
         self.assertEqual(len(set(shorts)), len(uuids))
         self.assertTrue(all(s.startswith("abcdef") for s in shorts))
+
+    def test_normalize_task_row_coerces_supported_shapes(self):
+        row = {
+            "id": 7,
+            "description": "Task 1",
+            "project": "Work",
+            "tags": {"a", "b"},
+            "dependencies": ("u1", "u2"),
+            "due": 12345,
+        }
+
+        normalized = _normalize_task_row(row)
+
+        self.assertEqual(normalized["uuid"], "7")
+        self.assertEqual(normalized["desc"], "Task 1")
+        self.assertEqual(normalized["project"], "Work")
+        self.assertEqual(sorted(normalized["tags"]), ["a", "b"])
+        self.assertEqual(normalized["depends"], ["u1", "u2"])
+        self.assertEqual(normalized["due"], "12345")
 
     def test_parse_task_export_json_array(self):
         raw = (

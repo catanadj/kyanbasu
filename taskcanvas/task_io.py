@@ -3,7 +3,9 @@ import re
 import shlex
 import subprocess
 from json import JSONDecodeError
-from typing import Callable
+from typing import Any, Callable
+
+from taskcanvas.task_types import TaskRecord
 
 
 def run_quiet(cmd, timeout=30):
@@ -120,6 +122,41 @@ def _parse_task_export(raw: str):
     return rows
 
 
+def _normalize_task_row(row: dict[str, Any]) -> TaskRecord | None:
+    uuid = row.get("uuid") or row.get("id") or ""
+    if not uuid:
+        return None
+
+    desc = row.get("description") or row.get("desc") or "(no description)"
+    project = row.get("project") or "(no project)"
+    tags = row.get("tags") or []
+    if isinstance(tags, str):
+        tags = [tag for tag in re.split(r"[,\s]+", tags) if tag]
+    elif isinstance(tags, (tuple, set)):
+        tags = [str(tag) for tag in tags if str(tag)]
+    elif not isinstance(tags, list):
+        tags = [str(tags)] if str(tags) else []
+
+    depends = row.get("depends") or row.get("dependencies") or []
+    if isinstance(depends, str):
+        depends = [dep for dep in re.split(r"[,\s]+", depends) if dep]
+    elif isinstance(depends, (tuple, set)):
+        depends = [str(dep) for dep in depends if str(dep)]
+    elif not isinstance(depends, list):
+        depends = [str(depends)] if str(depends) else []
+
+    due = row.get("due")
+    return {
+        "uuid": str(uuid),
+        "short": "",
+        "desc": str(desc),
+        "project": str(project),
+        "tags": [str(tag) for tag in tags],
+        "depends": [str(dep) for dep in depends],
+        "due": None if due is None else str(due),
+    }
+
+
 def fetch_tasks(
     filter_str=None,
     timeout=30,
@@ -169,33 +206,14 @@ def fetch_tasks(
         if not rows and strict_errors and rc != 0 and rc2 != 0:
             raise RuntimeError("Taskwarrior export failed in both primary and fallback modes.")
 
-    tasks_raw = []
+    tasks_raw: list[TaskRecord] = []
     for r in rows or []:
-        uuid = r.get("uuid") or r.get("id") or ""
-        if not uuid:
-            continue
-        desc = r.get("description") or r.get("desc") or "(no description)"
-        project = r.get("project") or "(no project)"
-        tags = r.get("tags") or []
-        if isinstance(tags, str):
-            tags = [t for t in re.split(r"[,\s]+", tags) if t]
-        depends = r.get("depends") or r.get("dependencies") or []
-        if isinstance(depends, str):
-            depends = [d for d in re.split(r"[,\s]+", depends) if d]
-        due = r.get("due")
-        tasks_raw.append(
-            {
-                "uuid": uuid,
-                "desc": desc,
-                "project": project,
-                "tags": tags,
-                "depends": depends,
-                "due": due,
-            }
-        )
+        normalized = _normalize_task_row(r)
+        if normalized is not None:
+            tasks_raw.append(normalized)
 
     short_map = _assign_unique_shorts([t["uuid"] for t in tasks_raw], min_len=8)
-    tasks = []
+    tasks: list[TaskRecord] = []
     widened = 0
     for t in tasks_raw:
         short = short_map.get(t["uuid"], re.sub(r"[^0-9a-fA-F]", "", t["uuid"]).lower()[:8])

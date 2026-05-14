@@ -1,4 +1,7 @@
-def build_payload(tasks):
+from taskcanvas.task_types import PayloadTask, RuntimePayload, TaskRecord
+
+
+def build_payload(tasks: list[TaskRecord]) -> RuntimePayload:
     short_by_uuid = {t["uuid"]: t["short"] for t in tasks}
     edges = []
     parent_current_deps = {}
@@ -11,19 +14,20 @@ def build_payload(tasks):
                 edges.append({"from": p, "to": c})
                 parent_current_deps.setdefault(p, set()).add(c)
                 children_map.setdefault(c, set()).add(p)
+    payload_tasks: list[PayloadTask] = [
+        {
+            "uuid": t["uuid"],
+            "short": t["short"],
+            "desc": t["desc"],
+            "project": t["project"],
+            "tags": t["tags"],
+            "has_depends": bool(t["depends"]),
+            "due": t["due"],
+        }
+        for t in tasks
+    ]
     return {
-        "tasks": [
-            {
-                "uuid": t["uuid"],
-                "short": t["short"],
-                "desc": t["desc"],
-                "project": t["project"],
-                "tags": t["tags"],
-                "has_depends": bool(t["depends"]),
-                "due": t.get("due"),
-            }
-            for t in tasks
-        ],
+        "tasks": payload_tasks,
         "graph": {
             "edges": edges,
             "parent_current_deps": {k: sorted(v) for k, v in parent_current_deps.items()},
