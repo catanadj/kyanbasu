@@ -50,62 +50,12 @@
       total: normalized.length
     };
   }
-  function commandTextForItems(items){
-    items = Array.isArray(items) ? items : [];
-    var raw = items.map(function(item){ return item && item.line ? item.line : ''; }).filter(Boolean).join('\n');
-    if (!raw) return '';
-    var api = window.TaskCanvasCommands || {};
-    if (api && typeof api.normalize === 'function') return api.normalize(raw).text || '';
-    return raw;
-  }
-  function groupText(group){
-    var data = currentReview();
-    if (group === 'all') return data.text;
-    return commandTextForItems(data.groups[group] || []);
-  }
-  function setCopyStatus(msg){
-    var el = document.getElementById('reviewCopyStatus');
-    if (!el) return;
-    el.textContent = msg || '';
-    clearTimeout(el.__reviewCopyTimer);
-    if (msg) el.__reviewCopyTimer = setTimeout(function(){ el.textContent = ''; }, 1800);
-  }
-  function copyText(txt, label){
-    txt = String(txt || '').trim();
-    if (!txt){
-      setCopyStatus('Nothing to copy');
-      return Promise.resolve(false);
-    }
-    function ok(){
-      setCopyStatus(label || 'Copied');
-      try{ if (typeof window.showToast === 'function') window.showToast(label || 'Copied'); }catch(_){}
-      return true;
-    }
-    function fallback(){
-      try{
-        var ta = document.createElement('textarea');
-        ta.value = txt;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-        return ok();
-      }catch(_){
-        setCopyStatus('Copy failed');
-        return false;
-      }
-    }
-    if (navigator.clipboard && navigator.clipboard.writeText){
-      return navigator.clipboard.writeText(txt).then(ok).catch(fallback);
-    }
-    return Promise.resolve(fallback());
-  }
   function metric(label, value){
     return '<div class="reviewMetric"><strong>'+esc(value)+'</strong><span>'+esc(label)+'</span></div>';
   }
-  function section(title, items, group){
+  function section(title, items){
     if (!items.length) return '';
-    return '<section class="reviewSection"><div class="reviewSectionHead"><div class="reviewSectionTitle"><span>'+esc(title)+'</span><button class="reviewCopyBtn" type="button" data-review-copy="'+esc(group)+'">Copy</button></div><span class="reviewCount">'+items.length+'</span></div><div class="reviewList">' +
+    return '<section class="reviewSection"><div class="reviewSectionHead"><span>'+esc(title)+'</span><span class="reviewCount">'+items.length+'</span></div><div class="reviewList">' +
       items.map(function(item){
         var label = item.id ? (item.type + ' · ' + item.id) : item.type;
         return '<div class="reviewItem"><div class="reviewItemType">'+esc(label)+'</div><code>'+esc(item.line)+'</code></div>';
@@ -122,7 +72,7 @@
     if (sub) sub.textContent = changed ? (changed + ' command' + (changed === 1 ? '' : 's') + ' staged') : 'No staged changes';
     if (!body) return data;
     if (!changed){
-      body.innerHTML = '<div class="reviewEmpty"><strong>No staged changes yet.</strong><div>Use card actions, dependency handles, due controls, quick add, or project/tag edits to stage Taskwarrior commands.</div></div>';
+      body.innerHTML = '<div class="reviewEmpty">No staged Taskwarrior changes yet.</div>';
       return data;
     }
     var html = '<div class="reviewSummary">' +
@@ -137,12 +87,12 @@
         data.warnings.map(function(w){ return '<div class="reviewItem"><div class="reviewItemType">Command core</div><code>'+esc(w)+'</code></div>'; }).join('') +
         '</div></section>';
     }
-    html += section('New Tasks', g.newTasks, 'newTasks');
-    html += section('Completed Or Deleted', g.terminal, 'terminal');
-    html += section('Task Field Changes', g.fieldChanges, 'fieldChanges');
-    html += section('Dependency Changes', g.dependencies, 'dependencies');
-    html += section('Other Commands', g.other, 'other');
-    html += '<section class="reviewSection"><div class="reviewSectionHead"><div class="reviewSectionTitle"><span>Raw Commands</span><button class="reviewCopyBtn" type="button" data-review-copy="all">Copy</button></div><span class="reviewCount">'+changed+'</span></div><pre>'+esc(data.text)+'</pre></section>';
+    html += section('New Tasks', g.newTasks);
+    html += section('Completed Or Deleted', g.terminal);
+    html += section('Task Field Changes', g.fieldChanges);
+    html += section('Dependency Changes', g.dependencies);
+    html += section('Other Commands', g.other);
+    html += '<section class="reviewSection"><div class="reviewSectionHead"><span>Raw Commands</span><span class="reviewCount">'+changed+'</span></div><pre>'+esc(data.text)+'</pre></section>';
     body.innerHTML = html;
     return data;
   }
@@ -173,20 +123,12 @@
     panel.innerHTML =
       '<div class="reviewHead">' +
         '<div><div class="reviewTitle">Review Changes</div><div class="reviewSub">No staged changes</div></div>' +
-        '<div class="reviewActions"><span id="reviewCopyStatus" class="reviewCopyStatus"></span><button id="reviewCopyAllBtn" class="btn primary" type="button">Copy all</button><button id="reviewRefreshBtn" class="btn ghost" type="button">Refresh</button><button id="reviewCloseBtn" class="btn ghost" type="button">Close</button></div>' +
+        '<div class="reviewActions"><button id="reviewRefreshBtn" class="btn ghost" type="button">Refresh</button><button id="reviewCloseBtn" class="btn ghost" type="button">Close</button></div>' +
       '</div>' +
       '<div class="reviewBody"></div>';
     document.body.appendChild(panel);
     qs('#reviewCloseBtn', panel).addEventListener('click', function(){ panel.classList.remove('open'); });
     qs('#reviewRefreshBtn', panel).addEventListener('click', function(){ render(); });
-    qs('#reviewCopyAllBtn', panel).addEventListener('click', function(){ copyText(groupText('all'), 'Copied all'); });
-    panel.addEventListener('click', function(ev){
-      var btn = ev.target && ev.target.closest ? ev.target.closest('[data-review-copy]') : null;
-      if (!btn || !panel.contains(btn)) return;
-      var group = btn.getAttribute('data-review-copy') || '';
-      var label = group === 'all' ? 'Copied all' : 'Copied section';
-      copyText(groupText(group), label);
-    });
     render();
     return panel;
   }
@@ -207,7 +149,7 @@
     render();
   }
 
-  window.TaskCanvasReview = { current: currentReview, render: render, groupText: groupText, copyText: copyText };
+  window.TaskCanvasReview = { current: currentReview, render: render };
   window.addEventListener('load', function(){ setTimeout(boot, 80); });
   document.addEventListener('twdata', function(){ setTimeout(boot, 0); });
 })();</script>
