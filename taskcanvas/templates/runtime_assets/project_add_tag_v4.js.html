@@ -1,0 +1,154 @@
+<script id="FEATURE_PROJECT_ADD_TAG_V4">(function(){
+  if (window.__FEATURE_PROJECT_ADD_TAG_V4__) return; window.__FEATURE_PROJECT_ADD_TAG_V4__=true;
+
+  function qs(s,root){ return (root||document).querySelector(s); }
+  function qsa(s,root){ return (root||document).querySelectorAll(s); }
+  function text(el){ return (el && (el.textContent||'').trim()) || ''; }
+  function canvasEl(){ return qs('#builderWrap .canvas'); }
+  function centerIntoView(el){
+    if (!el) return;
+    var cv = canvasEl(); if (!cv) return;
+    var cvr = cv.getBoundingClientRect();
+    var er  = el.getBoundingClientRect();
+    var elCx = er.left + er.width/2;
+    var elCy = er.top  + er.height/2;
+    var cvCx = cvr.left + cvr.width/2;
+    var cvCy = cvr.top  + cv.clientHeight/2;
+    var dx = elCx - cvCx;
+    var dy = elCy - cvCy;
+    var targetLeft = cv.scrollLeft + dx;
+    var targetTop  = cv.scrollTop  + dy;
+    targetLeft = Math.max(0, Math.min(cv.scrollWidth  - cv.clientWidth,  targetLeft));
+    targetTop  = Math.max(0, Math.min(cv.scrollHeight - cv.clientHeight, targetTop));
+    cv.scrollTo({ left: targetLeft, top: targetTop, behavior: 'smooth' });
+  }
+  function CSSescape(s){
+    return String(s).replace(/(["\#.:;?*+^$[\]()%!@<>=|{}])/g, '\\$1');
+  }
+
+  function getProjFromLabel(label){
+    if (!label) return '';
+    var holder = label.closest('[data-proj]') || label.closest('[data-project]');
+    if (holder){
+      var dp = holder.getAttribute('data-proj') || holder.getAttribute('data-project');
+      if (dp) return dp;
+    }
+    var cached = label.getAttribute('data-projname');
+    if (cached) return cached;
+    var t = text(label);
+    if (/\+\s*$/.test(t)) t = t.replace(/\+\s*$/,'').trim();
+    return t;
+  }
+
+  function ensureButtons(){
+    var labels = qsa('.projAreaLabel');
+    for (var i=0;i<labels.length;i++){
+      var lab = labels[i];
+      if (lab.__hasAddTagBtn) continue;
+
+      var proj = (lab.closest('[data-proj]') && lab.closest('[data-proj]').getAttribute('data-proj'))
+                 || (lab.closest('[data-project]') && lab.closest('[data-project]').getAttribute('data-project'))
+                 || text(lab);
+      if (proj) lab.setAttribute('data-projname', proj);
+
+      if (lab.querySelector('.projAddTagBtn')) { lab.__hasAddTagBtn = true; continue; }
+
+      var btn = document.createElement('span');
+      btn.className = 'projAddTagBtn';
+      btn.textContent = '+';
+      btn.title = 'Add a tag to this project';
+      if (proj) btn.dataset.project = proj;
+      lab.appendChild(btn);
+      lab.__hasAddTagBtn = true;
+    }
+  }
+
+  document.addEventListener('click', function(ev){
+    var t = ev.target;
+    if (!t || !t.classList || !t.classList.contains('projAddTagBtn')) return;
+    ev.preventDefault(); ev.stopPropagation();
+
+    var label = t.closest('.projAreaLabel');
+    if (!label) return;
+    var proj = t.dataset.project || getProjFromLabel(label);
+    if (!proj) return;
+
+    var input = prompt('New tag name(s) for project "'+proj+'" (separate multiple tags with spaces):');
+    if (!input) return;
+    input = String(input).trim();
+    if (!input) return;
+
+    var tagNames = input.split(/\s+/).filter(function(n){ return n.length > 0; });
+    if (tagNames.length === 0) return;
+
+    var addedTags = [];
+    var skippedTags = [];
+
+    for (var j = 0; j < tagNames.length; j++) {
+      var name = tagNames[j];
+
+      if (name === '(no tag)'){
+        skippedTags.push(name + ' (reserved)');
+        continue;
+      }
+
+      var exists = false;
+      try{
+        if (typeof uniqueTagsForProject === 'function'){
+          var tgs = uniqueTagsForProject(proj) || [];
+          exists = tgs.indexOf(name) !== -1;
+        }
+      }catch(_){}
+
+      if (exists){
+        skippedTags.push(name + ' (already exists)');
+        continue;
+      }
+
+      try{
+        if (typeof ensureTagArea === 'function'){
+          ensureTagArea(proj, name);
+        } else {
+          var area = label.closest('[data-proj]') || label.closest('[data-project]') || label.parentElement;
+          var tagEl = document.createElement('div');
+          tagEl.className = 'tagArea';
+          tagEl.setAttribute('data-proj', proj);
+          tagEl.setAttribute('data-tag', name);
+          var l = document.createElement('div'); l.className='tagAreaLabel'; l.textContent = name;
+          tagEl.appendChild(l);
+          (area||document.body).appendChild(tagEl);
+        }
+        addedTags.push(name);
+      }catch(_){}
+    }
+
+    try{ if (typeof recomputeAreasAndTags === 'function') recomputeAreasAndTags(); }catch(_){}
+    for (var k = 0; k < addedTags.length; k++) {
+      try{ if (typeof relayoutTag === 'function') relayoutTag(proj, addedTags[k]); }catch(_){}
+    }
+    try{ if (typeof resolveTagOverlaps === 'function') resolveTagOverlaps(proj); }catch(_){}
+    try{ if (typeof drawLinks === 'function') drawLinks(); }catch(_){}
+    try{ if (typeof updateConsole === 'function') updateConsole(); }catch(_){}
+
+    if (addedTags.length > 0){
+      var msg = 'Added tag' + (addedTags.length > 1 ? 's' : '') + ' "' + addedTags.join('", "') + '" to ' + proj + '.';
+      if (skippedTags.length > 0) msg += ' Skipped: ' + skippedTags.join(', ');
+      try{ if (window.showToast) showToast(msg); }catch(_){}
+
+      try{
+        var el2 = document.querySelector('[data-proj="'+CSSescape(proj)+'"][data-tag="'+CSSescape(addedTags[0])+'"]')
+              || document.querySelector('[data-project="'+CSSescape(proj)+'"][data-tag="'+CSSescape(addedTags[0])+'"]');
+        centerIntoView(el2);
+      }catch(_){}
+    } else if (skippedTags.length > 0){
+      try{ if (window.showToast) showToast('No tags added. Skipped: ' + skippedTags.join(', ')); }catch(_){}
+    }
+  }, true);
+
+  function boot(){
+    ensureButtons();
+    var mo = new MutationObserver(function(){ ensureButtons(); });
+    mo.observe(document.body, {childList:true, subtree:true});
+  }
+  window.addEventListener('load', function(){ setTimeout(boot, 120); });
+})();</script>

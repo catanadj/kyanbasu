@@ -1,0 +1,11 @@
+<style id="feature-dedupe-focus-v1-css">
+/* pulse highlight for focused/duplicate-found nodes */
+@keyframes nodePulse {
+  0%   { box-shadow: 0 0 0 0 rgba(122,162,247,.0), 0 0 0 0 rgba(122,162,247,.0); }
+  20%  { box-shadow: 0 0 0 2px #7aa2f7, 0 0 0 8px rgba(122,162,247,.25); }
+  100% { box-shadow: 0 0 0 0 rgba(122,162,247,.0), 0 0 0 0 rgba(122,162,247,.0); }
+}
+.node.pulse {
+  animation: nodePulse .8s ease-out 1;
+}
+</style>

@@ -205,6 +205,81 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "task one\ntask two")
         self.assertEqual(result["copied"], "task one\ntask two")
 
+    def test_focus_and_project_add_tag_runtimes_dedupe_and_add_multiple_tags(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps(
+            {
+                "tasks": [
+                    {
+                        "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        "short": "aaaaaaaa",
+                        "desc": "Alpha",
+                        "project": "Work",
+                        "tags": ["old"],
+                        "has_depends": False,
+                    }
+                ],
+                "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
+                "init_projects": ["Work"],
+            }
+        )
+        html = build_runtime_html(base_html, payload, 1, lambda *_: None)
+
+        harness = """
+<script id="E2E_FOCUS_ADD_TAG_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      window.prompt = function(){ return "newtag extra old"; };
+      var before = document.querySelectorAll('#builderStage .node[data-short="aaaaaaaa"]').length;
+      if (typeof addToBuilder === 'function') addToBuilder(window.TASKS[0], 180, 180);
+      var after = document.querySelectorAll('#builderStage .node[data-short="aaaaaaaa"]').length;
+      var btn = document.querySelector('.projAreaLabel .projAddTagBtn');
+      if (btn) btn.click();
+      setTimeout(function(){
+        var tags = Array.prototype.slice.call(document.querySelectorAll('.tagAreaLabel')).map(function(el){
+          return (el.textContent || '').replace(/[+＋]\\s*$/, '').trim();
+        }).sort();
+        var out = {
+          before: before,
+          after: after,
+          hasButton: !!btn,
+          tags: tags,
+          toast: (document.getElementById('devConsoleToast') || {}).textContent || "",
+          flags: [
+            !!window.__FEATURE_DEDUPE_FOCUS_V1__,
+            !!window.__FEATURE_PROJECT_ADD_TAG_V4__
+          ]
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 160);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["flags"], [True, True])
+        self.assertTrue(result["hasButton"])
+        self.assertEqual(result["before"], 1)
+        self.assertEqual(result["after"], 1)
+        self.assertIn("newtag", result["tags"])
+        self.assertIn("extra", result["tags"])
+        self.assertIn("old", result["tags"])
+        self.assertIn('Added tags "newtag", "extra" to Work.', result["toast"])
+        self.assertIn("Skipped: old (already exists)", result["toast"])
+
     def test_taskcanvas_commands_core_includes_dependency_commands(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

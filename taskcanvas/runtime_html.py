@@ -54,12 +54,21 @@ def build_runtime_html(
     """
     if 'id="COMMANDS_CORE_V1"' not in html:
         html = inject_body(html, load_runtime_asset("commands_core_v1.js.html") + "\n")
+    pre_payload_body_snippets = [
+        ("FEATURE_DEDUPE_FOCUS_V1", "dedupe_focus_v1.js.html"),
+        ("FEATURE_PROJECT_ADD_TAG_V4", "project_add_tag_v4.js.html"),
+    ]
+    for marker, asset_name in pre_payload_body_snippets:
+        if marker not in html:
+            html = inject_body(html, load_runtime_asset(asset_name))
     html = inject_body(html, payload_tag + runner)
 
     head_snippets = [
         ("feature-hover-css", "feature_hover.css.html"),
         ("feature-due-css-v2", "feature_due.css.html"),
         ("PROJECT_PICKER_V2_CSS", "project_picker_v2.css.html"),
+        ("feature-dedupe-focus-v1-css", "dedupe_focus_v1.css.html"),
+        ("feature-project-addtag-v4-css", "project_add_tag_v4.css.html"),
     ]
     body_snippets = [
         ("FEATURE_HOVERSTAGE", "feature_hover.js.html"),

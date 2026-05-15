@@ -1,0 +1,73 @@
+<script id="FEATURE_DEDUPE_FOCUS_V1">(function(){
+  if (window.__FEATURE_DEDUPE_FOCUS_V1__) return; window.__FEATURE_DEDUPE_FOCUS_V1__=true;
+
+  function qs(s,root){ return (root||document).querySelector(s); }
+  function canvasEl(){ return qs('#builderWrap .canvas'); }
+  function centerIntoView(el){
+    if (!el) return;
+    var cv = canvasEl(); if (!cv) return;
+    var cvr = cv.getBoundingClientRect();
+    var er  = el.getBoundingClientRect();
+    var elCx = er.left + er.width/2;
+    var elCy = er.top  + er.height/2;
+    var cvCx = cvr.left + cvr.width/2;
+    var cvCy = cvr.top  + cv.clientHeight/2;
+    var dx = elCx - cvCx;
+    var dy = elCy - cvCy;
+    var targetLeft = cv.scrollLeft + dx;
+    var targetTop  = cv.scrollTop  + dy;
+    targetLeft = Math.max(0, Math.min(cv.scrollWidth  - cv.clientWidth,  targetLeft));
+    targetTop  = Math.max(0, Math.min(cv.scrollHeight - cv.clientHeight, targetTop));
+    cv.scrollTo({ left: targetLeft, top: targetTop, behavior: 'smooth' });
+    try{ el.classList.add('pulse'); setTimeout(function(){ el.classList.remove('pulse'); }, 820);}catch(_){}
+  }
+
+  (function(){
+    var orig = window.addNodeForTask;
+    if (typeof orig !== 'function') return;
+    window.addNodeForTask = function(task, cx, cy, opts){
+      try{
+        var uuid = task && task.uuid || '';
+        if (/^new[-_]/i.test(uuid)){
+          return orig.call(this, task, cx, cy, opts);
+        }
+        if (uuid){
+          var exU = document.querySelector('.node[data-uuid="'+uuid+'"]');
+          if (exU) return exU;
+        }
+        var short = task && task.short;
+        if (short){
+          var exS = document.querySelector('.node[data-short="'+short+'"]');
+          if (exS) return exS;
+        }
+      }catch(_){}
+      return orig.call(this, task, cx, cy, opts);
+    };
+  })();
+
+  (function(){
+    var orig = window.addToBuilder;
+    if (typeof orig !== 'function') return;
+    window.addToBuilder = function(task, cx, cy){
+      var node = null;
+      try{
+        var uuid = task && task.uuid || '';
+        if (/^new[-_]/i.test(uuid)){
+          node = orig.call(this, task, cx, cy);
+          requestAnimationFrame(function(){ centerIntoView(node); });
+          return node;
+        }
+        var short = task && task.short;
+        var existing = null;
+        if (uuid) existing = document.querySelector('.node[data-uuid="'+uuid+'"]');
+        if (!existing && short) existing = document.querySelector('.node[data-short="'+short+'"]');
+        node = existing || orig.call(this, task, cx, cy);
+        requestAnimationFrame(function(){ centerIntoView(node); });
+        return node;
+      }catch(e){
+        try{ return orig.call(this, task, cx, cy); }catch(_){ return null; }
+      }
+    };
+  })();
+
+})();</script>
