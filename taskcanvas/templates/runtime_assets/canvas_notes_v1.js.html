@@ -180,6 +180,79 @@
   function rectsOverlap(a, b){
     return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
   }
+  function hash32(str){
+    var h = 2166136261;
+    str = String(str || '');
+    for (var i=0;i<str.length;i++){
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+  function resolveNoteOverlaps(){
+    var items = [];
+    qsa('.tcNoteNode').forEach(function(el){
+      if (el.style.display === 'none') return;
+      var id = el.getAttribute('data-note-id');
+      var n = noteById(id);
+      if (!n) return;
+      items.push({
+        id: id,
+        n: n,
+        el: el,
+        x: toInt(n.x, 160),
+        y: toInt(n.y, 160),
+        w: el.offsetWidth || 220,
+        h: el.offsetHeight || 92
+      });
+    });
+    if (items.length < 2) return false;
+    var changed = false;
+    var pad = 18;
+    for (var iter = 0; iter < 8; iter++){
+      var moved = false;
+      for (var i = 0; i < items.length; i++){
+        for (var j = i + 1; j < items.length; j++){
+          var a = items[i];
+          var b = items[j];
+          var ax = a.x + a.w / 2;
+          var ay = a.y + a.h / 2;
+          var bx = b.x + b.w / 2;
+          var by = b.y + b.h / 2;
+          var overlapX = (a.w + b.w) / 2 + pad - Math.abs(bx - ax);
+          var overlapY = (a.h + b.h) / 2 + pad - Math.abs(by - ay);
+          if (overlapX <= 0 || overlapY <= 0) continue;
+          var vx = bx - ax;
+          var vy = by - ay;
+          if (Math.abs(vx) + Math.abs(vy) < 1){
+            var seed = hash32(a.id + ':' + b.id);
+            vx = (seed & 1) ? 0.8 : -0.8;
+            vy = (seed & 2) ? 0.6 : -0.6;
+          }
+          var dist = Math.sqrt(vx * vx + vy * vy) || 1;
+          vx /= dist;
+          vy /= dist;
+          var push = Math.max(6, Math.min(overlapX, overlapY) / 2);
+          var dx = Math.round(vx * push);
+          var dy = Math.round(vy * push);
+          a.x = Math.max(0, a.x - dx);
+          a.y = Math.max(0, a.y - dy);
+          b.x = Math.max(0, b.x + dx);
+          b.y = Math.max(0, b.y + dy);
+          a.n.x = a.x; a.n.y = a.y;
+          b.n.x = b.x; b.n.y = b.y;
+          a.el.style.left = a.x + 'px';
+          a.el.style.top = a.y + 'px';
+          b.el.style.left = b.x + 'px';
+          b.el.style.top = b.y + 'px';
+          moved = true;
+          changed = true;
+        }
+      }
+      if (!moved) break;
+    }
+    return changed;
+  }
   function bucketFromPoint(x, y){
     var el = document.elementFromPoint(x, y);
     while (el && el !== stage()){
@@ -305,6 +378,7 @@
     var n = {id: uid(), x: toInt(x, 160), y: toInt(y, 160), content: noteText(title, body), bucket: bucketText(bucket), collapsed: false};
     notes.push(n);
     renderNote(n);
+    resolveNoteOverlaps();
     renderBuckets();
     selectNote(n.id);
     renderLinks();
@@ -441,6 +515,10 @@
       start = [];
       if (bucketChanged){
         renderAll();
+      } else {
+        resolveNoteOverlaps();
+        renderBuckets();
+        renderLinks();
       }
       saveSoon();
     });
@@ -749,6 +827,7 @@
     notes.forEach(renderNote);
     if (selectedNoteId) syncSelection();
     applyVisibility();
+    resolveNoteOverlaps();
     renderBuckets();
     renderLinks();
   }

@@ -797,6 +797,54 @@ window.addEventListener('load', function(){
         self.assertEqual(result["expandedVisible"], 3)
         self.assertEqual(result["bucketCount"], 2)
 
+    def test_canvas_notes_rejects_overlapping_notes(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_OVERLAP_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var a = window.TaskCanvasNotes.createNote(260, 260, "Alpha", "", "Planning");
+      var b = window.TaskCanvasNotes.createNote(260, 260, "Beta", "", "Planning");
+      setTimeout(function(){
+        var aEl = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]');
+        var bEl = document.querySelector('.tcNoteNode[data-note-id="'+b.id+'"]');
+        var ar = aEl.getBoundingClientRect();
+        var br = bEl.getBoundingClientRect();
+        var overlap = !(ar.right <= br.left || ar.left >= br.right || ar.bottom <= br.top || ar.top >= br.bottom);
+        var out = {
+          overlap: overlap,
+          ax: Math.round(ar.left),
+          ay: Math.round(ar.top),
+          bx: Math.round(br.left),
+          by: Math.round(br.top)
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 180);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertFalse(result["overlap"])
+        self.assertNotEqual(result["ax"], result["bx"])
+        self.assertNotEqual(result["ay"], result["by"])
+
     def test_canvas_notes_create_tasks_stages_selected_note_commands(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
@@ -1281,14 +1329,17 @@ window.addEventListener('load', function(){
       document.dispatchEvent(new MouseEvent('mousemove', {bubbles:true, cancelable:true, button:0, clientX:540, clientY:300}));
       document.dispatchEvent(new MouseEvent('mouseup', {bubbles:true, cancelable:true, button:0, clientX:540, clientY:300}));
       if (typeof updateConsole === 'function') updateConsole();
-      setTimeout(function(){
+        setTimeout(function(){
         var by = {};
         window.TaskCanvasNotes.notes().forEach(function(n){ by[n.content] = n; });
+        var aRect = document.querySelector('.tcNoteNode[data-note-id="'+by.A.id+'"]').getBoundingClientRect();
+        var bRect = document.querySelector('.tcNoteNode[data-note-id="'+by.B.id+'"]').getBoundingClientRect();
         var out = {
           selected: window.TaskCanvasNotes.selectedNotes().length,
-          aMoved: by.A.x === 270 && by.A.y === 290,
-          bMoved: by.B.x === 530 && by.B.y === 290,
-          cStayed: by.C.x === 760 && by.C.y === 240,
+          aMoved: Math.abs(by.A.x - 270) <= 60 && Math.abs(by.A.y - 290) <= 60,
+          bMoved: Math.abs(by.B.x - 530) <= 60 && Math.abs(by.B.y - 290) <= 60,
+          notOverlap: !(aRect.right > bRect.left && aRect.left < bRect.right && aRect.bottom > bRect.top && aRect.top < bRect.bottom),
+          cMovedSlightly: Math.abs(by.C.x - 760) <= 80 && Math.abs(by.C.y - 240) <= 80,
           paths: document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink').length,
           console: (document.getElementById('consoleText') || {}).value || ""
         };
@@ -1314,7 +1365,8 @@ window.addEventListener('load', function(){
         self.assertEqual(result["selected"], 2)
         self.assertTrue(result["aMoved"])
         self.assertTrue(result["bMoved"])
-        self.assertTrue(result["cStayed"])
+        self.assertTrue(result["notOverlap"])
+        self.assertTrue(result["cMovedSlightly"])
         self.assertEqual(result["paths"], 0)
         self.assertEqual(result["console"], "")
 
