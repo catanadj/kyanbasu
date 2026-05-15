@@ -7,6 +7,7 @@
   var linkMode = false;
   var linkFrom = null;
   var selectedNoteId = null;
+  var selectedNoteIds = {};
   var saveTimer = 0;
 
   function qs(s, root){ return (root || document).querySelector(s); }
@@ -59,6 +60,7 @@
     delete n.body;
     n.x = toInt(n.x, 160);
     n.y = toInt(n.y, 160);
+    n.collapsed = !!n.collapsed;
     return n;
   }
   function saveSoon(){
@@ -142,7 +144,7 @@
     if (linkBtn) linkBtn.classList.toggle('active', !!linkMode);
   }
   function createNote(x, y, title, body){
-    var n = {id: uid(), x: toInt(x, 160), y: toInt(y, 160), content: noteText(title, body)};
+    var n = {id: uid(), x: toInt(x, 160), y: toInt(y, 160), content: noteText(title, body), collapsed: false};
     notes.push(n);
     renderNote(n);
     selectNote(n.id);
@@ -158,15 +160,26 @@
       el.className = 'tcNoteNode';
       el.setAttribute('data-note-id', n.id);
       el.innerHTML =
-        '<div class="tcNoteHead"><div class="tcNoteActions"><button type="button" data-note-child title="Add child note">+</button><button type="button" data-note-link title="Link from this note">L</button><button type="button" data-note-delete title="Delete note">x</button></div></div>' +
+        '<div class="tcNoteHead"><div class="tcNoteActions"><button type="button" data-note-collapse title="Collapse branch">v</button><button type="button" data-note-child title="Add child note">+</button><button type="button" data-note-link title="Link from this note">L</button><button type="button" data-note-delete title="Delete selected notes">x</button></div></div>' +
         '<div class="tcNoteText" contenteditable="true"></div>';
       st.appendChild(el);
       wireNote(el);
     }
     el.style.left = toInt(n.x, 160) + 'px';
     el.style.top = toInt(n.y, 160) + 'px';
+    el.classList.toggle('collapsed', !!n.collapsed);
     qs('.tcNoteText', el).textContent = n.content || 'New note';
+    syncCollapseButton(n);
     return el;
+  }
+  function syncCollapseButton(n){
+    var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(n.id)+'"]');
+    var btn = el && qs('[data-note-collapse]', el);
+    if (!btn) return;
+    var hasKids = childLinksFrom(n.id).length > 0;
+    btn.disabled = !hasKids;
+    btn.textContent = n.collapsed ? '>' : 'v';
+    btn.title = n.collapsed ? 'Expand branch' : 'Collapse branch';
   }
   function wireNote(el){
     var id = el.getAttribute('data-note-id');
@@ -174,14 +187,15 @@
     text.addEventListener('input', function(){ var n = noteById(id); if (n){ n.content = text.textContent.trim() || 'New note'; saveSoon(); }});
     el.addEventListener('click', function(ev){
       ev.stopPropagation();
-      selectNote(id);
+      selectNote(id, !!(ev.ctrlKey || ev.metaKey || ev.shiftKey));
       if (linkMode && !ev.target.closest('[contenteditable="true"]')){
         handleLinkClick(id);
       }
     });
     qs('[data-note-delete]', el).addEventListener('click', function(ev){
       ev.preventDefault(); ev.stopPropagation();
-      deleteNote(id);
+      if (selectedNoteIds[id] && selectedIds().length > 1) deleteSelectedNotes();
+      else deleteNote(id);
     });
     qs('[data-note-link]', el).addEventListener('click', function(ev){
       ev.preventDefault(); ev.stopPropagation();
@@ -190,6 +204,10 @@
     qs('[data-note-child]', el).addEventListener('click', function(ev){
       ev.preventDefault(); ev.stopPropagation();
       createChildNote(id);
+    });
+    qs('[data-note-collapse]', el).addEventListener('click', function(ev){
+      ev.preventDefault(); ev.stopPropagation();
+      toggleCollapse(id);
     });
     makeNoteDraggable(el);
   }
@@ -200,7 +218,7 @@
       dragging = true;
       sx = ev.clientX; sy = ev.clientY;
       ox = toInt(el.style.left, 0); oy = toInt(el.style.top, 0);
-      selectNote(el.getAttribute('data-note-id'));
+      selectNote(el.getAttribute('data-note-id'), !!(ev.ctrlKey || ev.metaKey || ev.shiftKey));
       ev.preventDefault(); ev.stopPropagation();
     });
     document.addEventListener('mousemove', function(ev){
@@ -220,9 +238,29 @@
       saveSoon();
     });
   }
-  function selectNote(id){
-    selectedNoteId = noteById(id) ? id : null;
-    qsa('.tcNoteNode').forEach(function(el){ el.classList.toggle('selected', el.getAttribute('data-note-id') === id); });
+  function selectedIds(){
+    return Object.keys(selectedNoteIds).filter(function(id){ return !!selectedNoteIds[id] && !!noteById(id); });
+  }
+  function selectNote(id, additive){
+    if (!noteById(id)){
+      selectedNoteId = null;
+      selectedNoteIds = {};
+    } else if (additive) {
+      if (selectedNoteIds[id]) delete selectedNoteIds[id];
+      else selectedNoteIds[id] = true;
+      var ids = selectedIds();
+      selectedNoteId = ids.length ? ids[ids.length - 1] : null;
+    } else {
+      selectedNoteId = id;
+      selectedNoteIds = {};
+      selectedNoteIds[id] = true;
+    }
+    syncSelection();
+  }
+  function syncSelection(){
+    qsa('.tcNoteNode').forEach(function(el){
+      el.classList.toggle('selected', !!selectedNoteIds[el.getAttribute('data-note-id')]);
+    });
   }
   function focusNoteText(id){
     var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(id)+'"] .tcNoteText');
@@ -252,11 +290,55 @@
     syncButtons();
   }
   function deleteNote(id){
-    notes = notes.filter(function(n){ return n.id !== id; });
-    links = links.filter(function(l){ return l.from !== id && l.to !== id; });
-    var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(id)+'"]');
-    if (el) el.remove();
+    deleteNotes([id]);
+  }
+  function deleteSelectedNotes(){
+    deleteNotes(selectedIds());
+  }
+  function deleteNotes(ids){
+    var doomed = {};
+    ids.forEach(function(id){ if (noteById(id)) doomed[id] = true; });
+    var doomedIds = Object.keys(doomed);
+    if (!doomedIds.length) return;
+    notes = notes.filter(function(n){ return !doomed[n.id]; });
+    links = links.filter(function(l){ return !doomed[l.from] && !doomed[l.to]; });
+    doomedIds.forEach(function(id){ delete selectedNoteIds[id]; });
+    if (doomed[selectedNoteId]) selectedNoteId = selectedIds()[0] || null;
+    doomedIds.forEach(function(id){
+      var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(id)+'"]');
+      if (el) el.remove();
+    });
+    syncSelection();
     renderLinks();
+    saveSoon();
+  }
+  function hiddenNoteIds(){
+    var hidden = {};
+    function hideChildren(id){
+      childLinksFrom(id).forEach(function(l){
+        if (hidden[l.to]) return;
+        hidden[l.to] = true;
+        hideChildren(l.to);
+      });
+    }
+    notes.forEach(function(n){ if (n.collapsed) hideChildren(n.id); });
+    return hidden;
+  }
+  function isNoteVisible(id){
+    return !hiddenNoteIds()[id];
+  }
+  function applyVisibility(){
+    var hidden = hiddenNoteIds();
+    qsa('.tcNoteNode').forEach(function(el){
+      el.style.display = hidden[el.getAttribute('data-note-id')] ? 'none' : '';
+    });
+    notes.forEach(syncCollapseButton);
+  }
+  function toggleCollapse(id){
+    var n = noteById(id);
+    if (!n || childLinksFrom(id).length === 0) return;
+    n.collapsed = !n.collapsed;
+    renderAll();
     saveSoon();
   }
   function ensureLinkLayer(){
@@ -278,6 +360,7 @@
       var a = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(l.from)+'"]');
       var b = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(l.to)+'"]');
       if (!a || !b) return;
+      if (!isNoteVisible(l.from) || !isNoteVisible(l.to)) return;
       var p1 = centerPoint(a), p2 = centerPoint(b);
       var dx = Math.max(80, Math.abs(p2.x - p1.x) * .45);
       var d = 'M '+p1.x+' '+p1.y+' C '+(p1.x+dx)+' '+p1.y+', '+(p2.x-dx)+' '+p2.y+', '+p2.x+' '+p2.y;
@@ -294,6 +377,7 @@
     var parent = noteById(parentId);
     if (!parent) return null;
     var existing = childLinksFrom(parentId).length;
+    parent.collapsed = false;
     var child = createNote(parent.x + 300, parent.y + existing * 124, title || 'New branch', body || '');
     links.push({from: parent.id, to: child.id, type: 'child'});
     reflowMindMap(parent.id);
@@ -319,7 +403,7 @@
     if (seen[id]) return 1;
     seen[id] = true;
     var kids = childLinksFrom(id);
-    if (!kids.length) return 1;
+    if (!kids.length || (noteById(id) || {}).collapsed) return 1;
     var slots = 0;
     kids.forEach(function(l){ slots += subtreeSlots(l.to, Object.assign({}, seen)); });
     return Math.max(1, slots);
@@ -333,7 +417,7 @@
     var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(id)+'"]');
     if (el){ el.style.left = x + 'px'; el.style.top = y + 'px'; }
     var kids = childLinksFrom(id);
-    if (!kids.length) return;
+    if (!kids.length || n.collapsed) return;
     var rowH = 132;
     var total = 0;
     kids.forEach(function(l){ total += subtreeSlots(l.to, Object.assign({}, seen)); });
@@ -362,7 +446,8 @@
   function renderAll(){
     qsa('.tcNoteNode').forEach(function(el){ el.remove(); });
     notes.forEach(renderNote);
-    if (selectedNoteId) selectNote(selectedNoteId);
+    if (selectedNoteId) syncSelection();
+    applyVisibility();
     renderLinks();
   }
   function installCanvasClick(){
@@ -404,6 +489,10 @@
       } else if (ev.key === 'Enter'){
         ev.preventDefault();
         createSiblingNote(selectedNoteId);
+      } else if (ev.key === 'Delete' || ev.key === 'Backspace'){
+        if (ev.target && ev.target.closest && ev.target.closest('[contenteditable="true"]')) return;
+        ev.preventDefault();
+        deleteSelectedNotes();
       }
     });
   }
@@ -420,9 +509,12 @@
     createNote: createNote,
     createChildNote: createChildNote,
     createSiblingNote: createSiblingNote,
+    deleteSelectedNotes: deleteSelectedNotes,
     linkNotes: function(from, to, type){ if (from && to && from !== to && !linkExists(from, to)){ links.push({from:from, to:to, type:type || 'manual'}); renderLinks(); saveSoon(); } },
     reflowMindMap: reflowMindMap,
+    toggleCollapse: toggleCollapse,
     selectNote: selectNote,
+    selectedNotes: function(){ return selectedIds(); },
     notes: function(){ return notes.slice(); },
     links: function(){ return links.slice(); },
     render: renderAll,

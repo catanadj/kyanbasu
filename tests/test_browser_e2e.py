@@ -621,6 +621,123 @@ window.addEventListener('load', function(){
         self.assertTrue(result["focusedText"])
         self.assertEqual(result["console"], "")
 
+    def test_canvas_notes_multiselect_deletes_selected_notes_and_links(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_MULTISELECT_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var root = window.TaskCanvasNotes.createNote(180, 240, "Root", "");
+      var a = window.TaskCanvasNotes.createChildNote(root.id, "A", "");
+      var b = window.TaskCanvasNotes.createChildNote(root.id, "B", "");
+      var c = window.TaskCanvasNotes.createChildNote(a.id, "C", "");
+      window.TaskCanvasNotes.selectNote(a.id);
+      window.TaskCanvasNotes.selectNote(c.id, true);
+      document.dispatchEvent(new KeyboardEvent('keydown', {key:'Delete', bubbles:true, cancelable:true}));
+      if (typeof updateConsole === 'function') updateConsole();
+      setTimeout(function(){
+        var notes = window.TaskCanvasNotes.notes();
+        var links = window.TaskCanvasNotes.links();
+        var out = {
+          notes: notes.length,
+          contents: notes.map(function(n){ return n.content; }).sort(),
+          links: links.length,
+          selected: window.TaskCanvasNotes.selectedNotes().length,
+          selectedNodes: document.querySelectorAll('.tcNoteNode.selected').length,
+          domNotes: document.querySelectorAll('.tcNoteNode').length,
+          console: (document.getElementById('consoleText') || {}).value || ""
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 120);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["notes"], 2)
+        self.assertEqual(result["contents"], ["B", "Root"])
+        self.assertEqual(result["links"], 1)
+        self.assertEqual(result["selected"], 0)
+        self.assertEqual(result["selectedNodes"], 0)
+        self.assertEqual(result["domNotes"], 2)
+        self.assertEqual(result["console"], "")
+
+    def test_canvas_notes_collapse_hides_descendants_and_restores_them(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_COLLAPSE_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var root = window.TaskCanvasNotes.createNote(180, 240, "Root", "");
+      var a = window.TaskCanvasNotes.createChildNote(root.id, "A", "");
+      var b = window.TaskCanvasNotes.createChildNote(root.id, "B", "");
+      var c = window.TaskCanvasNotes.createChildNote(a.id, "C", "");
+      window.TaskCanvasNotes.toggleCollapse(root.id);
+      var collapsedVisible = Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){ return el.style.display !== 'none'; }).length;
+      var collapsedPaths = document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink[data-type="child"]').length;
+      window.TaskCanvasNotes.toggleCollapse(root.id);
+      var expandedVisible = Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){ return el.style.display !== 'none'; }).length;
+      var expandedPaths = document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink[data-type="child"]').length;
+      if (typeof updateConsole === 'function') updateConsole();
+      setTimeout(function(){
+        var out = {
+          notes: window.TaskCanvasNotes.notes().length,
+          links: window.TaskCanvasNotes.links().length,
+          collapsedVisible: collapsedVisible,
+          collapsedPaths: collapsedPaths,
+          expandedVisible: expandedVisible,
+          expandedPaths: expandedPaths,
+          collapseButtons: document.querySelectorAll('.tcNoteNode [data-note-collapse]').length,
+          console: (document.getElementById('consoleText') || {}).value || ""
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 120);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["notes"], 4)
+        self.assertEqual(result["links"], 3)
+        self.assertEqual(result["collapsedVisible"], 1)
+        self.assertEqual(result["collapsedPaths"], 0)
+        self.assertEqual(result["expandedVisible"], 4)
+        self.assertEqual(result["expandedPaths"], 3)
+        self.assertEqual(result["collapseButtons"], 4)
+        self.assertEqual(result["console"], "")
+
     def test_taskcanvas_commands_core_includes_dependency_commands(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
