@@ -1,0 +1,155 @@
+<script id="FEATURE_REVIEW_CHANGES_V1">(function(){
+  if (window.__FEATURE_REVIEW_CHANGES_V1__) return; window.__FEATURE_REVIEW_CHANGES_V1__ = true;
+
+  function esc(s){
+    if (typeof window.escapeHtml === 'function') return window.escapeHtml(s);
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+    });
+  }
+  function qs(s, root){ return (root || document).querySelector(s); }
+  function lineId(line){
+    var m = /^task\s+(\S+)\s+\S+\b/i.exec(String(line || '').trim());
+    return m ? m[1] : '';
+  }
+  function classify(line){
+    var s = String(line || '').trim();
+    if (!s) return null;
+    if (/^task\s+(add|log)\s+/i.test(s)) return [{group:'newTasks', type:/^task\s+log\s+/i.test(s) ? 'New completed task' : 'New task', line:s}];
+    var items = [];
+    if (/\sdepends:[^\s]+/i.test(s)) items.push({group:'dependencies', type:'Dependency change', line:s, id:lineId(s)});
+    var terminal = /^task\s+(\S+)\s+(done|delete)\s*$/i.exec(s);
+    if (terminal) return [{group:'terminal', type:terminal[2].toLowerCase() === 'done' ? 'Mark done' : 'Delete task', line:s, id:terminal[1]}];
+    var mod = /^task\s+(\S+)\s+modify(?:\s+(.*))?$/i.exec(s);
+    if (mod){
+      var rest = String(mod[2] || '').trim();
+      var toks = rest ? rest.split(/\s+/).filter(Boolean) : [];
+      var hasField = toks.some(function(t){ return /^project:/i.test(t) || /^due:/i.test(t) || /^[+-][^\s]+$/.test(t); });
+      if (hasField) items.push({group:'fieldChanges', type:'Task field change', line:s, id:mod[1]});
+      if (!items.length) items.push({group:'other', type:'Modify task', line:s, id:mod[1]});
+      return items;
+    }
+    if (items.length) return items;
+    return [{group:'other', type:'Command', line:s}];
+  }
+  function currentReview(){
+    var api = window.TaskCanvasCommands || {};
+    var built = api && typeof api.build === 'function' ? api.build({runtime: window}) : {text: (typeof buildCommands === 'function' ? String(buildCommands() || '') : ''), warnings: []};
+    var normalized = Array.isArray(built.normalizedLines) ? built.normalizedLines : String(built.text || '').split(/\r?\n/).filter(Boolean);
+    var groups = {newTasks:[], terminal:[], fieldChanges:[], dependencies:[], other:[]};
+    normalized.forEach(function(line){
+      var items = classify(line) || [];
+      items.forEach(function(item){
+        if (item && groups[item.group]) groups[item.group].push(item);
+      });
+    });
+    return {
+      text: String(built.text || ''),
+      warnings: Array.isArray(built.warnings) ? built.warnings : [],
+      groups: groups,
+      total: normalized.length
+    };
+  }
+  function metric(label, value){
+    return '<div class="reviewMetric"><strong>'+esc(value)+'</strong><span>'+esc(label)+'</span></div>';
+  }
+  function section(title, items){
+    if (!items.length) return '';
+    return '<section class="reviewSection"><div class="reviewSectionHead"><span>'+esc(title)+'</span><span class="reviewCount">'+items.length+'</span></div><div class="reviewList">' +
+      items.map(function(item){
+        var label = item.id ? (item.type + ' · ' + item.id) : item.type;
+        return '<div class="reviewItem"><div class="reviewItemType">'+esc(label)+'</div><code>'+esc(item.line)+'</code></div>';
+      }).join('') +
+      '</div></section>';
+  }
+  function render(){
+    var panel = ensurePanel();
+    var body = qs('.reviewBody', panel);
+    var sub = qs('.reviewSub', panel);
+    var data = currentReview();
+    var g = data.groups;
+    var changed = data.total;
+    if (sub) sub.textContent = changed ? (changed + ' command' + (changed === 1 ? '' : 's') + ' staged') : 'No staged changes';
+    if (!body) return data;
+    if (!changed){
+      body.innerHTML = '<div class="reviewEmpty">No staged Taskwarrior changes yet.</div>';
+      return data;
+    }
+    var html = '<div class="reviewSummary">' +
+      metric('New', g.newTasks.length) +
+      metric('Done/Delete', g.terminal.length) +
+      metric('Fields', g.fieldChanges.length) +
+      metric('Dependencies', g.dependencies.length) +
+      metric('Other', g.other.length) +
+      '</div>';
+    if (data.warnings.length){
+      html += '<section class="reviewSection reviewWarnings"><div class="reviewSectionHead"><span>Warnings</span><span class="reviewCount">'+data.warnings.length+'</span></div><div class="reviewList">' +
+        data.warnings.map(function(w){ return '<div class="reviewItem"><div class="reviewItemType">Command core</div><code>'+esc(w)+'</code></div>'; }).join('') +
+        '</div></section>';
+    }
+    html += section('New Tasks', g.newTasks);
+    html += section('Completed Or Deleted', g.terminal);
+    html += section('Task Field Changes', g.fieldChanges);
+    html += section('Dependency Changes', g.dependencies);
+    html += section('Other Commands', g.other);
+    html += '<section class="reviewSection"><div class="reviewSectionHead"><span>Raw Commands</span><span class="reviewCount">'+changed+'</span></div><pre>'+esc(data.text)+'</pre></section>';
+    body.innerHTML = html;
+    return data;
+  }
+  function ensureButton(){
+    var existing = document.getElementById('reviewChangesBtn');
+    if (existing) return existing;
+    var btn = document.createElement('button');
+    btn.id = 'reviewChangesBtn';
+    btn.className = 'btn ghost';
+    btn.type = 'button';
+    btn.textContent = 'Review';
+    btn.title = 'Review staged Taskwarrior changes';
+    var anchor = document.getElementById('toggleConsole') || document.getElementById('copyBtn');
+    if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(btn, anchor.nextSibling);
+    else document.body.appendChild(btn);
+    btn.addEventListener('click', function(){
+      var panel = ensurePanel();
+      render();
+      panel.classList.toggle('open');
+    });
+    return btn;
+  }
+  function ensurePanel(){
+    var panel = document.getElementById('reviewChangesPanel');
+    if (panel) return panel;
+    panel = document.createElement('div');
+    panel.id = 'reviewChangesPanel';
+    panel.innerHTML =
+      '<div class="reviewHead">' +
+        '<div><div class="reviewTitle">Review Changes</div><div class="reviewSub">No staged changes</div></div>' +
+        '<div class="reviewActions"><button id="reviewRefreshBtn" class="btn ghost" type="button">Refresh</button><button id="reviewCloseBtn" class="btn ghost" type="button">Close</button></div>' +
+      '</div>' +
+      '<div class="reviewBody"></div>';
+    document.body.appendChild(panel);
+    qs('#reviewCloseBtn', panel).addEventListener('click', function(){ panel.classList.remove('open'); });
+    qs('#reviewRefreshBtn', panel).addEventListener('click', function(){ render(); });
+    render();
+    return panel;
+  }
+  function wrapUpdateConsole(){
+    if (typeof window.updateConsole !== 'function' || window.updateConsole.__reviewWrapped) return;
+    var orig = window.updateConsole;
+    window.updateConsole = function(){
+      var rv = orig.apply(this, arguments);
+      try{ if (document.getElementById('reviewChangesPanel')) render(); }catch(_){}
+      return rv;
+    };
+    window.updateConsole.__reviewWrapped = true;
+  }
+  function boot(){
+    ensureButton();
+    ensurePanel();
+    wrapUpdateConsole();
+    render();
+  }
+
+  window.TaskCanvasReview = { current: currentReview, render: render };
+  window.addEventListener('load', function(){ setTimeout(boot, 80); });
+  document.addEventListener('twdata', function(){ setTimeout(boot, 0); });
+})();</script>

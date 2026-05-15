@@ -223,6 +223,8 @@ class TestMainFlow(unittest.TestCase):
                 'id="FEATURE_DEDUPE_FOCUS_V1"',
                 'id="feature-project-addtag-v4-css"',
                 'id="FEATURE_PROJECT_ADD_TAG_V4"',
+                'id="FEATURE_REVIEW_CHANGES_V1_CSS"',
+                'id="FEATURE_REVIEW_CHANGES_V1"',
                 "__ENERGY_ARROW_CSS__",
                 "__ONLY_DEPS_CONSOLE_CSS__",
                 "__FIXPACK_V61__",

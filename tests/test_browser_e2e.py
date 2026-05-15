@@ -280,6 +280,100 @@ window.addEventListener('load', function(){
         self.assertIn('Added tags "newtag", "extra" to Work.', result["toast"])
         self.assertIn("Skipped: old (already exists)", result["toast"])
 
+    def test_review_changes_runtime_groups_staged_command_core_output(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps(
+            {
+                "tasks": [
+                    {
+                        "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        "short": "aaaaaaaa",
+                        "desc": "Alpha",
+                        "project": "Work",
+                        "tags": ["old"],
+                        "has_depends": False,
+                    },
+                    {
+                        "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                        "short": "bbbbbbbb",
+                        "desc": "Beta",
+                        "project": "Work",
+                        "tags": [],
+                        "has_depends": False,
+                    },
+                ],
+                "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
+                "init_projects": ["Work"],
+            }
+        )
+        html = build_runtime_html(base_html, payload, 2, lambda *_: None)
+
+        harness = """
+<script id="E2E_REVIEW_CHANGES_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      window.TASKS.push({
+        uuid:"new-review",
+        short:"new-rev",
+        desc:"Review panel task",
+        project:"Inbox",
+        tags:["fresh"],
+        has_depends:false
+      });
+      window.EX_OPS = window.__EXISTING_OPS__ = {
+        "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa": {done:false, deleted:false, mods:["due:tomorrow"]},
+        "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb": {done:true, deleted:false, mods:[]}
+      };
+      window.stagedAdd = [{from:"aaaaaaaa", to:"bbbbbbbb"}];
+      if (typeof updateConsole === 'function') updateConsole();
+      document.getElementById('reviewChangesBtn').click();
+      setTimeout(function(){
+        var current = window.TaskCanvasReview.current();
+        var panel = document.getElementById('reviewChangesPanel');
+        var out = {
+          open: panel && panel.classList.contains('open'),
+          button: !!document.getElementById('reviewChangesBtn'),
+          groups: {
+            newTasks: current.groups.newTasks.length,
+            terminal: current.groups.terminal.length,
+            fieldChanges: current.groups.fieldChanges.length,
+            dependencies: current.groups.dependencies.length,
+            other: current.groups.other.length
+          },
+          text: panel ? panel.textContent : "",
+          raw: current.text
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 120);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 800);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["button"])
+        self.assertTrue(result["open"])
+        self.assertEqual(result["groups"]["newTasks"], 1)
+        self.assertEqual(result["groups"]["terminal"], 1)
+        self.assertGreaterEqual(result["groups"]["fieldChanges"], 1)
+        self.assertEqual(result["groups"]["dependencies"], 1)
+        self.assertIn("Review Changes", result["text"])
+        self.assertIn("New Tasks", result["text"])
+        self.assertIn("Dependency Changes", result["text"])
+        self.assertIn("task add 'Review panel task'", result["raw"])
+
     def test_taskcanvas_commands_core_includes_dependency_commands(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
