@@ -457,9 +457,13 @@ window.addEventListener('load', function(){
           noteButton: !!document.getElementById('noteModeBtn'),
           linkButton: !!document.getElementById('noteLinkModeBtn'),
           notes: document.querySelectorAll('.tcNoteNode').length,
+          textFields: document.querySelectorAll('.tcNoteNode .tcNoteText').length,
+          titleFields: document.querySelectorAll('.tcNoteNode .tcNoteTitle').length,
           links: document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink').length,
           apiNotes: window.TaskCanvasNotes.notes().length,
           apiLinks: window.TaskCanvasNotes.links().length,
+          firstContent: window.TaskCanvasNotes.notes()[0] && window.TaskCanvasNotes.notes()[0].content,
+          hasTitleKey: window.TaskCanvasNotes.notes().some(function(n){ return Object.prototype.hasOwnProperty.call(n, 'title'); }),
           console: (document.getElementById('consoleText') || {}).value || "",
           savedKeys: Object.keys(localStorage).filter(function(k){ return k.indexOf('taskcanvas:notes:v1:') === 0; }).length
         };
@@ -485,9 +489,13 @@ window.addEventListener('load', function(){
         self.assertTrue(result["noteButton"])
         self.assertTrue(result["linkButton"])
         self.assertEqual(result["notes"], 2)
+        self.assertEqual(result["textFields"], 2)
+        self.assertEqual(result["titleFields"], 0)
         self.assertEqual(result["links"], 1)
         self.assertEqual(result["apiNotes"], 2)
         self.assertEqual(result["apiLinks"], 1)
+        self.assertEqual(result["firstContent"], "Plan\nBreak work down")
+        self.assertFalse(result["hasTitleKey"])
         self.assertEqual(result["console"], "")
         self.assertGreaterEqual(result["savedKeys"], 1)
 
@@ -511,16 +519,16 @@ window.addEventListener('load', function(){
       setTimeout(function(){
         var notes = window.TaskCanvasNotes.notes();
         var links = window.TaskCanvasNotes.links();
-        var byTitle = {};
-        notes.forEach(function(n){ byTitle[n.title] = n; });
+        var byContent = {};
+        notes.forEach(function(n){ byContent[n.content] = n; });
         var out = {
           reflowButton: !!document.getElementById('noteReflowBtn'),
           actionButtons: document.querySelectorAll('.tcNoteNode [data-note-child]').length,
           notes: notes.length,
           childLinks: links.filter(function(l){ return l.type === 'child'; }).length,
           childPaths: document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink[data-type="child"]').length,
-          designRightOfRoot: byTitle.Design.x > byTitle["Launch plan"].x,
-          prototypeRightOfDesign: byTitle.Prototype.x > byTitle.Design.x,
+          designRightOfRoot: byContent.Design.x > byContent["Launch plan"].x,
+          prototypeRightOfDesign: byContent.Prototype.x > byContent.Design.x,
           console: (document.getElementById('consoleText') || {}).value || ""
         };
         var pre = document.createElement('pre');
@@ -582,7 +590,7 @@ window.addEventListener('load', function(){
           rootChildren: rootChildren.length,
           firstChildren: firstChildren.length,
           selected: selected,
-          focusedTitle: !!(document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('tcNoteTitle')),
+          focusedText: !!(document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('tcNoteText')),
           console: (document.getElementById('consoleText') || {}).value || ""
         };
         var pre = document.createElement('pre');
@@ -610,7 +618,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["rootChildren"], 2)
         self.assertEqual(result["firstChildren"], 1)
         self.assertEqual(result["selected"], 1)
-        self.assertTrue(result["focusedTitle"])
+        self.assertTrue(result["focusedText"])
         self.assertEqual(result["console"], "")
 
     def test_taskcanvas_commands_core_includes_dependency_commands(self):

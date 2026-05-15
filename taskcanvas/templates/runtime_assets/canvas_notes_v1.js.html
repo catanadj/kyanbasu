@@ -46,6 +46,21 @@
     }
     return null;
   }
+  function noteText(title, body){
+    var a = String(title || '').trim();
+    var b = String(body || '').trim();
+    if (a && b) return a + '\n' + b;
+    return a || b || 'New note';
+  }
+  function normalizeNote(n){
+    n = n || {};
+    if (!n.content) n.content = noteText(n.title, n.body);
+    delete n.title;
+    delete n.body;
+    n.x = toInt(n.x, 160);
+    n.y = toInt(n.y, 160);
+    return n;
+  }
   function saveSoon(){
     clearTimeout(saveTimer);
     saveTimer = setTimeout(saveNow, 180);
@@ -59,6 +74,7 @@
       if (!raw) return;
       var parsed = JSON.parse(raw);
       notes = Array.isArray(parsed.notes) ? parsed.notes : [];
+      notes = notes.map(normalizeNote);
       links = Array.isArray(parsed.links) ? parsed.links : [];
       links.forEach(function(l){ if (l && !l.type) l.type = 'manual'; });
     }catch(_){ notes = []; links = []; }
@@ -126,7 +142,7 @@
     if (linkBtn) linkBtn.classList.toggle('active', !!linkMode);
   }
   function createNote(x, y, title, body){
-    var n = {id: uid(), x: toInt(x, 160), y: toInt(y, 160), title: title || 'New note', body: body || ''};
+    var n = {id: uid(), x: toInt(x, 160), y: toInt(y, 160), content: noteText(title, body)};
     notes.push(n);
     renderNote(n);
     selectNote(n.id);
@@ -142,23 +158,20 @@
       el.className = 'tcNoteNode';
       el.setAttribute('data-note-id', n.id);
       el.innerHTML =
-        '<div class="tcNoteHead"><div class="tcNoteTitle" contenteditable="true"></div><div class="tcNoteActions"><button type="button" data-note-child title="Add child note">+</button><button type="button" data-note-link title="Link from this note">L</button><button type="button" data-note-delete title="Delete note">x</button></div></div>' +
-        '<div class="tcNoteBody" contenteditable="true"></div>';
+        '<div class="tcNoteHead"><div class="tcNoteActions"><button type="button" data-note-child title="Add child note">+</button><button type="button" data-note-link title="Link from this note">L</button><button type="button" data-note-delete title="Delete note">x</button></div></div>' +
+        '<div class="tcNoteText" contenteditable="true"></div>';
       st.appendChild(el);
       wireNote(el);
     }
     el.style.left = toInt(n.x, 160) + 'px';
     el.style.top = toInt(n.y, 160) + 'px';
-    qs('.tcNoteTitle', el).textContent = n.title || 'New note';
-    qs('.tcNoteBody', el).textContent = n.body || '';
+    qs('.tcNoteText', el).textContent = n.content || 'New note';
     return el;
   }
   function wireNote(el){
     var id = el.getAttribute('data-note-id');
-    var title = qs('.tcNoteTitle', el);
-    var body = qs('.tcNoteBody', el);
-    title.addEventListener('input', function(){ var n = noteById(id); if (n){ n.title = title.textContent.trim() || 'New note'; saveSoon(); }});
-    body.addEventListener('input', function(){ var n = noteById(id); if (n){ n.body = body.textContent; saveSoon(); }});
+    var text = qs('.tcNoteText', el);
+    text.addEventListener('input', function(){ var n = noteById(id); if (n){ n.content = text.textContent.trim() || 'New note'; saveSoon(); }});
     el.addEventListener('click', function(ev){
       ev.stopPropagation();
       selectNote(id);
@@ -211,8 +224,8 @@
     selectedNoteId = noteById(id) ? id : null;
     qsa('.tcNoteNode').forEach(function(el){ el.classList.toggle('selected', el.getAttribute('data-note-id') === id); });
   }
-  function focusNoteTitle(id){
-    var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(id)+'"] .tcNoteTitle');
+  function focusNoteText(id){
+    var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(id)+'"] .tcNoteText');
     if (!el) return;
     el.focus();
     try{
@@ -285,7 +298,7 @@
     links.push({from: parent.id, to: child.id, type: 'child'});
     reflowMindMap(parent.id);
     selectNote(child.id);
-    focusNoteTitle(child.id);
+    focusNoteText(child.id);
     saveSoon();
     return child;
   }
@@ -297,7 +310,7 @@
     var sibling = createNote(n.x, n.y + 132, title || 'New branch', body || '');
     reflowMindMap();
     selectNote(sibling.id);
-    focusNoteTitle(sibling.id);
+    focusNoteText(sibling.id);
     saveSoon();
     return sibling;
   }
@@ -383,7 +396,8 @@
     document.addEventListener('keydown', function(ev){
       if (!selectedNoteId || !noteById(selectedNoteId)) return;
       if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
-      if (ev.target && ev.target.closest && ev.target.closest('[contenteditable="true"], input, textarea, select')) return;
+      if (ev.target && ev.target.closest && ev.target.closest('input, textarea, select')) return;
+      if (ev.target && ev.target.closest && ev.target.closest('[contenteditable="true"]') && !ev.target.closest('.tcNoteText')) return;
       if (ev.key === 'Tab'){
         ev.preventDefault();
         createChildNote(selectedNoteId);

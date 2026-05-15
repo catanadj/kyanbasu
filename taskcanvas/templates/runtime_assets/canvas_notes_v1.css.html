@@ -18,20 +18,12 @@
   .tcNoteHead {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 8px;
-    padding: 8px 9px;
+    padding: 6px 7px;
     background: rgba(242,177,74,.10);
     border-bottom: 1px solid rgba(242,177,74,.20);
     cursor: move;
-  }
-  .tcNoteTitle {
-    min-width: 0;
-    flex: 1;
-    font-weight: 700;
-    font-size: 13px;
-    line-height: 1.2;
-    outline: none;
   }
   .tcNoteActions {
     display: flex;
@@ -48,17 +40,17 @@
     font-size: 12px;
     line-height: 1;
   }
-  .tcNoteBody {
-    padding: 8px 9px 10px;
-    min-height: 46px;
+  .tcNoteText {
+    padding: 9px 10px 11px;
+    min-height: 58px;
     outline: none;
     color: #e8dcc7;
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.35;
     white-space: pre-wrap;
     word-break: break-word;
   }
-  .tcNoteBody:empty::before {
+  .tcNoteText:empty::before {
     content: "Add planning notes...";
     color: rgba(232,220,199,.45);
   }
