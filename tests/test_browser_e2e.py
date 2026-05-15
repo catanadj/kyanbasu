@@ -660,8 +660,9 @@ window.addEventListener('load', function(){
             var review = window.TaskCanvasReview.current();
             var out = {
               rowCount: document.querySelectorAll('#consoleRows .consoleCommandRow').length,
-              rowsBeforeTextarea: !!(document.getElementById('consoleRows') && document.getElementById('consoleText') && document.getElementById('consoleRows').nextSibling === document.getElementById('consoleText')),
+              rowsInOverlay: !!(document.getElementById('consoleRows') && document.getElementById('depCmdPre') && document.getElementById('consoleRows').nextSibling === document.getElementById('depCmdPre')),
               textareaBacking: document.getElementById('consoleText').classList.contains('consoleEditorBacking'),
+              overlayBacking: document.getElementById('depCmdPre').classList.contains('consoleEditorBacking'),
               text: text,
               reviewText: review.text,
               reviewNewTasks: review.groups.newTasks.length,
@@ -690,8 +691,9 @@ window.addEventListener('load', function(){
         self.assertNotIn("ERR:", raw)
         result = json.loads(raw)
         self.assertEqual(result["rowCount"], 1)
-        self.assertTrue(result["rowsBeforeTextarea"])
+        self.assertTrue(result["rowsInOverlay"])
         self.assertTrue(result["textareaBacking"])
+        self.assertTrue(result["overlayBacking"])
         self.assertEqual(result["text"], "task add Edited first +next")
         self.assertEqual(result["reviewText"], "task add Edited first +next")
         self.assertEqual(result["reviewNewTasks"], 1)
@@ -713,9 +715,11 @@ window.addEventListener('load', function(){
       var out = {
         api: !!window.TaskCanvasConsoleEditor,
         rows: !!rows,
+        rowsInOverlay: !!(rows && document.getElementById('depCmdPre') && rows.nextSibling === document.getElementById('depCmdPre')),
         empty: !!document.querySelector('#consoleRows .consoleCommandEmpty'),
         emptyText: (document.querySelector('#consoleRows .consoleCommandEmpty') || {}).textContent || "",
         textareaBacking: !!(ta && ta.classList.contains('consoleEditorBacking')),
+        overlayBacking: !!(document.getElementById('depCmdPre') && document.getElementById('depCmdPre').classList.contains('consoleEditorBacking')),
         rowCount: document.querySelectorAll('#consoleRows .consoleCommandRow').length
       };
       var pre = document.createElement('pre');
@@ -738,9 +742,11 @@ window.addEventListener('load', function(){
         result = json.loads(raw)
         self.assertTrue(result["api"])
         self.assertTrue(result["rows"])
+        self.assertTrue(result["rowsInOverlay"])
         self.assertTrue(result["empty"])
         self.assertEqual(result["emptyText"], "No pending commands")
         self.assertTrue(result["textareaBacking"])
+        self.assertTrue(result["overlayBacking"])
         self.assertEqual(result["rowCount"], 0)
 
     def test_canvas_notes_runtime_creates_child_branches_and_reflows_map(self):

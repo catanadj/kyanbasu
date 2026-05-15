@@ -41,14 +41,24 @@
     return out;
   }
   function ensureRows(){
-    var existing = document.getElementById('consoleRows');
-    if (existing) return existing;
     var ta = document.getElementById('consoleText');
     if (!ta || !ta.parentNode) return null;
+    var overlayPre = document.getElementById('depCmdPre');
+    var mountBefore = overlayPre || ta;
+    var mountParent = mountBefore && mountBefore.parentNode;
+    if (!mountParent) return null;
+    var existing = document.getElementById('consoleRows');
+    if (existing){
+      if (existing.parentNode !== mountParent) mountParent.insertBefore(existing, mountBefore);
+      ta.classList.add('consoleEditorBacking');
+      if (overlayPre) overlayPre.classList.add('consoleEditorBacking');
+      return existing;
+    }
     ta.classList.add('consoleEditorBacking');
+    if (overlayPre) overlayPre.classList.add('consoleEditorBacking');
     var rows = document.createElement('div');
     rows.id = 'consoleRows';
-    ta.parentNode.insertBefore(rows, ta);
+    mountParent.insertBefore(rows, mountBefore);
     return rows;
   }
   function setTextarea(text){
@@ -59,6 +69,11 @@
     var rows = ensureRows();
     var ta = document.getElementById('consoleText');
     if (!rows || !ta) return;
+    var overlayPre = document.getElementById('depCmdPre');
+    if (overlayPre){
+      overlayPre.classList.add('consoleEditorBacking');
+      overlayPre.textContent = ta.value || '';
+    }
     var current = lines(ta.value);
     rows.innerHTML = '';
     if (!current.length){
@@ -189,7 +204,9 @@
     if (!body) return;
     observerWired = true;
     var obs = new MutationObserver(function(){
-      if (!document.getElementById('consoleRows') && document.getElementById('consoleText')){
+      var rows = document.getElementById('consoleRows');
+      var overlayPre = document.getElementById('depCmdPre');
+      if ((!rows && document.getElementById('consoleText')) || (rows && overlayPre && rows.parentNode !== overlayPre.parentNode)){
         scheduleBoot(20);
       }
     });
