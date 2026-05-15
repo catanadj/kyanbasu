@@ -33,6 +33,12 @@
   function linkExists(from, to){
     return links.some(function(l){ return l && l.from === from && l.to === to; });
   }
+  function childLinksFrom(id){
+    return links.filter(function(l){ return l && l.type === 'child' && l.from === id && noteById(l.to); });
+  }
+  function hasChildParent(id){
+    return links.some(function(l){ return l && l.type === 'child' && l.to === id && noteById(l.from); });
+  }
   function saveSoon(){
     clearTimeout(saveTimer);
     saveTimer = setTimeout(saveNow, 180);
@@ -47,6 +53,7 @@
       var parsed = JSON.parse(raw);
       notes = Array.isArray(parsed.notes) ? parsed.notes : [];
       links = Array.isArray(parsed.links) ? parsed.links : [];
+      links.forEach(function(l){ if (l && !l.type) l.type = 'manual'; });
     }catch(_){ notes = []; links = []; }
   }
   function screenToStage(clientX, clientY){
@@ -81,7 +88,14 @@
     linkBtn.type = 'button';
     linkBtn.textContent = 'Link notes';
     linkBtn.title = 'Select two notes to link them';
-    parent.insertBefore(linkBtn, anchor.nextSibling);
+    var reflowBtn = document.createElement('button');
+    reflowBtn.id = 'noteReflowBtn';
+    reflowBtn.className = 'btn ghost';
+    reflowBtn.type = 'button';
+    reflowBtn.textContent = 'Reflow map';
+    reflowBtn.title = 'Arrange planning notes as a mind map';
+    parent.insertBefore(reflowBtn, anchor.nextSibling);
+    parent.insertBefore(linkBtn, reflowBtn);
     parent.insertBefore(noteBtn, linkBtn);
     noteBtn.addEventListener('click', function(){
       noteMode = !noteMode;
@@ -93,6 +107,9 @@
       if (linkMode) noteMode = false;
       linkFrom = null;
       syncButtons();
+    });
+    reflowBtn.addEventListener('click', function(){
+      reflowMindMap();
     });
   }
   function syncButtons(){
@@ -117,7 +134,7 @@
       el.className = 'tcNoteNode';
       el.setAttribute('data-note-id', n.id);
       el.innerHTML =
-        '<div class="tcNoteHead"><div class="tcNoteTitle" contenteditable="true"></div><div class="tcNoteActions"><button type="button" data-note-link title="Link from this note">L</button><button type="button" data-note-delete title="Delete note">x</button></div></div>' +
+        '<div class="tcNoteHead"><div class="tcNoteTitle" contenteditable="true"></div><div class="tcNoteActions"><button type="button" data-note-child title="Add child note">+</button><button type="button" data-note-link title="Link from this note">L</button><button type="button" data-note-delete title="Delete note">x</button></div></div>' +
         '<div class="tcNoteBody" contenteditable="true"></div>';
       st.appendChild(el);
       wireNote(el);
@@ -148,6 +165,10 @@
     qs('[data-note-link]', el).addEventListener('click', function(ev){
       ev.preventDefault(); ev.stopPropagation();
       linkMode = true; noteMode = false; syncButtons(); handleLinkClick(id);
+    });
+    qs('[data-note-child]', el).addEventListener('click', function(ev){
+      ev.preventDefault(); ev.stopPropagation();
+      createChildNote(id);
     });
     makeNoteDraggable(el);
   }
@@ -188,7 +209,7 @@
       return;
     }
     if (linkFrom !== id && !linkExists(linkFrom, id)){
-      links.push({from: linkFrom, to: id});
+      links.push({from: linkFrom, to: id, type: 'manual'});
       saveSoon();
       renderLinks();
     }
@@ -231,8 +252,64 @@
       path.setAttribute('d', d);
       path.setAttribute('data-from', l.from);
       path.setAttribute('data-to', l.to);
+      path.setAttribute('data-type', l.type || 'manual');
       layer.appendChild(path);
     });
+  }
+  function createChildNote(parentId, title, body){
+    var parent = noteById(parentId);
+    if (!parent) return null;
+    var existing = childLinksFrom(parentId).length;
+    var child = createNote(parent.x + 300, parent.y + existing * 124, title || 'New branch', body || '');
+    links.push({from: parent.id, to: child.id, type: 'child'});
+    reflowMindMap(parent.id);
+    saveSoon();
+    return child;
+  }
+  function subtreeSlots(id, seen){
+    seen = seen || {};
+    if (seen[id]) return 1;
+    seen[id] = true;
+    var kids = childLinksFrom(id);
+    if (!kids.length) return 1;
+    var slots = 0;
+    kids.forEach(function(l){ slots += subtreeSlots(l.to, Object.assign({}, seen)); });
+    return Math.max(1, slots);
+  }
+  function placeSubtree(id, x, y, seen){
+    var n = noteById(id);
+    if (!n || (seen && seen[id])) return;
+    seen = seen || {};
+    seen[id] = true;
+    n.x = x; n.y = y;
+    var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(id)+'"]');
+    if (el){ el.style.left = x + 'px'; el.style.top = y + 'px'; }
+    var kids = childLinksFrom(id);
+    if (!kids.length) return;
+    var rowH = 132;
+    var total = 0;
+    kids.forEach(function(l){ total += subtreeSlots(l.to, Object.assign({}, seen)); });
+    var cursor = y - ((total - 1) * rowH) / 2;
+    kids.forEach(function(l){
+      var slots = subtreeSlots(l.to, Object.assign({}, seen));
+      var childY = cursor + ((slots - 1) * rowH) / 2;
+      placeSubtree(l.to, x + 300, Math.max(24, childY|0), Object.assign({}, seen));
+      cursor += slots * rowH;
+    });
+  }
+  function reflowMindMap(preferredRootId){
+    if (!notes.length) return;
+    var roots = [];
+    if (preferredRootId && noteById(preferredRootId)) roots.push(noteById(preferredRootId));
+    notes.forEach(function(n){ if (roots.indexOf(n) === -1 && !hasChildParent(n.id)) roots.push(n); });
+    var rootY = roots.length === 1 ? toInt(roots[0].y, 180) : 140;
+    roots.forEach(function(root, idx){
+      var slots = subtreeSlots(root.id, {});
+      var y = idx === 0 && roots.length === 1 ? rootY : rootY + idx * Math.max(180, slots * 132);
+      placeSubtree(root.id, toInt(root.x, 160), y, {});
+    });
+    renderAll();
+    saveSoon();
   }
   function renderAll(){
     qsa('.tcNoteNode').forEach(function(el){ el.remove(); });
@@ -274,7 +351,9 @@
   }
   window.TaskCanvasNotes = {
     createNote: createNote,
-    linkNotes: function(from, to){ if (from && to && from !== to && !linkExists(from, to)){ links.push({from:from, to:to}); renderLinks(); saveSoon(); } },
+    createChildNote: createChildNote,
+    linkNotes: function(from, to, type){ if (from && to && from !== to && !linkExists(from, to)){ links.push({from:from, to:to, type:type || 'manual'}); renderLinks(); saveSoon(); } },
+    reflowMindMap: reflowMindMap,
     notes: function(){ return notes.slice(); },
     links: function(){ return links.slice(); },
     render: renderAll,

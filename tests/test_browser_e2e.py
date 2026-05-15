@@ -491,6 +491,66 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "")
         self.assertGreaterEqual(result["savedKeys"], 1)
 
+    def test_canvas_notes_runtime_creates_child_branches_and_reflows_map(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_MINDMAP_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var root = window.TaskCanvasNotes.createNote(180, 240, "Launch plan", "");
+      var a = window.TaskCanvasNotes.createChildNote(root.id, "Design", "");
+      var b = window.TaskCanvasNotes.createChildNote(root.id, "Build", "");
+      var c = window.TaskCanvasNotes.createChildNote(a.id, "Prototype", "");
+      window.TaskCanvasNotes.reflowMindMap(root.id);
+      window.TaskCanvasNotes.save();
+      if (typeof updateConsole === 'function') updateConsole();
+      setTimeout(function(){
+        var notes = window.TaskCanvasNotes.notes();
+        var links = window.TaskCanvasNotes.links();
+        var byTitle = {};
+        notes.forEach(function(n){ byTitle[n.title] = n; });
+        var out = {
+          reflowButton: !!document.getElementById('noteReflowBtn'),
+          actionButtons: document.querySelectorAll('.tcNoteNode [data-note-child]').length,
+          notes: notes.length,
+          childLinks: links.filter(function(l){ return l.type === 'child'; }).length,
+          childPaths: document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink[data-type="child"]').length,
+          designRightOfRoot: byTitle.Design.x > byTitle["Launch plan"].x,
+          prototypeRightOfDesign: byTitle.Prototype.x > byTitle.Design.x,
+          console: (document.getElementById('consoleText') || {}).value || ""
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 80);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["reflowButton"])
+        self.assertEqual(result["actionButtons"], 4)
+        self.assertEqual(result["notes"], 4)
+        self.assertEqual(result["childLinks"], 3)
+        self.assertEqual(result["childPaths"], 3)
+        self.assertTrue(result["designRightOfRoot"])
+        self.assertTrue(result["prototypeRightOfDesign"])
+        self.assertEqual(result["console"], "")
+
     def test_taskcanvas_commands_core_includes_dependency_commands(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
