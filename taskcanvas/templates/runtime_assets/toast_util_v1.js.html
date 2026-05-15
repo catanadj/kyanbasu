@@ -1,0 +1,23 @@
+<script id="FEATURE_TOAST_UTIL_V1">(function(){
+  if (window.__FEATURE_TOAST_UTIL_V1__) return; window.__FEATURE_TOAST_UTIL_V1__=true;
+  function ensureToast(){
+    var el = document.getElementById('devConsoleToast');
+    if (!el){
+      el = document.createElement('div');
+      el.id = 'devConsoleToast';
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+  window.showToast = window.showToast || function(msg){
+    try{
+      var el = ensureToast();
+      el.textContent = (msg==null ? '' : String(msg));
+      el.classList.add('show');
+      clearTimeout(el.__hide);
+      el.__hide = setTimeout(function(){ el.classList.remove('show'); }, 1600);
+    }catch(_){
+      try{ console.log(msg); }catch(__){}
+    }
+  };
+})();</script>

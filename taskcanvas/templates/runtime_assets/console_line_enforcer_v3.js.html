@@ -1,0 +1,123 @@
+<script id="FEATURE_CONSOLE_LINE_ENFORCER_V3">(function(){
+  if (window.__FEATURE_CONSOLE_LINE_ENFORCER_V3__) return; window.__FEATURE_CONSOLE_LINE_ENFORCER_V3__=true;
+
+  // ---------- helpers ----------
+  function qs(s,root){ return (root||document).querySelector(s); }
+  function pickCT(){
+    return document.getElementById('consoleText')
+        || qs('#consolePanel textarea#consoleText')
+        || qs('#devConsoleDock textarea#consoleText')
+        || qs('textarea#consoleText')
+        || qs('#consolePanel textarea')
+        || qs('#devConsoleDock textarea')
+        || qs('textarea');
+  }
+  function splitLinesSmart(x){
+    if (x == null) return [];
+    var s = String(x).replace(/\r\n/g,'\n');
+    // convert any literal \n into a real newline BEFORE splitting
+    s = s.replace(/\\n/g, '\n');
+    var parts = s.split('\n');
+    var out=[], seen={};
+    for (var i=0;i<parts.length;i++){
+      var t = parts[i].trim();
+      if (!t) continue;
+      if (seen[t]) continue; seen[t]=1;
+      out.push(t);
+    }
+    return out;
+  }
+  function normalizeTextarea(ct){
+    if (!ct) return;
+    var lines = splitLinesSmart(ct.value);
+    var joined = lines.join('\n');
+    if (ct.value !== joined){ ct.value = joined; }
+  }
+  function scheduleBurst(ms){
+    var end = Date.now() + (ms||1500);
+    if (window.__LINE_ENFORCER_TIMER__) return;
+    window.__LINE_ENFORCER_TIMER__ = setInterval(function(){
+      try{ normalizeTextarea(pickCT()); }catch(_){}
+      if (Date.now() > end){ clearInterval(window.__LINE_ENFORCER_TIMER__); window.__LINE_ENFORCER_TIMER__=null; }
+    }, 120);
+  }
+
+  // ---------- proxy the textarea .value so any writes are normalized ----------
+  function proxyValue(ct){
+    if (!ct || ct.__lineEnforcerProxied) return;
+    ct.__lineEnforcerProxied = true;
+    var proto = Object.getPrototypeOf(ct) || HTMLTextAreaElement.prototype;
+    var desc  = Object.getOwnPropertyDescriptor(proto, 'value') || Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
+    if (!desc || !desc.get || !desc.set) return;
+    Object.defineProperty(ct, 'value', {
+      get: function(){ return desc.get.call(this); },
+      set: function(v){
+        try{
+          var norm = splitLinesSmart(v).join('\n');
+          return desc.set.call(this, norm);
+        } catch(e){
+          try { return desc.set.call(this, v); } catch(_) {}
+        }
+      }
+    });
+    // normalize on interactions too
+    ct.addEventListener('input',  function(){ try{ normalizeTextarea(ct); }catch(_){}});
+    ct.addEventListener('change', function(){ try{ normalizeTextarea(ct); }catch(_){}});
+    ct.addEventListener('paste',  function(){ setTimeout(function(){ try{ normalizeTextarea(ct); }catch(_){}} , 10); });
+  }
+
+  // ---------- wrap stageAdd / stageToggle if present ----------
+  function wrapStageAdd(){
+    var orig = window.stageAdd;
+    window.stageAdd = function(cmd, human){
+      try{
+        var parts = splitLinesSmart(Array.isArray(cmd) ? cmd.join('\n') : String(cmd||''));
+        if (parts.length === 0) return;
+        for (var i=0;i<parts.length;i++){
+          if (typeof orig === 'function'){
+            try{ orig.call(this, parts[i], human); }catch(_){}
+          }
+        }
+      } finally {
+        try{ scheduleBurst(1200); }catch(_){}
+      }
+    };
+  }
+  function wrapStageToggle(){
+    var orig = window.stageToggle;
+    if (typeof orig !== 'function') return;
+    window.stageToggle = function(uuid, action, human){
+      try{
+        return orig.apply(this, arguments);
+      } finally {
+        try{ scheduleBurst(1200); }catch(_){}
+      }
+    };
+  }
+
+  // ---------- intercept copy buttons to normalize before copy ----------
+  function wireCopy(){
+    var ids = ['btnCopy','copyBtn','copyBtn2'];
+    for (var i=0;i<ids.length;i++){
+      var b = document.getElementById(ids[i]);
+      if (!b || b.__lineEnforcerCopy) continue;
+      b.__lineEnforcerCopy = true;
+      b.addEventListener('click', function(ev){
+        try{ normalizeTextarea(pickCT()); }catch(_){}
+      }, true);
+    }
+  }
+
+  function boot(){
+    var ct = pickCT(); if (ct) proxyValue(ct);
+    wrapStageAdd(); wrapStageToggle(); wireCopy();
+    scheduleBurst(1500);
+    // watch for console replacements
+    var root = document.body;
+    var mo = new MutationObserver(function(){ var ct=pickCT(); if (ct) proxyValue(ct); wireCopy(); });
+    mo.observe(root, {childList:true, subtree:true});
+  }
+
+  window.addEventListener('load', function(){ setTimeout(boot, 60); });
+  document.addEventListener('twdata', function(){ setTimeout(boot, 0); });
+})();</script>

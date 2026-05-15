@@ -1,0 +1,140 @@
+<script id="FEATURE_SINGLE_CONSOLE_AUGMENT_V1">(function(){
+  if (window.__FEATURE_SINGLE_CONSOLE_AUGMENT_V1__) return; window.__FEATURE_SINGLE_CONSOLE_AUGMENT_V1__=true;
+
+  // -------- helpers --------
+  function qs(s,root){ return (root||document).querySelector(s); }
+  function pad2(n){ return (n<10?'0':'')+n; }
+  function nowStr(){ var d=new Date(); return pad2(d.getHours())+':'+pad2(d.getMinutes())+':'+pad2(d.getSeconds()); }
+  function splitLines(s){
+    if (s==null) return [];
+    return String(s).replace(/\r\n/g,'\n').replace(/\\n/g,'\n').split('\n').map(function(t){return t.trim();}).filter(Boolean);
+  }
+  function buildMaps(){
+    if (!window.__DESC_BY_UUID__) window.__DESC_BY_UUID__ = Object.create(null);
+    if (!window.__DESC_BY_SHORT__) window.__DESC_BY_SHORT__ = Object.create(null);
+    if (!window.__CMD_TS__) window.__CMD_TS__ = Object.create(null);
+    if (window.__DESC_BUILT__) return;
+    try{
+      if (window.DATA && Array.isArray(window.DATA.tasks)){
+        for (var i=0;i<DATA.tasks.length;i++){
+          var t = DATA.tasks[i];
+          var uuid = t.uuid, short = t.short || String(uuid||'').slice(0,8);
+          var desc = t.desc || t.description || '';
+          if (uuid) window.__DESC_BY_UUID__[uuid] = desc;
+          if (short) window.__DESC_BY_SHORT__[short] = desc;
+        }
+      }
+    }catch(_){}
+    window.__DESC_BUILT__ = true;
+  }
+  function parseAddDesc(cmd){
+    // task add <desc words...> [k:v | +tag | -tag | due:...]*
+    var m = /^task\s+add\s+(.+)$/i.exec(cmd);
+    if (!m) return '';
+    var rest = m[1];
+    var toks = rest.split(/\s+/);
+    var out=[];
+    for (var i=0;i<toks.length;i++){
+      var tk = toks[i];
+      if (/^[+-][^\s]+$/.test(tk)) break;
+      if (/^[a-z0-9_-]+:/.test(tk)) break;
+      out.push(tk);
+    }
+    return out.join(' ');
+  }
+  function findDescForCmd(cmd){
+    cmd = String(cmd||'');
+    var m = /^task\s+([0-9a-f-]{8,})\b/i.exec(cmd);
+    if (m){ // modify/done/delete
+      var id = m[1];
+      return window.__DESC_BY_UUID__[id] || window.__DESC_BY_SHORT__[id.slice(0,8)] || '';
+    }
+    if (/^task\s+add\b/i.test(cmd)){
+      return parseAddDesc(cmd);
+    }
+    return '';
+  }
+  function ensureTs(cmd){
+    if (!window.__CMD_TS__) window.__CMD_TS__ = Object.create(null);
+    if (!window.__CMD_TS__[cmd]) window.__CMD_TS__[cmd] = nowStr();
+    return window.__CMD_TS__[cmd];
+  }
+  function augmentLine(cmd){
+    var raw = String(cmd||'').trim();
+    if (!raw) return '';
+    // If already augmented (contains " > task "), strip to raw first
+    var i = raw.indexOf(' > task ');
+    if (i !== -1){ raw = raw.slice(i+3).trim(); }
+    return raw;
+  }
+  function stripAugment(s){
+    var lines = splitLines(s);
+    var out=[];
+    for (var i=0;i<lines.length;i++){
+      var L = lines[i];
+      var j = L.indexOf(' > task ');
+      if (j !== -1) out.push(L.slice(j+3).trim());
+      else out.push(L);
+    }
+    return out.join('\n');
+  }
+
+  // -------- wrap updateConsole --------
+  function wrapUpdate(){
+    var orig = window.updateConsole;
+    window.updateConsole = function(){
+      buildMaps();
+      var rv;
+      if (typeof orig === 'function'){ try{ rv = orig.apply(this, arguments); }catch(_){ } }
+      try{
+        var ta = document.getElementById('consoleText') || qs('#devConsoleDock textarea#consoleText') || qs('#consolePanel textarea#consoleText');
+        if (!ta) return rv;
+        var rawLines = splitLines( stripAugment(ta.value) );
+        var aug = rawLines.map(augmentLine).join('\n');
+        if (aug !== ta.value) ta.value = aug;
+      }catch(_){}
+      return rv;
+    };
+  }
+
+  // -------- ensure copy copies RAW commands only --------
+  function wireCopyRaw(){
+    var btnIds = ['btnCopy','copyBtn','copyBtn2'];
+    btnIds.forEach(function(id){
+      var b = document.getElementById(id);
+      if (!b || b.__augRaw) return;
+      b.__augRaw = true;
+      b.addEventListener('mousedown', function(){
+        try{
+          var ta = document.getElementById('consoleText') || qs('#devConsoleDock textarea#consoleText') || qs('#consolePanel textarea#consoleText');
+          if (!ta) return;
+          b.__augPrev = ta.value;
+          ta.value = stripAugment(ta.value);
+        }catch(_){}
+      }, true);
+      b.addEventListener('mouseup', function(){
+        setTimeout(function(){
+          try{
+            var ta = document.getElementById('consoleText') || qs('#devConsoleDock textarea#consoleText') || qs('#consolePanel textarea#consoleText');
+            if (!ta) return;
+            if (b.__augPrev != null){ ta.value = b.__augPrev; b.__augPrev = null; }
+            // force re-augment in case copy handler normalized content
+            var ev = new Event('input'); ta.dispatchEvent(ev);
+          }catch(_){}
+        }, 60);
+      }, true);
+    });
+  }
+
+  function boot(){
+    buildMaps();
+    wrapUpdate();
+    wireCopyRaw();
+    // normalize once on load
+    if (typeof window.updateConsole === 'function'){ try{ window.updateConsole(); }catch(_){ } }
+    var mo = new MutationObserver(function(){ wireCopyRaw(); });
+    mo.observe(document.body, {childList:true, subtree:true});
+  }
+  window.addEventListener('load', function(){ setTimeout(boot, 80); });
+  document.addEventListener('twdata', function(){ setTimeout(boot, 0); });
+})();</script>

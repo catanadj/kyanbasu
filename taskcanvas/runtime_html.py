@@ -69,6 +69,10 @@ def build_runtime_html(
         ("dep handle authoritative v6", "dep_handle_authoritative_v6.js.html"),
         ("FEATURE_QUICKFIX_ADD_RENDER_V1", "quickfix_add_render_v1.js.html"),
         ("PROJECT_PICKER_V2_JS", "project_picker_v2.js.html"),
+        ("FEATURE_TOAST_UTIL_V1", "toast_util_v1.js.html"),
+        ("FEATURE_CONSOLE_LINE_ENFORCER_V3", "console_line_enforcer_v3.js.html"),
+        ("FEATURE_COPY_FULL_OVERRIDE_V1", "copy_full_override_v1.js.html"),
+        ("FEATURE_SINGLE_CONSOLE_AUGMENT_V1", "single_console_augment_v1.js.html"),
     ]
 
     for marker, asset_name in head_snippets:

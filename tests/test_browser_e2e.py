@@ -148,6 +148,63 @@ window.addEventListener('load', function(){
         self.assertTrue(any("Dropped modify after terminal action for task abc" in w for w in warnings))
         self.assertTrue(any("Conflicting terminal actions for task def" in w for w in warnings))
 
+    def test_console_utility_runtimes_wire_toast_normalize_and_copy(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CONSOLE_UTILITIES_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      try{
+        Object.defineProperty(navigator, 'clipboard', {
+          configurable: true,
+          value: { writeText: function(txt){ window.__copiedText = txt; return Promise.resolve(); } }
+        });
+      }catch(_){}
+      var ct = document.getElementById('consoleText');
+      ct.value = "task one\\ntask one\\\\ntask two";
+      ct.dispatchEvent(new Event('input'));
+      window.showToast("Ready");
+      document.getElementById('copyBtn').click();
+      setTimeout(function(){
+        var out = {
+          toast: (document.getElementById('devConsoleToast') || {}).textContent || "",
+          console: ct.value,
+          copied: window.__copiedText || "",
+          flags: [
+            !!window.__FEATURE_TOAST_UTIL_V1__,
+            !!window.__FEATURE_CONSOLE_LINE_ENFORCER_V3__,
+            !!window.__FEATURE_COPY_FULL_OVERRIDE_V1__,
+            !!window.__FEATURE_SINGLE_CONSOLE_AUGMENT_V1__
+          ]
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 0);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 600);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["flags"], [True, True, True, True])
+        self.assertIn(result["toast"], ["Ready", "Copied 2 line(s)."])
+        self.assertEqual(result["console"], "task one\ntask two")
+        self.assertEqual(result["copied"], "task one\ntask two")
+
     def test_taskcanvas_commands_core_includes_dependency_commands(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
