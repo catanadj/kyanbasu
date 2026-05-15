@@ -1,0 +1,79 @@
+<style id="FEATURE_CANVAS_NOTES_V1_CSS">
+  .tcNoteNode {
+    position: absolute;
+    width: 220px;
+    min-height: 92px;
+    border: 1px solid rgba(242, 177, 74, .38);
+    border-radius: 8px;
+    background: linear-gradient(180deg, rgba(45, 36, 16, .96), rgba(27, 24, 17, .96));
+    color: #f4ead7;
+    box-shadow: 0 14px 34px rgba(0,0,0,.28);
+    z-index: 8;
+    overflow: hidden;
+  }
+  .tcNoteNode.selected {
+    outline: 2px solid rgba(242,177,74,.72);
+    box-shadow: 0 0 0 5px rgba(242,177,74,.15), 0 14px 34px rgba(0,0,0,.28);
+  }
+  .tcNoteHead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 9px;
+    background: rgba(242,177,74,.10);
+    border-bottom: 1px solid rgba(242,177,74,.20);
+    cursor: move;
+  }
+  .tcNoteTitle {
+    min-width: 0;
+    flex: 1;
+    font-weight: 700;
+    font-size: 13px;
+    line-height: 1.2;
+    outline: none;
+  }
+  .tcNoteActions {
+    display: flex;
+    gap: 4px;
+  }
+  .tcNoteActions button {
+    width: 22px;
+    height: 22px;
+    border: 1px solid rgba(242,177,74,.25);
+    border-radius: 6px;
+    background: rgba(0,0,0,.18);
+    color: #f4ead7;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+  }
+  .tcNoteBody {
+    padding: 8px 9px 10px;
+    min-height: 46px;
+    outline: none;
+    color: #e8dcc7;
+    font-size: 12px;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .tcNoteBody:empty::before {
+    content: "Add planning notes...";
+    color: rgba(232,220,199,.45);
+  }
+  #builderLinks path.tcNoteLink {
+    stroke: rgba(242,177,74,.78);
+    stroke-width: 2.2;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: none;
+    filter: drop-shadow(0 0 3px rgba(242,177,74,.35));
+  }
+  #noteModeBtn.active,
+  #noteLinkModeBtn.active {
+    border-color: rgba(242,177,74,.65);
+    background: rgba(242,177,74,.16);
+  }
+</style>

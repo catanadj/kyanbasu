@@ -437,6 +437,60 @@ window.addEventListener('load', function(){
         self.assertEqual(len(final_lines), 1)
         self.assertRegex(final_lines[0], r"^task '?[0-9a-f-]+'? done$")
 
+    def test_canvas_notes_runtime_creates_links_and_stays_out_of_commands(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var a = window.TaskCanvasNotes.createNote(260, 220, "Plan", "Break work down");
+      var b = window.TaskCanvasNotes.createNote(560, 250, "Step 1", "Trace current flow");
+      window.TaskCanvasNotes.linkNotes(a.id, b.id);
+      window.TaskCanvasNotes.save();
+      if (typeof updateConsole === 'function') updateConsole();
+      setTimeout(function(){
+        var out = {
+          noteButton: !!document.getElementById('noteModeBtn'),
+          linkButton: !!document.getElementById('noteLinkModeBtn'),
+          notes: document.querySelectorAll('.tcNoteNode').length,
+          links: document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink').length,
+          apiNotes: window.TaskCanvasNotes.notes().length,
+          apiLinks: window.TaskCanvasNotes.links().length,
+          console: (document.getElementById('consoleText') || {}).value || "",
+          savedKeys: Object.keys(localStorage).filter(function(k){ return k.indexOf('taskcanvas:notes:v1:') === 0; }).length
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 80);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["noteButton"])
+        self.assertTrue(result["linkButton"])
+        self.assertEqual(result["notes"], 2)
+        self.assertEqual(result["links"], 1)
+        self.assertEqual(result["apiNotes"], 2)
+        self.assertEqual(result["apiLinks"], 1)
+        self.assertEqual(result["console"], "")
+        self.assertGreaterEqual(result["savedKeys"], 1)
+
     def test_taskcanvas_commands_core_includes_dependency_commands(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

@@ -1,0 +1,285 @@
+<script id="FEATURE_CANVAS_NOTES_V1">(function(){
+  if (window.__FEATURE_CANVAS_NOTES_V1__) return; window.__FEATURE_CANVAS_NOTES_V1__ = true;
+
+  var notes = [];
+  var links = [];
+  var noteMode = false;
+  var linkMode = false;
+  var linkFrom = null;
+  var saveTimer = 0;
+
+  function qs(s, root){ return (root || document).querySelector(s); }
+  function qsa(s, root){ return Array.prototype.slice.call((root || document).querySelectorAll(s)); }
+  function escAttr(v){ return String(v || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"'); }
+  function stage(){ return document.getElementById('builderStage'); }
+  function canvas(){ return qs('#builderWrap .canvas'); }
+  function toInt(v, d){ var n = parseInt(v, 10); return isFinite(n) ? n : d; }
+  function key(){
+    var seed = 'fallback';
+    try{
+      if (window.DATA && Array.isArray(DATA.tasks)){
+        seed = DATA.tasks.map(function(t){ return t && (t.uuid || t.short || t.desc || ''); }).join('|').slice(0, 240) || 'empty';
+      } else if (location && location.pathname) {
+        seed = location.pathname;
+      }
+    }catch(_){}
+    return 'taskcanvas:notes:v1:' + seed;
+  }
+  function uid(){ return 'note-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7); }
+  function noteById(id){
+    for (var i=0;i<notes.length;i++) if (notes[i].id === id) return notes[i];
+    return null;
+  }
+  function linkExists(from, to){
+    return links.some(function(l){ return l && l.from === from && l.to === to; });
+  }
+  function saveSoon(){
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveNow, 180);
+  }
+  function saveNow(){
+    try{ localStorage.setItem(key(), JSON.stringify({notes:notes, links:links})); }catch(_){}
+  }
+  function loadState(){
+    try{
+      var raw = localStorage.getItem(key());
+      if (!raw) return;
+      var parsed = JSON.parse(raw);
+      notes = Array.isArray(parsed.notes) ? parsed.notes : [];
+      links = Array.isArray(parsed.links) ? parsed.links : [];
+    }catch(_){ notes = []; links = []; }
+  }
+  function screenToStage(clientX, clientY){
+    var st = stage(), cv = canvas();
+    if (!st || !cv) return {x: 120, y: 120};
+    var r = st.getBoundingClientRect();
+    var scale = window.ZSCALE || 1;
+    return {x: Math.max(0, (clientX - r.left) / scale), y: Math.max(0, (clientY - r.top) / scale)};
+  }
+  function centerPoint(el){
+    var st = stage();
+    if (!el || !st) return {x: 0, y: 0};
+    return {
+      x: toInt(el.style.left, 0) + el.offsetWidth / 2,
+      y: toInt(el.style.top, 0) + el.offsetHeight / 2
+    };
+  }
+  function ensureToolbar(){
+    if (document.getElementById('noteModeBtn')) return;
+    var anchor = document.getElementById('toggleConsole') || document.getElementById('copyBtn');
+    var parent = anchor && anchor.parentNode;
+    if (!parent) return;
+    var noteBtn = document.createElement('button');
+    noteBtn.id = 'noteModeBtn';
+    noteBtn.className = 'btn ghost';
+    noteBtn.type = 'button';
+    noteBtn.textContent = 'Note';
+    noteBtn.title = 'Click the canvas to add a planning note';
+    var linkBtn = document.createElement('button');
+    linkBtn.id = 'noteLinkModeBtn';
+    linkBtn.className = 'btn ghost';
+    linkBtn.type = 'button';
+    linkBtn.textContent = 'Link notes';
+    linkBtn.title = 'Select two notes to link them';
+    parent.insertBefore(linkBtn, anchor.nextSibling);
+    parent.insertBefore(noteBtn, linkBtn);
+    noteBtn.addEventListener('click', function(){
+      noteMode = !noteMode;
+      if (noteMode) linkMode = false;
+      syncButtons();
+    });
+    linkBtn.addEventListener('click', function(){
+      linkMode = !linkMode;
+      if (linkMode) noteMode = false;
+      linkFrom = null;
+      syncButtons();
+    });
+  }
+  function syncButtons(){
+    var noteBtn = document.getElementById('noteModeBtn');
+    var linkBtn = document.getElementById('noteLinkModeBtn');
+    if (noteBtn) noteBtn.classList.toggle('active', !!noteMode);
+    if (linkBtn) linkBtn.classList.toggle('active', !!linkMode);
+  }
+  function createNote(x, y, title, body){
+    var n = {id: uid(), x: toInt(x, 160), y: toInt(y, 160), title: title || 'New note', body: body || ''};
+    notes.push(n);
+    renderNote(n);
+    renderLinks();
+    saveSoon();
+    return n;
+  }
+  function renderNote(n){
+    var st = stage(); if (!st || !n) return null;
+    var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(n.id)+'"]');
+    if (!el){
+      el = document.createElement('div');
+      el.className = 'tcNoteNode';
+      el.setAttribute('data-note-id', n.id);
+      el.innerHTML =
+        '<div class="tcNoteHead"><div class="tcNoteTitle" contenteditable="true"></div><div class="tcNoteActions"><button type="button" data-note-link title="Link from this note">L</button><button type="button" data-note-delete title="Delete note">x</button></div></div>' +
+        '<div class="tcNoteBody" contenteditable="true"></div>';
+      st.appendChild(el);
+      wireNote(el);
+    }
+    el.style.left = toInt(n.x, 160) + 'px';
+    el.style.top = toInt(n.y, 160) + 'px';
+    qs('.tcNoteTitle', el).textContent = n.title || 'New note';
+    qs('.tcNoteBody', el).textContent = n.body || '';
+    return el;
+  }
+  function wireNote(el){
+    var id = el.getAttribute('data-note-id');
+    var title = qs('.tcNoteTitle', el);
+    var body = qs('.tcNoteBody', el);
+    title.addEventListener('input', function(){ var n = noteById(id); if (n){ n.title = title.textContent.trim() || 'New note'; saveSoon(); }});
+    body.addEventListener('input', function(){ var n = noteById(id); if (n){ n.body = body.textContent; saveSoon(); }});
+    el.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      selectNote(id);
+      if (linkMode && !ev.target.closest('[contenteditable="true"]')){
+        handleLinkClick(id);
+      }
+    });
+    qs('[data-note-delete]', el).addEventListener('click', function(ev){
+      ev.preventDefault(); ev.stopPropagation();
+      deleteNote(id);
+    });
+    qs('[data-note-link]', el).addEventListener('click', function(ev){
+      ev.preventDefault(); ev.stopPropagation();
+      linkMode = true; noteMode = false; syncButtons(); handleLinkClick(id);
+    });
+    makeNoteDraggable(el);
+  }
+  function makeNoteDraggable(el){
+    var dragging=false, sx=0, sy=0, ox=0, oy=0;
+    qs('.tcNoteHead', el).addEventListener('mousedown', function(ev){
+      if (ev.button !== 0 || ev.target.closest('button')) return;
+      dragging = true;
+      sx = ev.clientX; sy = ev.clientY;
+      ox = toInt(el.style.left, 0); oy = toInt(el.style.top, 0);
+      selectNote(el.getAttribute('data-note-id'));
+      ev.preventDefault(); ev.stopPropagation();
+    });
+    document.addEventListener('mousemove', function(ev){
+      if (!dragging) return;
+      var scale = window.ZSCALE || 1;
+      var nx = ox + (ev.clientX - sx) / scale;
+      var ny = oy + (ev.clientY - sy) / scale;
+      el.style.left = Math.max(0, nx|0) + 'px';
+      el.style.top = Math.max(0, ny|0) + 'px';
+      var n = noteById(el.getAttribute('data-note-id'));
+      if (n){ n.x = toInt(el.style.left, n.x); n.y = toInt(el.style.top, n.y); }
+      renderLinks();
+    });
+    document.addEventListener('mouseup', function(){
+      if (!dragging) return;
+      dragging = false;
+      saveSoon();
+    });
+  }
+  function selectNote(id){
+    qsa('.tcNoteNode').forEach(function(el){ el.classList.toggle('selected', el.getAttribute('data-note-id') === id); });
+  }
+  function handleLinkClick(id){
+    if (!linkFrom){
+      linkFrom = id;
+      selectNote(id);
+      return;
+    }
+    if (linkFrom !== id && !linkExists(linkFrom, id)){
+      links.push({from: linkFrom, to: id});
+      saveSoon();
+      renderLinks();
+    }
+    linkFrom = null;
+    linkMode = false;
+    syncButtons();
+  }
+  function deleteNote(id){
+    notes = notes.filter(function(n){ return n.id !== id; });
+    links = links.filter(function(l){ return l.from !== id && l.to !== id; });
+    var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(id)+'"]');
+    if (el) el.remove();
+    renderLinks();
+    saveSoon();
+  }
+  function ensureLinkLayer(){
+    var svg = document.getElementById('builderLinks');
+    if (!svg) return null;
+    var layer = document.getElementById('tcNoteLinksLayer');
+    if (!layer){
+      layer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      layer.id = 'tcNoteLinksLayer';
+      svg.appendChild(layer);
+    }
+    return layer;
+  }
+  function renderLinks(){
+    var layer = ensureLinkLayer();
+    if (!layer) return;
+    layer.innerHTML = '';
+    links.forEach(function(l){
+      var a = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(l.from)+'"]');
+      var b = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(l.to)+'"]');
+      if (!a || !b) return;
+      var p1 = centerPoint(a), p2 = centerPoint(b);
+      var dx = Math.max(80, Math.abs(p2.x - p1.x) * .45);
+      var d = 'M '+p1.x+' '+p1.y+' C '+(p1.x+dx)+' '+p1.y+', '+(p2.x-dx)+' '+p2.y+', '+p2.x+' '+p2.y;
+      var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('class', 'tcNoteLink');
+      path.setAttribute('d', d);
+      path.setAttribute('data-from', l.from);
+      path.setAttribute('data-to', l.to);
+      layer.appendChild(path);
+    });
+  }
+  function renderAll(){
+    qsa('.tcNoteNode').forEach(function(el){ el.remove(); });
+    notes.forEach(renderNote);
+    renderLinks();
+  }
+  function installCanvasClick(){
+    var st = stage(); if (!st || st.__notesClick) return;
+    st.__notesClick = true;
+    st.addEventListener('click', function(ev){
+      if (!noteMode) return;
+      if (ev.target.closest('.node, .tcNoteNode, .projAreaLabel, .tagAreaLabel, .depHandle')) return;
+      var p = screenToStage(ev.clientX, ev.clientY);
+      createNote(p.x, p.y);
+      noteMode = false;
+      syncButtons();
+      ev.preventDefault();
+      ev.stopPropagation();
+    }, true);
+  }
+  function wrapDrawLinks(){
+    if (window.drawLinks && !window.drawLinks.__notesWrapped){
+      var orig = window.drawLinks;
+      window.drawLinks = function(){
+        var rv = orig.apply(this, arguments);
+        try{ renderLinks(); }catch(_){}
+        return rv;
+      };
+      window.drawLinks.__notesWrapped = true;
+    }
+  }
+  function boot(){
+    ensureToolbar();
+    loadState();
+    renderAll();
+    installCanvasClick();
+    wrapDrawLinks();
+    try{ renderLinks(); }catch(_){}
+  }
+  window.TaskCanvasNotes = {
+    createNote: createNote,
+    linkNotes: function(from, to){ if (from && to && from !== to && !linkExists(from, to)){ links.push({from:from, to:to}); renderLinks(); saveSoon(); } },
+    notes: function(){ return notes.slice(); },
+    links: function(){ return links.slice(); },
+    render: renderAll,
+    save: saveNow
+  };
+  window.addEventListener('load', function(){ setTimeout(boot, 120); });
+  document.addEventListener('twdata', function(){ setTimeout(boot, 0); });
+})();</script>
