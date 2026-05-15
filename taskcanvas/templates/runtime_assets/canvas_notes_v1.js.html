@@ -10,6 +10,7 @@
   var selectedNoteIds = {};
   var saveTimer = 0;
   var lasso = null;
+  var bucketDrag = null;
 
   function qs(s, root){ return (root || document).querySelector(s); }
   function qsa(s, root){ return Array.prototype.slice.call((root || document).querySelectorAll(s)); }
@@ -52,6 +53,20 @@
       return a.localeCompare(b);
     });
     return list;
+  }
+  function renameBucket(oldBucket, nextBucket){
+    oldBucket = bucketText(oldBucket);
+    nextBucket = bucketText(nextBucket);
+    if (oldBucket === nextBucket) return false;
+    var changed = false;
+    notes.forEach(function(n){
+      if (noteBucket(n) === oldBucket){
+        n.bucket = nextBucket;
+        changed = true;
+      }
+    });
+    if (changed) renderAll();
+    return changed;
   }
   function linkExists(from, to){
     return links.some(function(l){ return l && l.from === from && l.to === to; });
@@ -128,6 +143,27 @@
   }
   function rectsOverlap(a, b){
     return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  }
+  function bucketFromPoint(x, y){
+    var el = document.elementFromPoint(x, y);
+    while (el && el !== stage()){
+      if (el.classList && el.classList.contains('tcNoteBucket')) return el.getAttribute('data-bucket') || '(no bucket)';
+      el = el.parentNode;
+    }
+    return null;
+  }
+  function bucketAtStagePoint(x, y){
+    var found = null;
+    qsa('.tcNoteBucket').forEach(function(el){
+      var left = toInt(el.style.left, 0);
+      var top = toInt(el.style.top, 0);
+      var width = toInt(el.style.width, 0);
+      var height = toInt(el.style.height, 0);
+      if (x >= left && x <= left + width && y >= top && y <= top + height){
+        found = el.getAttribute('data-bucket') || '(no bucket)';
+      }
+    });
+    return found;
   }
   function ensureToolbar(){
     if (document.getElementById('noteModeBtn')) return;
@@ -352,7 +388,24 @@
     document.addEventListener('mouseup', function(){
       if (!dragging) return;
       dragging = false;
+      var bucketChanged = false;
+      start.forEach(function(sp){
+        var n = noteById(sp.id);
+        if (!n) return;
+        var finalX = toInt(sp.el.style.left, sp.x);
+        var finalY = toInt(sp.el.style.top, sp.y);
+        var centerX = finalX + (sp.el.offsetWidth || 220) / 2;
+        var centerY = finalY + (sp.el.offsetHeight || 92) / 2;
+        var bucket = bucketAtStagePoint(centerX, centerY);
+        if (bucket && bucket !== noteBucket(n)){
+          n.bucket = bucket;
+          bucketChanged = true;
+        }
+      });
       start = [];
+      if (bucketChanged){
+        renderAll();
+      }
       saveSoon();
     });
   }
@@ -521,8 +574,18 @@
       box.style.top = Math.max(0, g.y - 28) + 'px';
       box.style.width = Math.max(260, (g.right - g.x) + 44) + 'px';
       box.style.height = Math.max(120, (g.bottom - g.y) + 44) + 'px';
-      box.innerHTML = '<div class="tcNoteBucketHead"><span class="tcNoteBucketTitle"></span><span class="tcNoteBucketCount"></span></div>';
-      qs('.tcNoteBucketTitle', box).textContent = bucket;
+      box.innerHTML = '<div class="tcNoteBucketHead"><button type="button" class="tcNoteBucketTitle"></button><span class="tcNoteBucketCount"></span></div>';
+      var title = qs('.tcNoteBucketTitle', box);
+      title.textContent = bucket;
+      title.title = 'Rename bucket';
+      title.addEventListener('click', function(ev){
+        ev.preventDefault();
+        ev.stopPropagation();
+        var next = window.prompt ? window.prompt('Bucket name:', bucket) : null;
+        if (next === null) return;
+        renameBucket(bucket, next);
+        saveSoon();
+      });
       qs('.tcNoteBucketCount', box).textContent = g.count + ' note' + (g.count === 1 ? '' : 's');
       layer.appendChild(box);
     });

@@ -635,6 +635,111 @@ window.addEventListener('load', function(){
         self.assertEqual(result["mergedBucketLabel"], "Planning")
         self.assertEqual(result["mergedBucketNotes"], 3)
 
+    def test_canvas_notes_dragging_note_into_bucket_reassigns_it(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_BUCKET_DRAG_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var target = window.TaskCanvasNotes.createNote(520, 260, "Bucket note", "", "Planning");
+      var moving = window.TaskCanvasNotes.createNote(120, 260, "Move me", "", "(no bucket)");
+      var movingEl = document.querySelector('.tcNoteNode[data-note-id="'+moving.id+'"]');
+      var head = movingEl.querySelector('.tcNoteHead');
+      var targetEl = document.querySelector('.tcNoteNode[data-note-id="'+target.id+'"]');
+      var t = targetEl.getBoundingClientRect();
+      var h = head.getBoundingClientRect();
+      function fire(node, type, x, y, extra){
+        node.dispatchEvent(new MouseEvent(type, Object.assign({
+          bubbles:true,
+          cancelable:true,
+          button:0,
+          clientX:x,
+          clientY:y
+        }, extra || {})));
+      }
+      fire(head, 'mousedown', h.left + 8, h.top + 8);
+      fire(document, 'mousemove', t.left + t.width / 2, t.top + t.height / 2);
+      fire(document, 'mouseup', t.left + t.width / 2, t.top + t.height / 2);
+      setTimeout(function(){
+        var notes = window.TaskCanvasNotes.notes();
+        var moved = notes.filter(function(n){ return n.content === 'Move me'; })[0];
+        var out = {
+          movedBucket: moved && moved.bucket,
+          bucketCount: document.querySelectorAll('.tcNoteBucket').length,
+          bucketLabel: (document.querySelector('.tcNoteBucketTitle') || {}).textContent || ""
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 180);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["movedBucket"], "Planning")
+        self.assertGreaterEqual(result["bucketCount"], 1)
+        self.assertEqual(result["bucketLabel"], "Planning")
+
+    def test_canvas_notes_renames_bucket_from_header(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_BUCKET_RENAME_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var a = window.TaskCanvasNotes.createNote(180, 240, "Alpha", "", "Planning");
+      var b = window.TaskCanvasNotes.createNote(460, 240, "Beta", "", "Planning");
+      var bucketBtn = document.querySelector('.tcNoteBucketTitle');
+      window.prompt = function(){ return 'Roadmap'; };
+      bucketBtn.click();
+      setTimeout(function(){
+        var notes = window.TaskCanvasNotes.notes();
+        var out = {
+          renamedCount: notes.filter(function(n){ return n.bucket === 'Roadmap'; }).length,
+          bucketLabel: (document.querySelector('.tcNoteBucketTitle') || {}).textContent || "",
+          noteHeader: document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"] .tcNoteBucketLabel').textContent
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 180);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["renamedCount"], 2)
+        self.assertEqual(result["bucketLabel"], "Roadmap")
+        self.assertEqual(result["noteHeader"], "Roadmap")
+
     def test_canvas_notes_create_tasks_stages_selected_note_commands(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
