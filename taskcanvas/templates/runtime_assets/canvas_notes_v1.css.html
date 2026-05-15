@@ -25,6 +25,9 @@
     box-shadow: inset 0 0 0 1px rgba(242, 177, 74, .05);
     pointer-events: auto;
   }
+  .tcNoteBucket.collapsed {
+    background: rgba(18, 15, 8, .26);
+  }
   .tcNoteBucketHead {
     position: absolute;
     left: 12px;
@@ -40,6 +43,18 @@
     font-size: 11px;
     line-height: 1;
     pointer-events: auto;
+  }
+  .tcNoteBucketToggle {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: rgba(244, 234, 215, .7);
+    cursor: pointer;
+    font-size: 11px;
+    line-height: 1;
+  }
+  .tcNoteBucketToggle:hover {
+    color: #f4ead7;
   }
   .tcNoteBucketTitle {
     max-width: 280px;

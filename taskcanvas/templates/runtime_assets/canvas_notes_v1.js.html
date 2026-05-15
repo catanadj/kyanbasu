@@ -11,6 +11,7 @@
   var saveTimer = 0;
   var lasso = null;
   var bucketDrag = null;
+  var bucketUiState = Object.create(null);
 
   function qs(s, root){ return (root || document).querySelector(s); }
   function qsa(s, root){ return Array.prototype.slice.call((root || document).querySelectorAll(s)); }
@@ -28,6 +29,9 @@
       }
     }catch(_){}
     return 'taskcanvas:notes:v1:' + seed;
+  }
+  function bucketStateKey(){
+    return key() + ':buckets';
   }
   function uid(){ return 'note-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7); }
   function noteById(id){
@@ -59,13 +63,20 @@
     nextBucket = bucketText(nextBucket);
     if (oldBucket === nextBucket) return false;
     var changed = false;
+    if (Object.prototype.hasOwnProperty.call(bucketUiState, oldBucket)){
+      bucketUiState[nextBucket] = bucketUiState[oldBucket];
+      delete bucketUiState[oldBucket];
+    }
     notes.forEach(function(n){
       if (noteBucket(n) === oldBucket){
         n.bucket = nextBucket;
         changed = true;
       }
     });
-    if (changed) renderAll();
+    if (changed){
+      renderAll();
+      saveBucketState();
+    }
     return changed;
   }
   function linkExists(from, to){
@@ -96,6 +107,30 @@
     var text = String(bucket || '').trim();
     return text || '(no bucket)';
   }
+  function bucketCollapsed(bucket){
+    return !!bucketUiState[bucketText(bucket)];
+  }
+  function toggleBucketCollapse(bucket){
+    bucket = bucketText(bucket);
+    bucketUiState[bucket] = !bucketCollapsed(bucket);
+    renderAll();
+    saveBucketState();
+    return !!bucketUiState[bucket];
+  }
+  function loadBucketState(){
+    try{
+      var raw = localStorage.getItem(bucketStateKey());
+      if (!raw) return;
+      var parsed = JSON.parse(raw);
+      bucketUiState = Object.create(null);
+      Object.keys(parsed || {}).forEach(function(k){
+        bucketUiState[bucketText(k)] = !!parsed[k];
+      });
+    }catch(_){ bucketUiState = Object.create(null); }
+  }
+  function saveBucketState(){
+    try{ localStorage.setItem(bucketStateKey(), JSON.stringify(bucketUiState)); }catch(_){}
+  }
   function normalizeNote(n){
     n = n || {};
     if (!n.id) n.id = uid();
@@ -114,6 +149,7 @@
   }
   function saveNow(){
     try{ localStorage.setItem(key(), JSON.stringify({notes:notes, links:links})); }catch(_){}
+    saveBucketState();
   }
   function loadState(){
     try{
@@ -519,12 +555,15 @@
     return hidden;
   }
   function isNoteVisible(id){
-    return !hiddenNoteIds()[id];
+    var n = noteById(id);
+    return !!n && !hiddenNoteIds()[id] && !bucketCollapsed(noteBucket(n));
   }
   function applyVisibility(){
     var hidden = hiddenNoteIds();
     qsa('.tcNoteNode').forEach(function(el){
-      el.style.display = hidden[el.getAttribute('data-note-id')] ? 'none' : '';
+      var n = noteById(el.getAttribute('data-note-id'));
+      var hiddenByBucket = n ? bucketCollapsed(noteBucket(n)) : false;
+      el.style.display = (hidden[el.getAttribute('data-note-id')] || hiddenByBucket) ? 'none' : '';
     });
     notes.forEach(syncCollapseButton);
   }
@@ -544,16 +583,13 @@
     if (!layer) return;
     layer.innerHTML = '';
     var groups = Object.create(null);
-    qsa('.tcNoteNode').forEach(function(el){
-      if (el.style.display === 'none') return;
-      var id = el.getAttribute('data-note-id');
-      var n = noteById(id);
-      if (!n) return;
+    notes.forEach(function(n){
       var bucket = noteBucket(n);
-      var x = toInt(el.style.left, 0);
-      var y = toInt(el.style.top, 0);
-      var w = el.offsetWidth || 220;
-      var h = el.offsetHeight || 92;
+      var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(n.id)+'"]');
+      var x = toInt(n.x, 160);
+      var y = toInt(n.y, 160);
+      var w = el && el.offsetWidth ? el.offsetWidth : 220;
+      var h = el && el.offsetHeight ? el.offsetHeight : 92;
       var g = groups[bucket];
       if (!g){
         g = groups[bucket] = {x:x, y:y, right:x+w, bottom:y+h, count:0};
@@ -569,12 +605,21 @@
       if (!g) return;
       var box = document.createElement('div');
       box.className = 'tcNoteBucket';
+      if (bucketCollapsed(bucket)) box.classList.add('collapsed');
       box.setAttribute('data-bucket', bucket);
       box.style.left = Math.max(0, g.x - 22) + 'px';
       box.style.top = Math.max(0, g.y - 28) + 'px';
       box.style.width = Math.max(260, (g.right - g.x) + 44) + 'px';
-      box.style.height = Math.max(120, (g.bottom - g.y) + 44) + 'px';
-      box.innerHTML = '<div class="tcNoteBucketHead"><button type="button" class="tcNoteBucketTitle"></button><span class="tcNoteBucketCount"></span></div>';
+      box.style.height = bucketCollapsed(bucket) ? '38px' : Math.max(120, (g.bottom - g.y) + 44) + 'px';
+      box.innerHTML = '<div class="tcNoteBucketHead"><button type="button" class="tcNoteBucketToggle" title="Collapse bucket"></button><button type="button" class="tcNoteBucketTitle"></button><span class="tcNoteBucketCount"></span></div>';
+      var toggle = qs('.tcNoteBucketToggle', box);
+      toggle.textContent = bucketCollapsed(bucket) ? '▸' : '▾';
+      toggle.title = bucketCollapsed(bucket) ? 'Expand bucket' : 'Collapse bucket';
+      toggle.addEventListener('click', function(ev){
+        ev.preventDefault();
+        ev.stopPropagation();
+        toggleBucketCollapse(bucket);
+      });
       var title = qs('.tcNoteBucketTitle', box);
       title.textContent = bucket;
       title.title = 'Rename bucket';
@@ -882,6 +927,7 @@
   function boot(){
     ensureToolbar();
     loadState();
+    loadBucketState();
     renderAll();
     installCanvasClick();
     installLassoSelection();

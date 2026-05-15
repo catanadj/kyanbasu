@@ -740,6 +740,63 @@ window.addEventListener('load', function(){
         self.assertEqual(result["bucketLabel"], "Roadmap")
         self.assertEqual(result["noteHeader"], "Roadmap")
 
+    def test_canvas_notes_collapses_and_expands_bucket(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_BUCKET_COLLAPSE_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      window.TaskCanvasNotes.createNote(180, 220, "One", "", "Planning");
+      window.TaskCanvasNotes.createNote(480, 260, "Two", "", "Planning");
+      window.TaskCanvasNotes.createNote(820, 240, "Three", "", "Delivery");
+      var toggle = document.querySelector('.tcNoteBucket[data-bucket="Planning"] .tcNoteBucketToggle');
+      toggle.click();
+      setTimeout(function(){
+        var collapsedVisible = Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){
+          return el.style.display !== 'none';
+        }).length;
+        var collapsedClass = document.querySelector('.tcNoteBucket[data-bucket="Planning"]').classList.contains('collapsed');
+        toggle = document.querySelector('.tcNoteBucket[data-bucket="Planning"] .tcNoteBucketToggle');
+        toggle.click();
+        setTimeout(function(){
+          var expandedVisible = Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){
+            return el.style.display !== 'none';
+          }).length;
+          var out = {
+            collapsedVisible: collapsedVisible,
+            collapsedClass: collapsedClass,
+            expandedVisible: expandedVisible,
+            bucketCount: document.querySelectorAll('.tcNoteBucket').length
+          };
+          var pre = document.createElement('pre');
+          pre.id = 'e2e-out';
+          pre.textContent = JSON.stringify(out);
+          document.body.appendChild(pre);
+        }, 160);
+      }, 160);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["collapsedVisible"], 1)
+        self.assertTrue(result["collapsedClass"])
+        self.assertEqual(result["expandedVisible"], 3)
+        self.assertEqual(result["bucketCount"], 2)
+
     def test_canvas_notes_create_tasks_stages_selected_note_commands(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
