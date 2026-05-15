@@ -574,6 +574,62 @@ window.addEventListener('load', function(){
         self.assertGreaterEqual(result["savedKeys"], 1)
         self.assertEqual(result["console"], "")
 
+    def test_canvas_notes_create_tasks_stages_selected_note_commands(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_CREATE_TASKS_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var a = window.TaskCanvasNotes.createNote(180, 240, "Plan branch", "");
+      var b = window.TaskCanvasNotes.createNote(440, 240, "Build branch", "with details");
+      var c = window.TaskCanvasNotes.createNote(760, 240, "Ignore branch", "");
+      window.TaskCanvasNotes.selectNote(a.id);
+      window.TaskCanvasNotes.selectNote(b.id, true);
+      var count1 = window.TaskCanvasNotes.stageSelectedNotesAsTasks();
+      var count2 = window.TaskCanvasNotes.stageSelectedNotesAsTasks();
+      if (typeof updateConsole === 'function') updateConsole();
+      setTimeout(function(){
+        var lines = ((document.getElementById('consoleText') || {}).value || "").split(/\\n/).filter(Boolean);
+        var out = {
+          button: !!document.getElementById('noteCreateTasksBtn'),
+          count1: count1,
+          count2: count2,
+          staged: Array.isArray(window.STAGED_CMDS) ? window.STAGED_CMDS.slice() : [],
+          lines: lines,
+          ignorePresent: lines.some(function(line){ return line.indexOf('Ignore branch') !== -1; })
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 120);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["button"])
+        self.assertEqual(result["count1"], 2)
+        self.assertEqual(result["count2"], 2)
+        self.assertEqual(len(result["staged"]), 2)
+        self.assertEqual(len(result["lines"]), 2)
+        self.assertIn("task add 'Plan branch'", result["lines"])
+        self.assertIn("task add 'Build branch with details'", result["lines"])
+        self.assertFalse(result["ignorePresent"])
+
     def test_canvas_notes_runtime_creates_child_branches_and_reflows_map(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

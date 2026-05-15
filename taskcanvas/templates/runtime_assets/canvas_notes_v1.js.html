@@ -54,6 +54,9 @@
     if (a && b) return a + '\n' + b;
     return a || b || 'New note';
   }
+  function commandText(s){
+    return String(s || '').replace(/\s+/g, ' ').trim() || 'New note';
+  }
   function normalizeNote(n){
     n = n || {};
     if (!n.id) n.id = uid();
@@ -136,6 +139,12 @@
     importBtn.type = 'button';
     importBtn.textContent = 'Import notes';
     importBtn.title = 'Import planning notes from JSON';
+    var createTasksBtn = document.createElement('button');
+    createTasksBtn.id = 'noteCreateTasksBtn';
+    createTasksBtn.className = 'btn ghost';
+    createTasksBtn.type = 'button';
+    createTasksBtn.textContent = 'Create tasks';
+    createTasksBtn.title = 'Stage Taskwarrior add commands for selected notes';
     var importInput = document.createElement('input');
     importInput.id = 'noteImportInput';
     importInput.type = 'file';
@@ -144,6 +153,7 @@
     parent.insertBefore(importInput, anchor.nextSibling);
     parent.insertBefore(importBtn, importInput);
     parent.insertBefore(exportBtn, importBtn);
+    parent.insertBefore(createTasksBtn, exportBtn);
     parent.insertBefore(reflowBtn, anchor.nextSibling);
     parent.insertBefore(linkBtn, reflowBtn);
     parent.insertBefore(noteBtn, linkBtn);
@@ -167,6 +177,10 @@
     importBtn.addEventListener('click', function(){
       importInput.value = '';
       importInput.click();
+    });
+    createTasksBtn.addEventListener('click', function(){
+      var count = stageSelectedNotesAsTasks();
+      if (!count && window.alert) window.alert('Select one or more notes first.');
     });
     importInput.addEventListener('change', function(){
       var file = importInput.files && importInput.files[0];
@@ -672,6 +686,26 @@
   function importJSON(text){
     return importData(text);
   }
+  function stageSelectedNotesAsTasks(){
+    var ids = selectedIds();
+    if (!ids.length && selectedNoteId) ids = [selectedNoteId];
+    ids = ids.filter(function(id){ return !!noteById(id); });
+    if (!ids.length) return 0;
+    var A = window.STAGED_CMDS = Array.isArray(window.STAGED_CMDS) ? window.STAGED_CMDS : [];
+    window.__NOTE_TASK_CMD_BY_ID__ = window.__NOTE_TASK_CMD_BY_ID__ || {};
+    ids.forEach(function(id){
+      var old = window.__NOTE_TASK_CMD_BY_ID__[id];
+      if (old){
+        for (var i=A.length-1;i>=0;i--) if (A[i] === old) A.splice(i, 1);
+      }
+      var n = noteById(id);
+      var cmd = 'task add ' + commandText(n && n.content);
+      window.__NOTE_TASK_CMD_BY_ID__[id] = cmd;
+      A.push(cmd);
+    });
+    try{ if (typeof updateConsole === 'function') updateConsole(); }catch(_){}
+    return ids.length;
+  }
   function boot(){
     ensureToolbar();
     loadState();
@@ -691,6 +725,7 @@
     exportJSON: exportJSON,
     importData: importData,
     importJSON: importJSON,
+    stageSelectedNotesAsTasks: stageSelectedNotesAsTasks,
     linkNotes: function(from, to, type){ if (from && to && from !== to && !linkExists(from, to)){ links.push({from:from, to:to, type:type || 'manual'}); renderLinks(); saveSoon(); } },
     reflowMindMap: reflowMindMap,
     toggleCollapse: toggleCollapse,
