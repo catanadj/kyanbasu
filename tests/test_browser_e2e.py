@@ -678,6 +678,115 @@ window.addEventListener('load', function(){
         self.assertEqual(result["domNotes"], 2)
         self.assertEqual(result["console"], "")
 
+    def test_canvas_notes_shift_click_multiselects_notes(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_SHIFT_CLICK_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var a = window.TaskCanvasNotes.createNote(180, 240, "A", "");
+      var b = window.TaskCanvasNotes.createNote(440, 240, "B", "");
+      var aEl = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]');
+      var bEl = document.querySelector('.tcNoteNode[data-note-id="'+b.id+'"]');
+      aEl.dispatchEvent(new MouseEvent('click', {bubbles:true, cancelable:true, button:0}));
+      bEl.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, cancelable:true, button:0, shiftKey:true}));
+      bEl.dispatchEvent(new MouseEvent('mouseup', {bubbles:true, cancelable:true, button:0, shiftKey:true}));
+      bEl.dispatchEvent(new MouseEvent('click', {bubbles:true, cancelable:true, button:0, shiftKey:true}));
+      if (typeof updateConsole === 'function') updateConsole();
+      setTimeout(function(){
+        var out = {
+          selected: window.TaskCanvasNotes.selectedNotes().length,
+          selectedNodes: document.querySelectorAll('.tcNoteNode.selected').length,
+          selectedContents: window.TaskCanvasNotes.selectedNotes().map(function(id){
+            return window.TaskCanvasNotes.notes().filter(function(n){ return n.id === id; })[0].content;
+          }).sort(),
+          console: (document.getElementById('consoleText') || {}).value || ""
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 120);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["selected"], 2)
+        self.assertEqual(result["selectedNodes"], 2)
+        self.assertEqual(result["selectedContents"], ["A", "B"])
+        self.assertEqual(result["console"], "")
+
+    def test_canvas_notes_drag_lasso_multiselects_notes(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_LASSO_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      window.TaskCanvasNotes.createNote(180, 240, "A", "");
+      window.TaskCanvasNotes.createNote(440, 240, "B", "");
+      window.TaskCanvasNotes.createNote(760, 240, "C", "");
+      var stage = document.getElementById('builderStage');
+      var r = stage.getBoundingClientRect();
+      function evt(type, x, y){
+        stage.dispatchEvent(new MouseEvent(type, {bubbles:true, cancelable:true, button:0, clientX:r.left+x, clientY:r.top+y}));
+      }
+      evt('mousedown', 120, 190);
+      evt('mousemove', 690, 390);
+      document.dispatchEvent(new MouseEvent('mouseup', {bubbles:true, cancelable:true, button:0, clientX:r.left+690, clientY:r.top+390}));
+      if (typeof updateConsole === 'function') updateConsole();
+      setTimeout(function(){
+        var out = {
+          selected: window.TaskCanvasNotes.selectedNotes().length,
+          selectedNodes: document.querySelectorAll('.tcNoteNode.selected').length,
+          selectedContents: window.TaskCanvasNotes.selectedNotes().map(function(id){
+            return window.TaskCanvasNotes.notes().filter(function(n){ return n.id === id; })[0].content;
+          }).sort(),
+          marqueeLeftovers: document.querySelectorAll('.tcNoteMarquee').length,
+          console: (document.getElementById('consoleText') || {}).value || ""
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 120);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["selected"], 2)
+        self.assertEqual(result["selectedNodes"], 2)
+        self.assertEqual(result["selectedContents"], ["A", "B"])
+        self.assertEqual(result["marqueeLeftovers"], 0)
+        self.assertEqual(result["console"], "")
+
     def test_canvas_notes_collapse_hides_descendants_and_restores_them(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
