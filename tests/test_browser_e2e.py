@@ -692,6 +692,122 @@ window.addEventListener('load', function(){
         self.assertEqual(result["pulseGroups"], 1)
         self.assertGreaterEqual(result["pulses"], 2)
 
+    def test_project_picker_runtime_opens_and_lists_projects(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps(
+            {
+                "tasks": [
+                    {
+                        "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        "short": "aaaaaaaa",
+                        "desc": "Alpha",
+                        "project": "Work",
+                        "tags": [],
+                        "has_depends": False,
+                    },
+                    {
+                        "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                        "short": "bbbbbbbb",
+                        "desc": "Beta",
+                        "project": "Home",
+                        "tags": [],
+                        "has_depends": False,
+                    },
+                ],
+                "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
+            }
+        )
+        html = build_runtime_html(base_html, payload, 2, lambda *_: None)
+        self.assertIn('id="PROJECT_PICKER_V2_CSS"', html)
+        self.assertIn('id="PROJECT_PICKER_V2_JS"', html)
+        self.assertNotIn("<!-- PROJECT_PICKER_V2_CSS -->", html)
+        self.assertNotIn("<!-- PROJECT_PICKER_V2_JS -->", html)
+        self.assertNotIn("<!-- PROJECT_PICKER_V2_BIND -->", html)
+
+        harness = """
+<script id="E2E_PROJECT_PICKER_HARNESS">
+window.addEventListener('load', function(){
+  try{
+    setTimeout(function(){
+      window.showProjectPickerV2();
+      setTimeout(function(){
+        var out = {
+          overlay: document.querySelectorAll('.projPickOverlay').length,
+          items: Array.prototype.map.call(document.querySelectorAll('.projPickItem .name'), function(el){ return el.textContent; }),
+          selectedText: (document.querySelector('.projPickFooter') || {}).textContent || ''
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 100);
+    }, 250);
+  }catch(e){
+    var pre2 = document.createElement('pre');
+    pre2.id = 'e2e-out';
+    pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+    document.body.appendChild(pre2);
+  }
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["overlay"], 1)
+        self.assertEqual(result["items"], ["Home", "Work"])
+        self.assertIn("0 selected", result["selectedText"])
+
+    def test_quickfix_add_render_runtime_exposes_parser_and_optimistic_add(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        self.assertIn('id="FEATURE_QUICKFIX_ADD_RENDER_V1"', html)
+        self.assertNotIn('<script id="FEATURE_QUICKFIX_ADD_RENDER_V1">(function(){\n  if (window.__FEATURE_QUICKFIX_ADD_RENDER_V1__)', base_html)
+
+        harness = """
+<script id="E2E_QUICKFIX_ADD_HARNESS">
+window.addEventListener('load', function(){
+  try{
+    setTimeout(function(){
+      var parsed = window.TaskCanvasQuickAdd.parseAdd("task add Review report project:Work +next due:tomorrow");
+      var ok = window.TaskCanvasQuickAdd.optimisticAdd("task add Review report project:Work +next due:tomorrow");
+      setTimeout(function(){
+        var node = document.querySelector('#builderStage .node[data-uuid^="new-"]');
+        var out = {
+          parsed: parsed,
+          ok: ok,
+          hasNode: !!node,
+          nodeProject: node && node.getAttribute('data-proj'),
+          nodeText: node ? node.textContent : ''
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 250);
+    }, 350);
+  }catch(e){
+    var pre2 = document.createElement('pre');
+    pre2.id = 'e2e-out';
+    pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+    document.body.appendChild(pre2);
+  }
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["parsed"]["desc"], "Review report")
+        self.assertEqual(result["parsed"]["project"], "Work")
+        self.assertEqual(result["parsed"]["tags"], ["next"])
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["hasNode"])
+        self.assertIn("Review report", result["nodeText"])
+
 
 if __name__ == "__main__":
     unittest.main()

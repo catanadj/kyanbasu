@@ -59,6 +59,7 @@ def build_runtime_html(
     head_snippets = [
         ("feature-hover-css", "feature_hover.css.html"),
         ("feature-due-css-v2", "feature_due.css.html"),
+        ("PROJECT_PICKER_V2_CSS", "project_picker_v2.css.html"),
     ]
     body_snippets = [
         ("FEATURE_HOVERSTAGE", "feature_hover.js.html"),
@@ -66,6 +67,8 @@ def build_runtime_html(
         ("FEATURE_DEPENDENCY_INTERACTIONS_V1", "dependency_interactions_v1.js.html"),
         ("FEATURE_DEPENDENCY_EDGES_V1", "dependency_edges_v1.js.html"),
         ("dep handle authoritative v6", "dep_handle_authoritative_v6.js.html"),
+        ("FEATURE_QUICKFIX_ADD_RENDER_V1", "quickfix_add_render_v1.js.html"),
+        ("PROJECT_PICKER_V2_JS", "project_picker_v2.js.html"),
     ]
 
     for marker, asset_name in head_snippets:
