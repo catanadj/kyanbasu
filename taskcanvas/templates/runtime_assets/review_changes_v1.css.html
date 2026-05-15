@@ -62,6 +62,24 @@
     text-transform: uppercase;
     letter-spacing: .04em;
   }
+  #reviewChangesPanel .reviewSectionTitle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  #reviewChangesPanel .reviewCopyBtn {
+    border: 1px solid rgba(164,185,214,.18);
+    border-radius: 7px;
+    background: rgba(18,29,46,.86);
+    color: #dfe8f5;
+    padding: 4px 7px;
+    font-size: 11px;
+    cursor: pointer;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  #reviewChangesPanel .reviewCopyBtn:hover { background: rgba(122,162,247,.18); }
   #reviewChangesPanel .reviewCount {
     color: #98a8bd;
     font-weight: 600;
@@ -96,9 +114,21 @@
     color: #e6edf3;
   }
   #reviewChangesPanel .reviewEmpty {
-    padding: 18px 10px;
+    padding: 22px 12px;
     color: #98a8bd;
     text-align: center;
+  }
+  #reviewChangesPanel .reviewEmpty strong {
+    display: block;
+    color: #dfe8f5;
+    margin-bottom: 5px;
+    font-size: 14px;
+  }
+  #reviewChangesPanel .reviewCopyStatus {
+    min-width: 78px;
+    color: #8fd19e;
+    font-size: 12px;
+    text-align: right;
   }
   #reviewChangesPanel .reviewWarnings {
     border-color: rgba(242,177,74,.32);

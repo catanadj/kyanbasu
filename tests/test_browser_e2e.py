@@ -313,6 +313,12 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
+      try{
+        Object.defineProperty(navigator, 'clipboard', {
+          configurable: true,
+          value: { writeText: function(txt){ window.__reviewCopiedText = txt; return Promise.resolve(); } }
+        });
+      }catch(_){}
       window.TASKS.push({
         uuid:"new-review",
         short:"new-rev",
@@ -328,6 +334,10 @@ window.addEventListener('load', function(){
       window.stagedAdd = [{from:"aaaaaaaa", to:"bbbbbbbb"}];
       if (typeof updateConsole === 'function') updateConsole();
       document.getElementById('reviewChangesBtn').click();
+      document.getElementById('reviewCopyAllBtn').click();
+      var copiedAll = window.__reviewCopiedText || "";
+      var depBtn = document.querySelector('[data-review-copy="dependencies"]');
+      if (depBtn) depBtn.click();
       setTimeout(function(){
         var current = window.TaskCanvasReview.current();
         var panel = document.getElementById('reviewChangesPanel');
@@ -342,7 +352,10 @@ window.addEventListener('load', function(){
             other: current.groups.other.length
           },
           text: panel ? panel.textContent : "",
-          raw: current.text
+          raw: current.text,
+          copiedAll: copiedAll,
+          copiedSection: window.__reviewCopiedText || "",
+          groupText: window.TaskCanvasReview.groupText("dependencies")
         };
         var pre = document.createElement('pre');
         pre.id = 'e2e-out';
@@ -370,9 +383,13 @@ window.addEventListener('load', function(){
         self.assertGreaterEqual(result["groups"]["fieldChanges"], 1)
         self.assertEqual(result["groups"]["dependencies"], 1)
         self.assertIn("Review Changes", result["text"])
+        self.assertIn("Copy all", result["text"])
         self.assertIn("New Tasks", result["text"])
         self.assertIn("Dependency Changes", result["text"])
         self.assertIn("task add 'Review panel task'", result["raw"])
+        self.assertIn("task add 'Review panel task'", result["copiedAll"])
+        self.assertIn("depends:bbbbbbbb", result["copiedSection"])
+        self.assertEqual(result["copiedSection"], result["groupText"])
 
     def test_taskcanvas_commands_core_includes_dependency_commands(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
