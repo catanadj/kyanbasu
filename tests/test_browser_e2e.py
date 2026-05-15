@@ -797,6 +797,72 @@ window.addEventListener('load', function(){
         self.assertEqual(result["expandedVisible"], 3)
         self.assertEqual(result["bucketCount"], 2)
 
+    def test_canvas_notes_drag_bucket_moves_all_notes_in_bucket(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_BUCKET_MOVE_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var a = window.TaskCanvasNotes.createNote(180, 220, "One", "", "Planning");
+      var b = window.TaskCanvasNotes.createNote(480, 260, "Two", "", "Planning");
+      var c = window.TaskCanvasNotes.createNote(820, 240, "Three", "", "Delivery");
+      var head = document.querySelector('.tcNoteBucket[data-bucket="Planning"] .tcNoteBucketHead');
+      var r = head.getBoundingClientRect();
+      function fire(node, type, x, y){
+        node.dispatchEvent(new MouseEvent(type, {
+          bubbles:true,
+          cancelable:true,
+          button:0,
+          clientX:x,
+          clientY:y
+        }));
+      }
+      fire(head, 'mousedown', r.left + 8, r.top + 8);
+      fire(document, 'mousemove', r.left + 168, r.top + 108);
+      fire(document, 'mouseup', r.left + 168, r.top + 108);
+      setTimeout(function(){
+        var notes = {};
+        window.TaskCanvasNotes.notes().forEach(function(n){ notes[n.content] = n; });
+        var out = {
+          aDx: notes.One.x - 180,
+          aDy: notes.One.y - 220,
+          bDx: notes.Two.x - 480,
+          bDy: notes.Two.y - 260,
+          cDx: notes.Three.x - 820,
+          cDy: notes.Three.y - 240,
+          bucketLabel: (document.querySelector('.tcNoteBucket[data-bucket="Planning"] .tcNoteBucketTitle') || {}).textContent || ""
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 180);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertGreater(result["aDx"], 80)
+        self.assertGreater(result["aDy"], 40)
+        self.assertGreater(result["bDx"], 80)
+        self.assertGreater(result["bDy"], 40)
+        self.assertLess(abs(result["cDx"]), 40)
+        self.assertLess(abs(result["cDy"]), 40)
+        self.assertEqual(result["bucketLabel"], "Planning")
+
     def test_canvas_notes_rejects_overlapping_notes(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

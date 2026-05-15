@@ -274,6 +274,60 @@
     });
     return found;
   }
+  function bucketNotes(bucket){
+    bucket = bucketText(bucket);
+    return notes.filter(function(n){ return noteBucket(n) === bucket; });
+  }
+  function installBucketDragging(){
+    var layer = document.getElementById('tcNoteBucketsLayer');
+    if (!layer || layer.__bucketDragWired) return;
+    layer.__bucketDragWired = true;
+    layer.addEventListener('mousedown', function(ev){
+      var head = ev.target && ev.target.closest ? ev.target.closest('.tcNoteBucketHead') : null;
+      if (!head) return;
+      if (ev.target.closest('button')) return;
+      var bucketEl = ev.target.closest('.tcNoteBucket');
+      if (!bucketEl) return;
+      var bucket = bucketEl.getAttribute('data-bucket') || '(no bucket)';
+      bucketDrag = {
+        bucket: bucket,
+        sx: ev.clientX,
+        sy: ev.clientY,
+        items: bucketNotes(bucket).map(function(n){
+          var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(n.id)+'"]');
+          return el ? {id:n.id, n:n, el:el, x:toInt(n.x, 160), y:toInt(n.y, 160)} : null;
+        }).filter(Boolean)
+      };
+      ev.preventDefault();
+      ev.stopPropagation();
+    }, true);
+    document.addEventListener('mousemove', function(ev){
+      if (!bucketDrag || !bucketDrag.items.length) return;
+      var scale = window.ZSCALE || 1;
+      var dx = (ev.clientX - bucketDrag.sx) / scale;
+      var dy = (ev.clientY - bucketDrag.sy) / scale;
+      bucketDrag.items.forEach(function(sp){
+        var nx = Math.max(0, (sp.x + dx)|0);
+        var ny = Math.max(0, (sp.y + dy)|0);
+        sp.n.x = nx;
+        sp.n.y = ny;
+        sp.el.style.left = nx + 'px';
+        sp.el.style.top = ny + 'px';
+      });
+      renderBuckets();
+      renderLinks();
+    });
+    document.addEventListener('mouseup', function(){
+      if (!bucketDrag) return;
+      var moved = bucketDrag.items.length > 0;
+      bucketDrag = null;
+      if (moved){
+        resolveNoteOverlaps();
+        renderAll();
+        saveSoon();
+      }
+    });
+  }
   function ensureToolbar(){
     if (document.getElementById('noteModeBtn')) return;
     var anchor = document.getElementById('toggleConsole') || document.getElementById('copyBtn');
@@ -659,6 +713,7 @@
   function renderBuckets(){
     var layer = ensureBucketLayer();
     if (!layer) return;
+    installBucketDragging();
     layer.innerHTML = '';
     var groups = Object.create(null);
     notes.forEach(function(n){
