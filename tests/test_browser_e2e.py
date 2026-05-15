@@ -551,6 +551,68 @@ window.addEventListener('load', function(){
         self.assertTrue(result["prototypeRightOfDesign"])
         self.assertEqual(result["console"], "")
 
+    def test_canvas_notes_keyboard_creates_sibling_and_child_notes(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_KEYBOARD_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var root = window.TaskCanvasNotes.createNote(180, 240, "Root", "");
+      var first = window.TaskCanvasNotes.createChildNote(root.id, "First", "");
+      window.TaskCanvasNotes.selectNote(first.id);
+      document.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true, cancelable:true}));
+      if (document.activeElement) document.activeElement.blur();
+      window.TaskCanvasNotes.selectNote(first.id);
+      document.dispatchEvent(new KeyboardEvent('keydown', {key:'Tab', bubbles:true, cancelable:true}));
+      if (typeof updateConsole === 'function') updateConsole();
+      setTimeout(function(){
+        var notes = window.TaskCanvasNotes.notes();
+        var links = window.TaskCanvasNotes.links();
+        var rootChildren = links.filter(function(l){ return l.type === 'child' && l.from === root.id; });
+        var firstChildren = links.filter(function(l){ return l.type === 'child' && l.from === first.id; });
+        var selected = document.querySelectorAll('.tcNoteNode.selected').length;
+        var out = {
+          notes: notes.length,
+          links: links.length,
+          childLinks: links.filter(function(l){ return l.type === 'child'; }).length,
+          rootChildren: rootChildren.length,
+          firstChildren: firstChildren.length,
+          selected: selected,
+          focusedTitle: !!(document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('tcNoteTitle')),
+          console: (document.getElementById('consoleText') || {}).value || ""
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 120);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["notes"], 4)
+        self.assertEqual(result["links"], 3)
+        self.assertEqual(result["childLinks"], 3)
+        self.assertEqual(result["rootChildren"], 2)
+        self.assertEqual(result["firstChildren"], 1)
+        self.assertEqual(result["selected"], 1)
+        self.assertTrue(result["focusedTitle"])
+        self.assertEqual(result["console"], "")
+
     def test_taskcanvas_commands_core_includes_dependency_commands(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

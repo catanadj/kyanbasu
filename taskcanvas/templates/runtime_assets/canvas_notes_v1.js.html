@@ -6,6 +6,7 @@
   var noteMode = false;
   var linkMode = false;
   var linkFrom = null;
+  var selectedNoteId = null;
   var saveTimer = 0;
 
   function qs(s, root){ return (root || document).querySelector(s); }
@@ -38,6 +39,12 @@
   }
   function hasChildParent(id){
     return links.some(function(l){ return l && l.type === 'child' && l.to === id && noteById(l.from); });
+  }
+  function parentLinkFor(id){
+    for (var i=0;i<links.length;i++){
+      if (links[i] && links[i].type === 'child' && links[i].to === id && noteById(links[i].from)) return links[i];
+    }
+    return null;
   }
   function saveSoon(){
     clearTimeout(saveTimer);
@@ -122,6 +129,7 @@
     var n = {id: uid(), x: toInt(x, 160), y: toInt(y, 160), title: title || 'New note', body: body || ''};
     notes.push(n);
     renderNote(n);
+    selectNote(n.id);
     renderLinks();
     saveSoon();
     return n;
@@ -200,7 +208,20 @@
     });
   }
   function selectNote(id){
+    selectedNoteId = noteById(id) ? id : null;
     qsa('.tcNoteNode').forEach(function(el){ el.classList.toggle('selected', el.getAttribute('data-note-id') === id); });
+  }
+  function focusNoteTitle(id){
+    var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(id)+'"] .tcNoteTitle');
+    if (!el) return;
+    el.focus();
+    try{
+      var range = document.createRange();
+      range.selectNodeContents(el);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }catch(_){}
   }
   function handleLinkClick(id){
     if (!linkFrom){
@@ -263,8 +284,22 @@
     var child = createNote(parent.x + 300, parent.y + existing * 124, title || 'New branch', body || '');
     links.push({from: parent.id, to: child.id, type: 'child'});
     reflowMindMap(parent.id);
+    selectNote(child.id);
+    focusNoteTitle(child.id);
     saveSoon();
     return child;
+  }
+  function createSiblingNote(id, title, body){
+    var n = noteById(id);
+    if (!n) return null;
+    var parentLink = parentLinkFor(id);
+    if (parentLink) return createChildNote(parentLink.from, title, body);
+    var sibling = createNote(n.x, n.y + 132, title || 'New branch', body || '');
+    reflowMindMap();
+    selectNote(sibling.id);
+    focusNoteTitle(sibling.id);
+    saveSoon();
+    return sibling;
   }
   function subtreeSlots(id, seen){
     seen = seen || {};
@@ -314,6 +349,7 @@
   function renderAll(){
     qsa('.tcNoteNode').forEach(function(el){ el.remove(); });
     notes.forEach(renderNote);
+    if (selectedNoteId) selectNote(selectedNoteId);
     renderLinks();
   }
   function installCanvasClick(){
@@ -341,19 +377,38 @@
       window.drawLinks.__notesWrapped = true;
     }
   }
+  function installKeyboardShortcuts(){
+    if (document.__notesKeyboard) return;
+    document.__notesKeyboard = true;
+    document.addEventListener('keydown', function(ev){
+      if (!selectedNoteId || !noteById(selectedNoteId)) return;
+      if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
+      if (ev.target && ev.target.closest && ev.target.closest('[contenteditable="true"], input, textarea, select')) return;
+      if (ev.key === 'Tab'){
+        ev.preventDefault();
+        createChildNote(selectedNoteId);
+      } else if (ev.key === 'Enter'){
+        ev.preventDefault();
+        createSiblingNote(selectedNoteId);
+      }
+    });
+  }
   function boot(){
     ensureToolbar();
     loadState();
     renderAll();
     installCanvasClick();
+    installKeyboardShortcuts();
     wrapDrawLinks();
     try{ renderLinks(); }catch(_){}
   }
   window.TaskCanvasNotes = {
     createNote: createNote,
     createChildNote: createChildNote,
+    createSiblingNote: createSiblingNote,
     linkNotes: function(from, to, type){ if (from && to && from !== to && !linkExists(from, to)){ links.push({from:from, to:to, type:type || 'manual'}); renderLinks(); saveSoon(); } },
     reflowMindMap: reflowMindMap,
+    selectNote: selectNote,
     notes: function(){ return notes.slice(); },
     links: function(){ return links.slice(); },
     render: renderAll,
