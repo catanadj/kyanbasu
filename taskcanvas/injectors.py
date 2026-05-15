@@ -188,7 +188,7 @@ def inject_wire_deps_as_main(html: str) -> str:
     return html
 
 
-def _find_bg_file(prefer: str | None, base_dir: Path | None = None):
+def _find_bg_file(prefer: str | None, base_dir: Path | None = None, include_demo: bool = False):
     """Look for a background image either by explicit path or by common names in script dir / CWD."""
     exts = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg")
     script_dir = (base_dir or Path(__file__).resolve().parent)
@@ -203,7 +203,10 @@ def _find_bg_file(prefer: str | None, base_dir: Path | None = None):
         candidates.append(script_dir / p.name)
         candidates.append(demo_dir / p.name)
     names = ["taskcanvas-bg", "TaskCanvas.bg", "canvas-bg", "background", "bg"]
-    for root in (script_dir, cwd, demo_dir):
+    roots = [script_dir, cwd]
+    if include_demo:
+        roots.append(demo_dir)
+    for root in roots:
         for name in names:
             for ext in exts:
                 candidates.append(root / f"{name}{ext}")

@@ -660,6 +660,8 @@ window.addEventListener('load', function(){
             var review = window.TaskCanvasReview.current();
             var out = {
               rowCount: document.querySelectorAll('#consoleRows .consoleCommandRow').length,
+              rowsBeforeTextarea: !!(document.getElementById('consoleRows') && document.getElementById('consoleText') && document.getElementById('consoleRows').nextSibling === document.getElementById('consoleText')),
+              textareaBacking: document.getElementById('consoleText').classList.contains('consoleEditorBacking'),
               text: text,
               reviewText: review.text,
               reviewNewTasks: review.groups.newTasks.length,
@@ -688,6 +690,8 @@ window.addEventListener('load', function(){
         self.assertNotIn("ERR:", raw)
         result = json.loads(raw)
         self.assertEqual(result["rowCount"], 1)
+        self.assertTrue(result["rowsBeforeTextarea"])
+        self.assertTrue(result["textareaBacking"])
         self.assertEqual(result["text"], "task add Edited first +next")
         self.assertEqual(result["reviewText"], "task add Edited first +next")
         self.assertEqual(result["reviewNewTasks"], 1)

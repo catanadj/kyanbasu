@@ -120,7 +120,7 @@ def _render_html(tasks_all: list[dict], payload: dict) -> str:
 
 
 def _apply_background(html: str, bg_arg: str | None, bg_opacity: str | None) -> str:
-    bg_path = _find_bg_file(bg_arg, base_dir=BASE_DIR)
+    bg_path = _find_bg_file(bg_arg, base_dir=BASE_DIR, include_demo=bool(bg_arg))
     if bg_path:
         print(f"[TaskCanvas] Using background: {bg_path.name}")
         return inject_custom_background(html, bg_path, OUT_HTML, eprint, bg_opacity)

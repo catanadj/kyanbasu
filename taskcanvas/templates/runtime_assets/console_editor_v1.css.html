@@ -2,7 +2,16 @@
   #consoleRows {
     display: grid;
     gap: 6px;
-    margin-top: 8px;
+    max-height: 184px;
+    overflow: auto;
+  }
+  #consoleText.consoleEditorBacking {
+    position: absolute;
+    left: -10000px;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
   }
   .consoleCommandRow {
     display: grid;

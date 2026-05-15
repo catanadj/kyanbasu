@@ -43,9 +43,10 @@
     if (existing) return existing;
     var ta = document.getElementById('consoleText');
     if (!ta || !ta.parentNode) return null;
+    ta.classList.add('consoleEditorBacking');
     var rows = document.createElement('div');
     rows.id = 'consoleRows';
-    ta.parentNode.insertBefore(rows, ta.nextSibling);
+    ta.parentNode.insertBefore(rows, ta);
     return rows;
   }
   function setTextarea(text){

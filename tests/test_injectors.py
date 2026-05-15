@@ -123,7 +123,7 @@ class TestInjectors(unittest.TestCase):
             found = _find_bg_file(None, base_dir=base)
             self.assertEqual(found, bg)
 
-    def test_find_bg_file_searches_demo_dir(self):
+    def test_find_bg_file_skips_demo_dir_by_default(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             package_dir = root / "taskcanvas"
@@ -134,6 +134,20 @@ class TestInjectors(unittest.TestCase):
             bg.write_bytes(b"img")
 
             found = _find_bg_file(None, base_dir=package_dir)
+
+            self.assertIsNone(found)
+
+    def test_find_bg_file_searches_demo_dir_when_enabled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            package_dir = root / "taskcanvas"
+            demo_dir = root / "demo"
+            package_dir.mkdir()
+            demo_dir.mkdir()
+            bg = demo_dir / "taskcanvas-bg.jpg"
+            bg.write_bytes(b"img")
+
+            found = _find_bg_file(None, base_dir=package_dir, include_demo=True)
 
             self.assertEqual(found, bg)
 
