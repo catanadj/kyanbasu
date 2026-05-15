@@ -20,8 +20,25 @@
     return uid.slice(0,8);
   }
   function ensureArray(){ return (window.STAGED_CMDS = Array.isArray(window.STAGED_CMDS) ? window.STAGED_CMDS : []); }
+  function hasOwnedTerminalState(kind, node){
+    var uid = resolveUUID(node); if (!uid) return false;
+    var sid = toShort(uid);
+    var key = kind === 'done' ? 'done' : 'deleted';
+    try{
+      var F = window.FOLD || window.__FOLD_STATE__ || {};
+      var f = F[uid] || F[sid];
+      if (f && f[key]) return true;
+    }catch(_){}
+    try{
+      var E = window.EX_OPS || window.__EXISTING_OPS__ || {};
+      var ex = E[uid] || E[sid];
+      if (ex && ex[key]) return true;
+    }catch(_){}
+    return false;
+  }
   function stage(kind, node){
     var uid = resolveUUID(node); if (!uid) return;
+    if ((kind === 'done' || kind === 'delete') && hasOwnedTerminalState(kind, node)) return;
     var sid = toShort(uid);
     var cmd = 'task '+sid+' '+(kind==='modify'?'modify':kind);
     var A = ensureArray();

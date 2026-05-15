@@ -5,15 +5,23 @@
   function stageAdd(cmd, human){ ensureArrays(); window.STAGED_CMDS.push(cmd); window.STAGED_HUMAN.push(human); try{updateConsole();}catch(_){}} 
   function stageToggle(node, task, kind){
     ensureArrays();
-    var uid = (task && task.uuid) || (node && node.getAttribute('data-uuid')) || (node && node.getAttribute('data-short')) || '';
     var short = (task && task.short) || (node && node.getAttribute('data-short')) || 'task';
+    var uid = (task && task.uuid) || (node && node.getAttribute('data-uuid')) || short || '';
+    var cmdId = short || uid;
     var desc = (task && task.desc) || ((node && node.querySelector('.title'))? node.querySelector('.title').textContent : '');
-    var cmd = 'task '+uid+' '+(kind==='done'?'done':'delete');
+    var action = (kind==='done'?'done':'delete');
+    var oppositeAction = (kind==='done'?'delete':'done');
+    var cmd = 'task '+cmdId+' '+action;
     var human = (kind==='done'?'DONE ':'DELETE ') + short + ' — ' + desc;
     var cls = (kind==='done'?'stagedDone':'stagedDel');
+    function matchesTerminal(s, verb){
+      var m = /^task\s+(\S+)\s+(done|delete)\s*$/i.exec(String(s||'').trim());
+      if (!m || String(m[2]).toLowerCase() !== verb) return false;
+      return m[1] === uid || m[1] === short || m[1] === cmdId;
+    }
     if (!node) return;
     if (node.classList.contains(cls)){
-      var res1 = removeFrom(window.STAGED_CMDS,  function(s){ return s===cmd; });
+      var res1 = removeFrom(window.STAGED_CMDS,  function(s){ return matchesTerminal(s, action); });
       var res2 = removeFrom(window.STAGED_HUMAN, function(s){ return s===human; });
       window.STAGED_CMDS = res1.out; window.STAGED_HUMAN = res2.out;
       node.classList.remove(cls);
@@ -22,9 +30,8 @@
       var other = (kind==='done'?'stagedDel':'stagedDone');
       if (node.classList.contains(other)){
         node.classList.remove(other);
-        var cmdOther = 'task '+uid+' '+(kind==='done'?'delete':'done');
         var humanOther = (kind==='done'?'DELETE ':'DONE ') + short + ' — '+ desc;
-        window.STAGED_CMDS = removeFrom(window.STAGED_CMDS,  function(s){ return s===cmdOther; }).out;
+        window.STAGED_CMDS = removeFrom(window.STAGED_CMDS,  function(s){ return matchesTerminal(s, oppositeAction); }).out;
         window.STAGED_HUMAN = removeFrom(window.STAGED_HUMAN, function(s){ return s===humanOther; }).out;
       }
     }
@@ -95,10 +102,12 @@
         try{
           var ct = document.getElementById('consoleText');
           if (ct){
-            var base = ct.value || '';
-            var staged = (window.STAGED_CMDS||[]).join('\\n');
-            if (staged){
-              if (base.indexOf(staged)!==0){
+            if (window.TaskCanvasCommands && typeof window.TaskCanvasCommands.runtimeCommandText === 'function'){
+              ct.value = window.TaskCanvasCommands.runtimeCommandText(window);
+            } else {
+              var base = ct.value || '';
+              var staged = (window.STAGED_CMDS||[]).join('\\n');
+              if (staged && base.indexOf(staged)!==0){
                 ct.value = staged + (base? '\\n'+base : '');
               }
             }

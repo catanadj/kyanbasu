@@ -374,6 +374,69 @@ window.addEventListener('load', function(){
         self.assertIn("Dependency Changes", result["text"])
         self.assertIn("task add 'Review panel task'", result["raw"])
 
+    def test_done_delete_toggle_does_not_duplicate_console_commands(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps(
+            {
+                "tasks": [
+                    {
+                        "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        "short": "aaaaaaaa",
+                        "desc": "Alpha",
+                        "project": "Work",
+                        "tags": [],
+                        "has_depends": False,
+                    }
+                ],
+                "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
+                "init_projects": ["Work"],
+            }
+        )
+        html = build_runtime_html(base_html, payload, 1, lambda *_: None)
+
+        harness = """
+<script id="E2E_DONE_DELETE_DUP_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var btn = document.querySelector('#builderStage .node[data-short="aaaaaaaa"] .btnDone');
+      if (!btn) throw new Error('done button missing');
+      btn.click();
+      var immediate = (document.getElementById('consoleText') || {}).value || "";
+      setTimeout(function(){
+        var early = (document.getElementById('consoleText') || {}).value || "";
+        setTimeout(function(){
+          var text = (document.getElementById('consoleText') || {}).value || "";
+          var raw = (window.STAGED_CMDS || []).slice();
+          var pre = document.createElement('pre');
+          pre.id = 'e2e-out';
+          pre.textContent = JSON.stringify({immediate:immediate, early:early, text:text, staged:raw});
+          document.body.appendChild(pre);
+        }, 260);
+      }, 80);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 900);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["staged"], [])
+        immediate_lines = [line for line in result["immediate"].splitlines() if line.strip()]
+        early_lines = [line for line in result["early"].splitlines() if line.strip()]
+        final_lines = [line for line in result["text"].splitlines() if line.strip()]
+        self.assertLessEqual(len(immediate_lines), 1)
+        self.assertEqual(len(early_lines), 1)
+        self.assertEqual(len(final_lines), 1)
+        self.assertRegex(final_lines[0], r"^task '?[0-9a-f-]+'? done$")
+
     def test_taskcanvas_commands_core_includes_dependency_commands(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
