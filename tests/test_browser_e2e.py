@@ -787,6 +787,64 @@ window.addEventListener('load', function(){
         self.assertEqual(result["marqueeLeftovers"], 0)
         self.assertEqual(result["console"], "")
 
+    def test_canvas_notes_drag_moves_selected_note_group(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_GROUP_DRAG_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var a = window.TaskCanvasNotes.createNote(180, 240, "A", "");
+      var b = window.TaskCanvasNotes.createNote(440, 240, "B", "");
+      var c = window.TaskCanvasNotes.createNote(760, 240, "C", "");
+      window.TaskCanvasNotes.selectNote(a.id);
+      window.TaskCanvasNotes.selectNote(b.id, true);
+      var bEl = document.querySelector('.tcNoteNode[data-note-id="'+b.id+'"]');
+      var head = bEl.querySelector('.tcNoteHead');
+      head.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, cancelable:true, button:0, clientX:450, clientY:250}));
+      document.dispatchEvent(new MouseEvent('mousemove', {bubbles:true, cancelable:true, button:0, clientX:540, clientY:300}));
+      document.dispatchEvent(new MouseEvent('mouseup', {bubbles:true, cancelable:true, button:0, clientX:540, clientY:300}));
+      if (typeof updateConsole === 'function') updateConsole();
+      setTimeout(function(){
+        var by = {};
+        window.TaskCanvasNotes.notes().forEach(function(n){ by[n.content] = n; });
+        var out = {
+          selected: window.TaskCanvasNotes.selectedNotes().length,
+          aMoved: by.A.x === 270 && by.A.y === 290,
+          bMoved: by.B.x === 530 && by.B.y === 290,
+          cStayed: by.C.x === 760 && by.C.y === 240,
+          paths: document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink').length,
+          console: (document.getElementById('consoleText') || {}).value || ""
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 120);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["selected"], 2)
+        self.assertTrue(result["aMoved"])
+        self.assertTrue(result["bMoved"])
+        self.assertTrue(result["cStayed"])
+        self.assertEqual(result["paths"], 0)
+        self.assertEqual(result["console"], "")
+
     def test_canvas_notes_collapse_hides_descendants_and_restores_them(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

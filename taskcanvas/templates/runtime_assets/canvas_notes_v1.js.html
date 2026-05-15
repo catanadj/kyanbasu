@@ -224,29 +224,40 @@
     makeNoteDraggable(el);
   }
   function makeNoteDraggable(el){
-    var dragging=false, sx=0, sy=0, ox=0, oy=0;
+    var dragging=false, sx=0, sy=0, start=[];
     qs('.tcNoteHead', el).addEventListener('mousedown', function(ev){
       if (ev.button !== 0 || ev.target.closest('button')) return;
       dragging = true;
       sx = ev.clientX; sy = ev.clientY;
-      ox = toInt(el.style.left, 0); oy = toInt(el.style.top, 0);
-      selectNote(el.getAttribute('data-note-id'), !!(ev.ctrlKey || ev.metaKey || ev.shiftKey));
+      var id = el.getAttribute('data-note-id');
+      var additive = !!(ev.ctrlKey || ev.metaKey || ev.shiftKey);
+      if (!selectedNoteIds[id] || additive) selectNote(id, additive);
+      var ids = selectedNoteIds[id] ? selectedIds() : [id];
+      start = ids.map(function(noteId){
+        var node = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(noteId)+'"]');
+        return node ? {id:noteId, el:node, x:toInt(node.style.left, 0), y:toInt(node.style.top, 0)} : null;
+      }).filter(Boolean);
       ev.preventDefault(); ev.stopPropagation();
     });
     document.addEventListener('mousemove', function(ev){
       if (!dragging) return;
       var scale = window.ZSCALE || 1;
-      var nx = ox + (ev.clientX - sx) / scale;
-      var ny = oy + (ev.clientY - sy) / scale;
-      el.style.left = Math.max(0, nx|0) + 'px';
-      el.style.top = Math.max(0, ny|0) + 'px';
-      var n = noteById(el.getAttribute('data-note-id'));
-      if (n){ n.x = toInt(el.style.left, n.x); n.y = toInt(el.style.top, n.y); }
+      var dx = (ev.clientX - sx) / scale;
+      var dy = (ev.clientY - sy) / scale;
+      start.forEach(function(sp){
+        var nx = Math.max(0, (sp.x + dx)|0);
+        var ny = Math.max(0, (sp.y + dy)|0);
+        sp.el.style.left = nx + 'px';
+        sp.el.style.top = ny + 'px';
+        var n = noteById(sp.id);
+        if (n){ n.x = nx; n.y = ny; }
+      });
       renderLinks();
     });
     document.addEventListener('mouseup', function(){
       if (!dragging) return;
       dragging = false;
+      start = [];
       saveSoon();
     });
   }
