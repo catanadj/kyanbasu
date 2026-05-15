@@ -11,6 +11,43 @@
     z-index: 8;
     overflow: hidden;
   }
+  #tcNoteBucketsLayer {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+  }
+  .tcNoteBucket {
+    position: absolute;
+    border: 1px dashed rgba(242, 177, 74, .26);
+    border-radius: 12px;
+    background: rgba(18, 15, 8, .18);
+    box-shadow: inset 0 0 0 1px rgba(242, 177, 74, .05);
+  }
+  .tcNoteBucketHead {
+    position: absolute;
+    left: 12px;
+    top: -11px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 8px;
+    border: 1px solid rgba(242, 177, 74, .26);
+    border-radius: 999px;
+    background: rgba(29, 24, 12, .96);
+    color: #f4ead7;
+    font-size: 11px;
+    line-height: 1;
+  }
+  .tcNoteBucketTitle {
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tcNoteBucketCount {
+    color: rgba(244, 234, 215, .7);
+  }
   .tcNoteNode.selected {
     outline: 2px solid rgba(242,177,74,.72);
     box-shadow: 0 0 0 5px rgba(242,177,74,.15), 0 14px 34px rgba(0,0,0,.28);
@@ -18,12 +55,31 @@
   .tcNoteHead {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
+    justify-content: space-between;
+    gap: 10px;
     padding: 6px 7px;
     background: rgba(242,177,74,.10);
     border-bottom: 1px solid rgba(242,177,74,.20);
     cursor: move;
+  }
+  .tcNoteBucketLabel {
+    max-width: 130px;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: rgba(244, 234, 215, .76);
+    cursor: pointer;
+    font-size: 11px;
+    line-height: 1;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tcNoteBucketLabel:hover {
+    color: #f4ead7;
+    text-decoration: underline;
   }
   .tcNoteActions {
     display: flex;

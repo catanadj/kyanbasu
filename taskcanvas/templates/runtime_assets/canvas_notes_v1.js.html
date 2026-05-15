@@ -33,6 +33,26 @@
     for (var i=0;i<notes.length;i++) if (notes[i].id === id) return notes[i];
     return null;
   }
+  function noteBucket(n){
+    return bucketText(n && n.bucket);
+  }
+  function bucketNames(){
+    var seen = Object.create(null);
+    var list = [];
+    notes.forEach(function(n){
+      var bucket = noteBucket(n);
+      if (!seen[bucket]){
+        seen[bucket] = true;
+        list.push(bucket);
+      }
+    });
+    list.sort(function(a, b){
+      if (a === '(no bucket)') return -1;
+      if (b === '(no bucket)') return 1;
+      return a.localeCompare(b);
+    });
+    return list;
+  }
   function linkExists(from, to){
     return links.some(function(l){ return l && l.from === from && l.to === to; });
   }
@@ -57,6 +77,10 @@
   function commandText(s){
     return String(s || '').replace(/\s+/g, ' ').trim() || 'New note';
   }
+  function bucketText(bucket){
+    var text = String(bucket || '').trim();
+    return text || '(no bucket)';
+  }
   function normalizeNote(n){
     n = n || {};
     if (!n.id) n.id = uid();
@@ -65,6 +89,7 @@
     delete n.body;
     n.x = toInt(n.x, 160);
     n.y = toInt(n.y, 160);
+    n.bucket = bucketText(n.bucket);
     n.collapsed = !!n.collapsed;
     return n;
   }
@@ -204,9 +229,11 @@
     if (linkBtn) linkBtn.classList.toggle('active', !!linkMode);
   }
   function createNote(x, y, title, body){
-    var n = {id: uid(), x: toInt(x, 160), y: toInt(y, 160), content: noteText(title, body), collapsed: false};
+    var bucket = arguments.length > 4 ? arguments[4] : null;
+    var n = {id: uid(), x: toInt(x, 160), y: toInt(y, 160), content: noteText(title, body), bucket: bucketText(bucket), collapsed: false};
     notes.push(n);
     renderNote(n);
+    renderBuckets();
     selectNote(n.id);
     renderLinks();
     saveSoon();
@@ -220,7 +247,7 @@
       el.className = 'tcNoteNode';
       el.setAttribute('data-note-id', n.id);
       el.innerHTML =
-        '<div class="tcNoteHead"><div class="tcNoteActions"><button type="button" data-note-collapse title="Collapse branch">v</button><button type="button" data-note-child title="Add child note">+</button><button type="button" data-note-link title="Link from this note">L</button><button type="button" data-note-delete title="Delete selected notes">x</button></div></div>' +
+        '<div class="tcNoteHead"><button type="button" class="tcNoteBucketLabel" title="Edit bucket"></button><div class="tcNoteActions"><button type="button" data-note-collapse title="Collapse branch">v</button><button type="button" data-note-child title="Add child note">+</button><button type="button" data-note-link title="Link from this note">L</button><button type="button" data-note-delete title="Delete selected notes">x</button></div></div>' +
         '<div class="tcNoteText" contenteditable="true"></div>';
       st.appendChild(el);
       wireNote(el);
@@ -228,6 +255,12 @@
     el.style.left = toInt(n.x, 160) + 'px';
     el.style.top = toInt(n.y, 160) + 'px';
     el.classList.toggle('collapsed', !!n.collapsed);
+    el.setAttribute('data-bucket', noteBucket(n));
+    var bucketLabel = qs('.tcNoteBucketLabel', el);
+    if (bucketLabel){
+      bucketLabel.textContent = noteBucket(n);
+      bucketLabel.title = 'Edit bucket (' + noteBucket(n) + ')';
+    }
     qs('.tcNoteText', el).textContent = n.content || 'New note';
     syncCollapseButton(n);
     return el;
@@ -245,8 +278,13 @@
     var id = el.getAttribute('data-note-id');
     var text = qs('.tcNoteText', el);
     text.addEventListener('input', function(){ var n = noteById(id); if (n){ n.content = text.textContent.trim() || 'New note'; saveSoon(); }});
+    qs('.tcNoteBucketLabel', el).addEventListener('click', function(ev){
+      ev.preventDefault(); ev.stopPropagation();
+      editBucket(id);
+    });
     el.addEventListener('mousedown', function(ev){
       if (ev.button !== 0 || ev.target.closest('button')) return;
+      if (ev.target.closest('.tcNoteBucketLabel')) return;
       if (!(ev.shiftKey || ev.ctrlKey || ev.metaKey)) return;
       selectNote(id, true);
       ev.preventDefault();
@@ -308,6 +346,7 @@
         var n = noteById(sp.id);
         if (n){ n.x = nx; n.y = ny; }
       });
+      renderBuckets();
       renderLinks();
     });
     document.addEventListener('mouseup', function(){
@@ -404,6 +443,16 @@
     renderLinks();
     saveSoon();
   }
+  function editBucket(id){
+    var n = noteById(id);
+    if (!n) return false;
+    var next = window.prompt ? window.prompt('Bucket name:', noteBucket(n)) : null;
+    if (next === null) return false;
+    n.bucket = bucketText(next);
+    renderAll();
+    saveSoon();
+    return true;
+  }
   function hiddenNoteIds(){
     var hidden = {};
     function hideChildren(id){
@@ -425,6 +474,58 @@
       el.style.display = hidden[el.getAttribute('data-note-id')] ? 'none' : '';
     });
     notes.forEach(syncCollapseButton);
+  }
+  function ensureBucketLayer(){
+    var st = stage();
+    if (!st) return null;
+    var layer = document.getElementById('tcNoteBucketsLayer');
+    if (!layer){
+      layer = document.createElement('div');
+      layer.id = 'tcNoteBucketsLayer';
+      st.insertBefore(layer, st.firstChild);
+    }
+    return layer;
+  }
+  function renderBuckets(){
+    var layer = ensureBucketLayer();
+    if (!layer) return;
+    layer.innerHTML = '';
+    var groups = Object.create(null);
+    qsa('.tcNoteNode').forEach(function(el){
+      if (el.style.display === 'none') return;
+      var id = el.getAttribute('data-note-id');
+      var n = noteById(id);
+      if (!n) return;
+      var bucket = noteBucket(n);
+      var x = toInt(el.style.left, 0);
+      var y = toInt(el.style.top, 0);
+      var w = el.offsetWidth || 220;
+      var h = el.offsetHeight || 92;
+      var g = groups[bucket];
+      if (!g){
+        g = groups[bucket] = {x:x, y:y, right:x+w, bottom:y+h, count:0};
+      }
+      g.x = Math.min(g.x, x);
+      g.y = Math.min(g.y, y);
+      g.right = Math.max(g.right, x + w);
+      g.bottom = Math.max(g.bottom, y + h);
+      g.count++;
+    });
+    bucketNames().forEach(function(bucket){
+      var g = groups[bucket];
+      if (!g) return;
+      var box = document.createElement('div');
+      box.className = 'tcNoteBucket';
+      box.setAttribute('data-bucket', bucket);
+      box.style.left = Math.max(0, g.x - 22) + 'px';
+      box.style.top = Math.max(0, g.y - 28) + 'px';
+      box.style.width = Math.max(260, (g.right - g.x) + 44) + 'px';
+      box.style.height = Math.max(120, (g.bottom - g.y) + 44) + 'px';
+      box.innerHTML = '<div class="tcNoteBucketHead"><span class="tcNoteBucketTitle"></span><span class="tcNoteBucketCount"></span></div>';
+      qs('.tcNoteBucketTitle', box).textContent = bucket;
+      qs('.tcNoteBucketCount', box).textContent = g.count + ' note' + (g.count === 1 ? '' : 's');
+      layer.appendChild(box);
+    });
   }
   function toggleCollapse(id){
     var n = noteById(id);
@@ -470,7 +571,7 @@
     if (!parent) return null;
     var existing = childLinksFrom(parentId).length;
     parent.collapsed = false;
-    var child = createNote(parent.x + 300, parent.y + existing * 124, title || 'New branch', body || '');
+    var child = createNote(parent.x + 300, parent.y + existing * 124, title || 'New branch', body || '', noteBucket(parent));
     links.push({from: parent.id, to: child.id, type: 'child'});
     reflowMindMap(parent.id);
     selectNote(child.id);
@@ -483,7 +584,7 @@
     if (!n) return null;
     var parentLink = parentLinkFor(id);
     if (parentLink) return createChildNote(parentLink.from, title, body);
-    var sibling = createNote(n.x, n.y + 132, title || 'New branch', body || '');
+    var sibling = createNote(n.x, n.y + 132, title || 'New branch', body || '', noteBucket(n));
     reflowMindMap();
     selectNote(sibling.id);
     focusNoteText(sibling.id);
@@ -540,6 +641,7 @@
     notes.forEach(renderNote);
     if (selectedNoteId) syncSelection();
     applyVisibility();
+    renderBuckets();
     renderLinks();
   }
   function installCanvasClick(){
@@ -640,7 +742,7 @@
       version: 1,
       exportedAt: new Date().toISOString(),
       notes: notes.map(function(n){
-        return {id:n.id, x:toInt(n.x, 160), y:toInt(n.y, 160), content:n.content || 'New note', collapsed:!!n.collapsed};
+        return {id:n.id, x:toInt(n.x, 160), y:toInt(n.y, 160), content:n.content || 'New note', bucket:noteBucket(n), collapsed:!!n.collapsed};
       }),
       links: links.map(function(l){
         return {from:l.from, to:l.to, type:l.type || 'manual'};
@@ -706,6 +808,14 @@
     try{ if (typeof updateConsole === 'function') updateConsole(); }catch(_){}
     return ids.length;
   }
+  function setBucket(id, bucket){
+    var n = noteById(id);
+    if (!n) return false;
+    n.bucket = bucketText(bucket);
+    renderAll();
+    saveSoon();
+    return true;
+  }
   function boot(){
     ensureToolbar();
     loadState();
@@ -729,6 +839,7 @@
     linkNotes: function(from, to, type){ if (from && to && from !== to && !linkExists(from, to)){ links.push({from:from, to:to, type:type || 'manual'}); renderLinks(); saveSoon(); } },
     reflowMindMap: reflowMindMap,
     toggleCollapse: toggleCollapse,
+    setBucket: setBucket,
     selectNote: selectNote,
     selectedNotes: function(){ return selectedIds(); },
     notes: function(){ return notes.slice(); },

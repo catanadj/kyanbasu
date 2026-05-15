@@ -513,8 +513,8 @@ window.addEventListener('load', function(){
         kind: 'taskcanvas.notes',
         version: 1,
         notes: [
-          {id:'root-note', x:180, y:220, title:'Imported root', body:'Legacy body', collapsed:true},
-          {id:'child-note', x:480, y:220, content:'Imported child', collapsed:false}
+          {id:'root-note', x:180, y:220, title:'Imported root', body:'Legacy body', bucket:'Planning', collapsed:true},
+          {id:'child-note', x:480, y:220, content:'Imported child', bucket:'Execution', collapsed:false}
         ],
         links: [
           {from:'root-note', to:'child-note', type:'child'},
@@ -536,7 +536,10 @@ window.addEventListener('load', function(){
           exportedNotes: exported.notes.length,
           exportedLinks: exported.links.length,
           firstContent: notes[0] && notes[0].content,
+          firstBucket: notes[0] && notes[0].bucket,
           firstCollapsed: notes[0] && notes[0].collapsed,
+          exportedFirstBucket: exported.notes[0] && exported.notes[0].bucket,
+          exportedSecondBucket: exported.notes[1] && exported.notes[1].bucket,
           visibleNotes: Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){ return el.style.display !== 'none'; }).length,
           savedKeys: Object.keys(localStorage).filter(function(k){ return k.indexOf('taskcanvas:notes:v1:') === 0; }).length,
           console: (document.getElementById('consoleText') || {}).value || ""
@@ -569,10 +572,68 @@ window.addEventListener('load', function(){
         self.assertEqual(result["exportedNotes"], 2)
         self.assertEqual(result["exportedLinks"], 1)
         self.assertEqual(result["firstContent"], "Imported root\nLegacy body")
+        self.assertEqual(result["firstBucket"], "Planning")
+        self.assertEqual(result["exportedFirstBucket"], "Planning")
+        self.assertEqual(result["exportedSecondBucket"], "Execution")
         self.assertTrue(result["firstCollapsed"])
         self.assertEqual(result["visibleNotes"], 1)
         self.assertGreaterEqual(result["savedKeys"], 1)
         self.assertEqual(result["console"], "")
+
+    def test_canvas_notes_groups_visible_notes_by_bucket(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_BUCKETS_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var a = window.TaskCanvasNotes.createNote(180, 220, "One", "", "Planning");
+      var b = window.TaskCanvasNotes.createNote(480, 260, "Two", "", "Planning");
+      var c = window.TaskCanvasNotes.createNote(820, 240, "Three", "", "Delivery");
+      var initialBucketCount = document.querySelectorAll('.tcNoteBucket').length;
+      var bucketLabels = Array.prototype.slice.call(document.querySelectorAll('.tcNoteBucketTitle')).map(function(el){ return el.textContent; });
+      var noteLabel = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"] .tcNoteBucketLabel');
+      window.TaskCanvasNotes.setBucket(c.id, "Planning");
+      setTimeout(function(){
+        var out = {
+          bucketCount: initialBucketCount,
+          bucketLabels: bucketLabels,
+          noteBucketLabel: noteLabel ? noteLabel.textContent : "",
+          mergedBucketCount: document.querySelectorAll('.tcNoteBucket').length,
+          mergedBucketLabel: (document.querySelector('.tcNoteBucketTitle') || {}).textContent || "",
+          mergedBucketNotes: Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){
+            return el.getAttribute('data-bucket') === 'Planning';
+          }).length
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 160);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["bucketCount"], 2)
+        self.assertIn("Planning", result["bucketLabels"])
+        self.assertIn("Delivery", result["bucketLabels"])
+        self.assertEqual(result["noteBucketLabel"], "Planning")
+        self.assertEqual(result["mergedBucketCount"], 1)
+        self.assertEqual(result["mergedBucketLabel"], "Planning")
+        self.assertEqual(result["mergedBucketNotes"], 3)
 
     def test_canvas_notes_create_tasks_stages_selected_note_commands(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
