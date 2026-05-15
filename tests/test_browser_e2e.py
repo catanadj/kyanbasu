@@ -586,6 +586,112 @@ window.addEventListener('load', function(){
         self.assertEqual(result["stagedPaths"], 1)
         self.assertIn("task 'aaaaaaaa' modify 'depends:bbbbbbbb'", result["commandText"])
 
+    def test_dependency_edges_runtime_renders_existing_edges_and_pulses_once(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps(
+            {
+                "tasks": [
+                    {
+                        "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        "short": "aaaaaaaa",
+                        "desc": "Parent",
+                        "project": "Work",
+                        "tags": [],
+                        "has_depends": False,
+                    },
+                    {
+                        "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                        "short": "bbbbbbbb",
+                        "desc": "Child",
+                        "project": "Work",
+                        "tags": [],
+                        "has_depends": False,
+                    },
+                    {
+                        "uuid": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+                        "short": "cccccccc",
+                        "desc": "Staged child",
+                        "project": "Work",
+                        "tags": [],
+                        "has_depends": False,
+                    },
+                ],
+                "graph": {
+                    "edges": [{"from": "aaaaaaaa", "to": "bbbbbbbb"}],
+                    "parent_current_deps": {},
+                    "child_to_parents": {},
+                },
+            }
+        )
+        html = build_runtime_html(base_html, payload, 3, lambda *_: None)
+        self.assertIn('id="FEATURE_DEPENDENCY_EDGES_V1"', html)
+        self.assertNotIn("dep pulses: animate energy", html)
+        self.assertNotIn("draw solid existing edges with robust anchors", html)
+
+        harness = """
+<script id="E2E_DEP_EDGES_HARNESS">
+window.addEventListener('load', function(){
+  try{
+    setTimeout(function(){
+      var stage = document.getElementById('builderStage');
+      function makeNode(uuid, shortId, left, top){
+        var node = document.createElement('div');
+        node.className = 'node';
+        node.setAttribute('data-uuid', uuid);
+        node.setAttribute('data-short', shortId);
+        node.style.position = 'absolute';
+        node.style.left = left + 'px';
+        node.style.top = top + 'px';
+        node.style.width = '140px';
+        node.style.height = '70px';
+        node.textContent = shortId;
+        stage.appendChild(node);
+        if (typeof attachDepHandleToNode === 'function') attachDepHandleToNode(node);
+      }
+      makeNode("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "aaaaaaaa", 120, 120);
+      makeNode("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", "bbbbbbbb", 340, 230);
+      makeNode("cccccccc-cccc-cccc-cccc-cccccccccccc", "cccccccc", 560, 330);
+      window.EXIST_EDGES = [{from:"aaaaaaaa", to:"bbbbbbbb"}];
+      window.stagedAdd = [{from:"bbbbbbbb", to:"cccccccc"}];
+      if (typeof drawLinks === 'function') drawLinks();
+      if (typeof drawLinks === 'function') drawLinks();
+      setTimeout(function(){
+        var out = {
+          existingGroups: document.querySelectorAll('#depExistingEdges').length,
+          existingPaths: document.querySelectorAll('#depExistingEdges path[data-from="aaaaaaaa"][data-to="bbbbbbbb"]').length,
+          stagedGroups: document.querySelectorAll('#depStagedOverlay').length,
+          stagedPaths: document.querySelectorAll('#depStagedOverlay path[data-from="bbbbbbbb"][data-to="cccccccc"]').length,
+          pulseGroups: document.querySelectorAll('#depPulseOverlay').length,
+          pulses: document.querySelectorAll('#depPulseOverlay .pulse-dot').length,
+          api: !!window.TaskCanvasDependencyEdges
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 450);
+    }, 500);
+  }catch(e){
+    var pre2 = document.createElement('pre');
+    pre2.id = 'e2e-out';
+    pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+    document.body.appendChild(pre2);
+  }
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["api"])
+        self.assertEqual(result["existingGroups"], 1)
+        self.assertEqual(result["existingPaths"], 1)
+        self.assertEqual(result["stagedGroups"], 1)
+        self.assertEqual(result["stagedPaths"], 1)
+        self.assertEqual(result["pulseGroups"], 1)
+        self.assertGreaterEqual(result["pulses"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -20,6 +20,7 @@ class TestRuntimeHtml(unittest.TestCase):
             'id="feature-due-css-v2"',
             'id="FEATURE_DUEBADGE2"',
             'id="FEATURE_DEPENDENCY_INTERACTIONS_V1"',
+            'id="FEATURE_DEPENDENCY_EDGES_V1"',
             "__ENERGY_ARROW_CSS__",
             "__ONLY_DEPS_CONSOLE_CSS__",
             "__FIXPACK_V61__",
