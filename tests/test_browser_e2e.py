@@ -698,6 +698,51 @@ window.addEventListener('load', function(){
         self.assertEqual(result["stateEdits"], 1)
         self.assertEqual(result["stateRemoved"], 1)
 
+    def test_console_editor_mounts_empty_state_without_commands(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CONSOLE_EDITOR_EMPTY_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var rows = document.getElementById('consoleRows');
+      var ta = document.getElementById('consoleText');
+      var out = {
+        api: !!window.TaskCanvasConsoleEditor,
+        rows: !!rows,
+        empty: !!document.querySelector('#consoleRows .consoleCommandEmpty'),
+        emptyText: (document.querySelector('#consoleRows .consoleCommandEmpty') || {}).textContent || "",
+        textareaBacking: !!(ta && ta.classList.contains('consoleEditorBacking')),
+        rowCount: document.querySelectorAll('#consoleRows .consoleCommandRow').length
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out';
+      pre.textContent = JSON.stringify(out);
+      document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 500);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["api"])
+        self.assertTrue(result["rows"])
+        self.assertTrue(result["empty"])
+        self.assertEqual(result["emptyText"], "No pending commands")
+        self.assertTrue(result["textareaBacking"])
+        self.assertEqual(result["rowCount"], 0)
+
     def test_canvas_notes_runtime_creates_child_branches_and_reflows_map(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

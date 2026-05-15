@@ -4,6 +4,8 @@
   var edits = Object.create(null);
   var removed = Object.create(null);
   var renderTimer = 0;
+  var bootTimer = 0;
+  var observerWired = false;
 
   function qs(s, root){ return (root || document).querySelector(s); }
   function lines(text){
@@ -59,6 +61,13 @@
     if (!rows || !ta) return;
     var current = lines(ta.value);
     rows.innerHTML = '';
+    if (!current.length){
+      var empty = document.createElement('div');
+      empty.className = 'consoleCommandEmpty';
+      empty.textContent = 'No pending commands';
+      rows.appendChild(empty);
+      return;
+    }
     current.forEach(function(line){
       var original = Object.keys(edits).filter(function(k){ return edits[k] === line; })[0] || line;
       var row = document.createElement('div');
@@ -170,11 +179,31 @@
     };
     window.updateConsole.__consoleEditorWrapped = true;
   }
+  function scheduleBoot(delay){
+    clearTimeout(bootTimer);
+    bootTimer = setTimeout(boot, delay || 0);
+  }
+  function wireObserver(){
+    if (observerWired || typeof MutationObserver !== 'function') return;
+    var body = document.body;
+    if (!body) return;
+    observerWired = true;
+    var obs = new MutationObserver(function(){
+      if (!document.getElementById('consoleRows') && document.getElementById('consoleText')){
+        scheduleBoot(20);
+      }
+    });
+    obs.observe(body, {childList:true, subtree:true});
+  }
   function boot(){
     wrapCommandCore();
     wrapUpdate();
     ensureRows();
     scheduleRender();
+    wireObserver();
+    if (!window.TaskCanvasCommands && typeof window.buildCommands !== 'function'){
+      scheduleBoot(200);
+    }
   }
   window.TaskCanvasConsoleEditor = {
     edit: function(original, replacement){ if (replacement) edits[original] = replacement; else delete edits[original]; refresh(); },
@@ -184,6 +213,7 @@
     render: renderRows,
     state: function(){ return {edits:Object.assign({}, edits), removed:Object.assign({}, removed)}; }
   };
+  scheduleBoot(0);
   window.addEventListener('load', function(){ setTimeout(boot, 120); });
   document.addEventListener('twdata', function(){ setTimeout(boot, 0); });
 })();</script>
