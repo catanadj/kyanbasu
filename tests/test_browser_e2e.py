@@ -499,6 +499,81 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "")
         self.assertGreaterEqual(result["savedKeys"], 1)
 
+    def test_canvas_notes_import_export_round_trips_json_without_commands(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_IMPORT_EXPORT_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var imported = {
+        kind: 'taskcanvas.notes',
+        version: 1,
+        notes: [
+          {id:'root-note', x:180, y:220, title:'Imported root', body:'Legacy body', collapsed:true},
+          {id:'child-note', x:480, y:220, content:'Imported child', collapsed:false}
+        ],
+        links: [
+          {from:'root-note', to:'child-note', type:'child'},
+          {from:'missing-note', to:'child-note', type:'manual'}
+        ]
+      };
+      var result = window.TaskCanvasNotes.importJSON(JSON.stringify(imported));
+      var exported = JSON.parse(window.TaskCanvasNotes.exportJSON());
+      if (typeof updateConsole === 'function') updateConsole();
+      setTimeout(function(){
+        var notes = window.TaskCanvasNotes.notes();
+        var out = {
+          importButton: !!document.getElementById('noteImportBtn'),
+          exportButton: !!document.getElementById('noteExportBtn'),
+          resultNotes: result.notes,
+          resultLinks: result.links,
+          exportedKind: exported.kind,
+          exportedVersion: exported.version,
+          exportedNotes: exported.notes.length,
+          exportedLinks: exported.links.length,
+          firstContent: notes[0] && notes[0].content,
+          firstCollapsed: notes[0] && notes[0].collapsed,
+          visibleNotes: Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){ return el.style.display !== 'none'; }).length,
+          savedKeys: Object.keys(localStorage).filter(function(k){ return k.indexOf('taskcanvas:notes:v1:') === 0; }).length,
+          console: (document.getElementById('consoleText') || {}).value || ""
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 120);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["importButton"])
+        self.assertTrue(result["exportButton"])
+        self.assertEqual(result["resultNotes"], 2)
+        self.assertEqual(result["resultLinks"], 1)
+        self.assertEqual(result["exportedKind"], "taskcanvas.notes")
+        self.assertEqual(result["exportedVersion"], 1)
+        self.assertEqual(result["exportedNotes"], 2)
+        self.assertEqual(result["exportedLinks"], 1)
+        self.assertEqual(result["firstContent"], "Imported root\nLegacy body")
+        self.assertTrue(result["firstCollapsed"])
+        self.assertEqual(result["visibleNotes"], 1)
+        self.assertGreaterEqual(result["savedKeys"], 1)
+        self.assertEqual(result["console"], "")
+
     def test_canvas_notes_runtime_creates_child_branches_and_reflows_map(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

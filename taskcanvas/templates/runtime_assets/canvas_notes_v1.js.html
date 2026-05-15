@@ -56,6 +56,7 @@
   }
   function normalizeNote(n){
     n = n || {};
+    if (!n.id) n.id = uid();
     if (!n.content) n.content = noteText(n.title, n.body);
     delete n.title;
     delete n.body;
@@ -123,6 +124,26 @@
     reflowBtn.type = 'button';
     reflowBtn.textContent = 'Reflow map';
     reflowBtn.title = 'Arrange planning notes as a mind map';
+    var exportBtn = document.createElement('button');
+    exportBtn.id = 'noteExportBtn';
+    exportBtn.className = 'btn ghost';
+    exportBtn.type = 'button';
+    exportBtn.textContent = 'Export notes';
+    exportBtn.title = 'Export planning notes as JSON';
+    var importBtn = document.createElement('button');
+    importBtn.id = 'noteImportBtn';
+    importBtn.className = 'btn ghost';
+    importBtn.type = 'button';
+    importBtn.textContent = 'Import notes';
+    importBtn.title = 'Import planning notes from JSON';
+    var importInput = document.createElement('input');
+    importInput.id = 'noteImportInput';
+    importInput.type = 'file';
+    importInput.accept = 'application/json,.json';
+    importInput.style.display = 'none';
+    parent.insertBefore(importInput, anchor.nextSibling);
+    parent.insertBefore(importBtn, importInput);
+    parent.insertBefore(exportBtn, importBtn);
     parent.insertBefore(reflowBtn, anchor.nextSibling);
     parent.insertBefore(linkBtn, reflowBtn);
     parent.insertBefore(noteBtn, linkBtn);
@@ -139,6 +160,27 @@
     });
     reflowBtn.addEventListener('click', function(){
       reflowMindMap();
+    });
+    exportBtn.addEventListener('click', function(){
+      downloadExport();
+    });
+    importBtn.addEventListener('click', function(){
+      importInput.value = '';
+      importInput.click();
+    });
+    importInput.addEventListener('change', function(){
+      var file = importInput.files && importInput.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function(){
+        try{
+          if (notes.length && window.confirm && !window.confirm('Replace current planning notes with imported notes?')) return;
+          importJSON(String(reader.result || ''));
+        }catch(e){
+          window.alert && window.alert('Could not import notes: ' + (e && e.message ? e.message : String(e)));
+        }
+      };
+      reader.readAsText(file);
     });
   }
   function syncButtons(){
@@ -578,6 +620,58 @@
       }
     });
   }
+  function exportData(){
+    return {
+      kind: 'taskcanvas.notes',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      notes: notes.map(function(n){
+        return {id:n.id, x:toInt(n.x, 160), y:toInt(n.y, 160), content:n.content || 'New note', collapsed:!!n.collapsed};
+      }),
+      links: links.map(function(l){
+        return {from:l.from, to:l.to, type:l.type || 'manual'};
+      })
+    };
+  }
+  function exportJSON(){
+    return JSON.stringify(exportData(), null, 2);
+  }
+  function downloadExport(){
+    var text = exportJSON();
+    var blob = new Blob([text], {type:'application/json'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'taskcanvas-notes.json';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0);
+  }
+  function importData(data){
+    if (typeof data === 'string') data = JSON.parse(data);
+    if (!data || !Array.isArray(data.notes)) throw new Error('Import file must contain a notes array');
+    var nextNotes = data.notes.map(normalizeNote);
+    var ids = {};
+    nextNotes.forEach(function(n){
+      while (ids[n.id]) n.id = uid();
+      ids[n.id] = true;
+    });
+    var nextLinks = Array.isArray(data.links) ? data.links.filter(function(l){
+      return l && ids[l.from] && ids[l.to] && l.from !== l.to;
+    }).map(function(l){
+      return {from:l.from, to:l.to, type:l.type || 'manual'};
+    }) : [];
+    notes = nextNotes;
+    links = nextLinks;
+    selectedNoteId = null;
+    selectedNoteIds = {};
+    renderAll();
+    saveNow();
+    return {notes:notes.length, links:links.length};
+  }
+  function importJSON(text){
+    return importData(text);
+  }
   function boot(){
     ensureToolbar();
     loadState();
@@ -593,6 +687,10 @@
     createChildNote: createChildNote,
     createSiblingNote: createSiblingNote,
     deleteSelectedNotes: deleteSelectedNotes,
+    exportData: exportData,
+    exportJSON: exportJSON,
+    importData: importData,
+    importJSON: importJSON,
     linkNotes: function(from, to, type){ if (from && to && from !== to && !linkExists(from, to)){ links.push({from:from, to:to, type:type || 'manual'}); renderLinks(); saveSoon(); } },
     reflowMindMap: reflowMindMap,
     toggleCollapse: toggleCollapse,
