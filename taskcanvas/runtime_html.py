@@ -71,6 +71,7 @@ def build_runtime_html(
         ("feature-project-addtag-v4-css", "project_add_tag_v4.css.html"),
         ("FEATURE_REVIEW_CHANGES_V1_CSS", "review_changes_v1.css.html"),
         ("FEATURE_CANVAS_NOTES_V1_CSS", "canvas_notes_v1.css.html"),
+        ("FEATURE_CONSOLE_EDITOR_V1_CSS", "console_editor_v1.css.html"),
     ]
     body_snippets = [
         ("FEATURE_HOVERSTAGE", "feature_hover.js.html"),
@@ -86,6 +87,7 @@ def build_runtime_html(
         ("FEATURE_SINGLE_CONSOLE_AUGMENT_V1", "single_console_augment_v1.js.html"),
         ("__FEATURE_REVIEW_CHANGES_V1__", "review_changes_v1.js.html"),
         ("__FEATURE_CANVAS_NOTES_V1__", "canvas_notes_v1.js.html"),
+        ("__FEATURE_CONSOLE_EDITOR_V1__", "console_editor_v1.js.html"),
     ]
 
     for marker, asset_name in head_snippets:

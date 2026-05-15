@@ -1,0 +1,188 @@
+<script id="FEATURE_CONSOLE_EDITOR_V1">(function(){
+  if (window.__FEATURE_CONSOLE_EDITOR_V1__) return; window.__FEATURE_CONSOLE_EDITOR_V1__ = true;
+
+  var edits = Object.create(null);
+  var removed = Object.create(null);
+  var renderTimer = 0;
+
+  function qs(s, root){ return (root || document).querySelector(s); }
+  function lines(text){
+    return String(text || '').split(/\r?\n/).map(function(s){ return s.trim(); }).filter(Boolean);
+  }
+  function cloneBuilt(built){
+    built = built || {};
+    return {
+      text: String(built.text || ''),
+      warnings: Array.isArray(built.warnings) ? built.warnings.slice() : [],
+      rawLines: Array.isArray(built.rawLines) ? built.rawLines.slice() : [],
+      normalizedLines: Array.isArray(built.normalizedLines) ? built.normalizedLines.slice() : lines(built.text)
+    };
+  }
+  function applyOverridesToLines(rawLines){
+    var out = [];
+    rawLines.forEach(function(line){
+      if (!line || removed[line]) return;
+      out.push(edits[line] || line);
+    });
+    return out;
+  }
+  function applyOverridesText(text){
+    return applyOverridesToLines(lines(text)).join('\n');
+  }
+  function applyOverridesBuilt(built){
+    var out = cloneBuilt(built);
+    var finalLines = applyOverridesToLines(lines(out.text));
+    out.text = finalLines.join('\n');
+    if (Object.keys(edits).length || Object.keys(removed).length){
+      out.normalizedLines = finalLines.slice();
+    }
+    return out;
+  }
+  function ensureRows(){
+    var existing = document.getElementById('consoleRows');
+    if (existing) return existing;
+    var ta = document.getElementById('consoleText');
+    if (!ta || !ta.parentNode) return null;
+    var rows = document.createElement('div');
+    rows.id = 'consoleRows';
+    ta.parentNode.insertBefore(rows, ta.nextSibling);
+    return rows;
+  }
+  function setTextarea(text){
+    var ta = document.getElementById('consoleText');
+    if (ta && ta.value !== text) ta.value = text;
+  }
+  function renderRows(){
+    var rows = ensureRows();
+    var ta = document.getElementById('consoleText');
+    if (!rows || !ta) return;
+    var current = lines(ta.value);
+    rows.innerHTML = '';
+    current.forEach(function(line){
+      var original = Object.keys(edits).filter(function(k){ return edits[k] === line; })[0] || line;
+      var row = document.createElement('div');
+      row.className = 'consoleCommandRow';
+      row.setAttribute('data-command', original);
+      var code = document.createElement('code');
+      code.textContent = line;
+      var actions = document.createElement('div');
+      actions.className = 'consoleCommandActions';
+      var edit = document.createElement('button');
+      edit.type = 'button';
+      edit.textContent = 'Edit';
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.textContent = 'Remove';
+      actions.appendChild(edit);
+      actions.appendChild(remove);
+      row.appendChild(code);
+      row.appendChild(actions);
+      rows.appendChild(row);
+      edit.addEventListener('click', function(){
+        startEdit(row, original, line);
+      });
+      remove.addEventListener('click', function(){
+        removed[original] = true;
+        delete edits[original];
+        refresh();
+      });
+    });
+  }
+  function startEdit(row, original, current){
+    row.innerHTML = '';
+    var input = document.createElement('input');
+    input.className = 'consoleCommandEdit';
+    input.value = current;
+    var actions = document.createElement('div');
+    actions.className = 'consoleCommandActions';
+    actions.style.opacity = '1';
+    var save = document.createElement('button');
+    save.type = 'button';
+    save.textContent = 'Save';
+    var cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.textContent = 'Cancel';
+    actions.appendChild(save);
+    actions.appendChild(cancel);
+    row.appendChild(input);
+    row.appendChild(actions);
+    input.focus();
+    input.select();
+    function commit(){
+      var next = input.value.trim();
+      if (next && next !== original) edits[original] = next;
+      else delete edits[original];
+      delete removed[original];
+      refresh();
+    }
+    save.addEventListener('click', commit);
+    cancel.addEventListener('click', renderRows);
+    input.addEventListener('keydown', function(ev){
+      if (ev.key === 'Enter'){ ev.preventDefault(); commit(); }
+      if (ev.key === 'Escape'){ ev.preventDefault(); renderRows(); }
+    });
+  }
+  function refresh(){
+    try{
+      if (window.TaskCanvasCommands && typeof window.TaskCanvasCommands.runtimeCommandText === 'function'){
+        setTextarea(window.TaskCanvasCommands.runtimeCommandText(window, {short:true}));
+      } else if (typeof window.buildCommands === 'function') {
+        setTextarea(applyOverridesText(window.buildCommands()));
+      }
+    }catch(_){}
+    renderRows();
+    try{ if (window.TaskCanvasReview && typeof window.TaskCanvasReview.render === 'function') window.TaskCanvasReview.render(); }catch(_){}
+  }
+  function scheduleRender(){
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(function(){
+      var ta = document.getElementById('consoleText');
+      if (ta) ta.value = applyOverridesText(ta.value);
+      renderRows();
+    }, 80);
+  }
+  function wrapCommandCore(){
+    var api = window.TaskCanvasCommands;
+    if (!api || api.__consoleEditorWrapped) return false;
+    var origBuild = api.build;
+    var origRuntime = api.runtimeCommandText;
+    if (typeof origBuild === 'function'){
+      api.build = function(){
+        return applyOverridesBuilt(origBuild.apply(this, arguments));
+      };
+    }
+    if (typeof origRuntime === 'function'){
+      api.runtimeCommandText = function(){
+        return applyOverridesText(origRuntime.apply(this, arguments));
+      };
+    }
+    api.__consoleEditorWrapped = true;
+    return true;
+  }
+  function wrapUpdate(){
+    if (typeof window.updateConsole !== 'function' || window.updateConsole.__consoleEditorWrapped) return;
+    var orig = window.updateConsole;
+    window.updateConsole = function(){
+      var rv = orig.apply(this, arguments);
+      scheduleRender();
+      return rv;
+    };
+    window.updateConsole.__consoleEditorWrapped = true;
+  }
+  function boot(){
+    wrapCommandCore();
+    wrapUpdate();
+    ensureRows();
+    scheduleRender();
+  }
+  window.TaskCanvasConsoleEditor = {
+    edit: function(original, replacement){ if (replacement) edits[original] = replacement; else delete edits[original]; refresh(); },
+    remove: function(original){ removed[original] = true; delete edits[original]; refresh(); },
+    reset: function(){ edits = Object.create(null); removed = Object.create(null); refresh(); },
+    applyText: applyOverridesText,
+    render: renderRows,
+    state: function(){ return {edits:Object.assign({}, edits), removed:Object.assign({}, removed)}; }
+  };
+  window.addEventListener('load', function(){ setTimeout(boot, 120); });
+  document.addEventListener('twdata', function(){ setTimeout(boot, 0); });
+})();</script>

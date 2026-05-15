@@ -630,6 +630,70 @@ window.addEventListener('load', function(){
         self.assertIn("task add 'Build branch with details'", result["lines"])
         self.assertFalse(result["ignorePresent"])
 
+    def test_console_editor_edits_and_removes_commands_across_updates(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CONSOLE_EDITOR_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var a = window.TaskCanvasNotes.createNote(180, 240, "First task", "");
+      var b = window.TaskCanvasNotes.createNote(440, 240, "Second task", "");
+      window.TaskCanvasNotes.selectNote(a.id);
+      window.TaskCanvasNotes.selectNote(b.id, true);
+      window.TaskCanvasNotes.stageSelectedNotesAsTasks();
+      setTimeout(function(){
+        var rows = document.querySelectorAll('#consoleRows .consoleCommandRow');
+        rows[0].querySelector('button').click();
+        var input = rows[0].querySelector('.consoleCommandEdit');
+        input.value = "task add Edited first +next";
+        rows[0].querySelectorAll('button')[0].click();
+        setTimeout(function(){
+          var rows2 = document.querySelectorAll('#consoleRows .consoleCommandRow');
+          rows2[1].querySelectorAll('button')[1].click();
+          if (typeof updateConsole === 'function') updateConsole();
+          setTimeout(function(){
+            var text = (document.getElementById('consoleText') || {}).value || "";
+            var review = window.TaskCanvasReview.current();
+            var out = {
+              rowCount: document.querySelectorAll('#consoleRows .consoleCommandRow').length,
+              text: text,
+              reviewText: review.text,
+              reviewNewTasks: review.groups.newTasks.length,
+              stateEdits: Object.keys(window.TaskCanvasConsoleEditor.state().edits).length,
+              stateRemoved: Object.keys(window.TaskCanvasConsoleEditor.state().removed).length
+            };
+            var pre = document.createElement('pre');
+            pre.id = 'e2e-out';
+            pre.textContent = JSON.stringify(out);
+            document.body.appendChild(pre);
+          }, 220);
+        }, 120);
+      }, 180);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 800);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["rowCount"], 1)
+        self.assertEqual(result["text"], "task add Edited first +next")
+        self.assertEqual(result["reviewText"], "task add Edited first +next")
+        self.assertEqual(result["reviewNewTasks"], 1)
+        self.assertEqual(result["stateEdits"], 1)
+        self.assertEqual(result["stateRemoved"], 1)
+
     def test_canvas_notes_runtime_creates_child_branches_and_reflows_map(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

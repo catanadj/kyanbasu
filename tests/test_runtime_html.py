@@ -36,6 +36,8 @@ class TestRuntimeHtml(unittest.TestCase):
             'id="FEATURE_REVIEW_CHANGES_V1"',
             'id="FEATURE_CANVAS_NOTES_V1_CSS"',
             'id="FEATURE_CANVAS_NOTES_V1"',
+            'id="FEATURE_CONSOLE_EDITOR_V1_CSS"',
+            'id="FEATURE_CONSOLE_EDITOR_V1"',
             "__ENERGY_ARROW_CSS__",
             "__ONLY_DEPS_CONSOLE_CSS__",
             "__FIXPACK_V61__",
