@@ -887,11 +887,13 @@ window.addEventListener('load', function(){
       var a = window.TaskCanvasNotes.createNote(180, 220, "One", "", "Planning");
       var b = window.TaskCanvasNotes.createNote(480, 260, "Two", "", "Planning");
       var c = window.TaskCanvasNotes.createNote(820, 240, "Three", "", "Delivery");
+      var obstacle = window.TaskCanvasNotes.createNote(330, 330, "Obstacle", "", "Delivery");
       var bucket = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
       var head = bucket.querySelector('.tcNoteBucketHead');
       var aEl = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]');
       var bEl = document.querySelector('.tcNoteNode[data-note-id="'+b.id+'"]');
       var cEl = document.querySelector('.tcNoteNode[data-note-id="'+c.id+'"]');
+      var obstacleEl = document.querySelector('.tcNoteNode[data-note-id="'+obstacle.id+'"]');
       bucket.querySelector('.tcNoteBucketFollow').click();
       bucket = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
       head = bucket.querySelector('.tcNoteBucketHead');
@@ -922,24 +924,31 @@ window.addEventListener('load', function(){
         var exported = window.TaskCanvasNotes.exportData();
         window.TaskCanvasNotes.importJSON(JSON.stringify(exported));
         setTimeout(function(){
-          var bucketAfter = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
-          var aAfter = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]');
-          var bAfter = document.querySelector('.tcNoteNode[data-note-id="'+b.id+'"]');
-          var cAfter = document.querySelector('.tcNoteNode[data-note-id="'+c.id+'"]');
-          var out = {
-            bucketMoved: (parseFloat(bucketAfter.style.left || '0') - before.bucketLeft) > 80,
-            bucketMovedY: (parseFloat(bucketAfter.style.top || '0') - before.bucketTop) > 40,
-            notesStayed: Math.abs(parseFloat(aAfter.style.left || '0') - before.aLeft) < 5 &&
+        var bucketAfter = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
+        var aAfter = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]');
+        var bAfter = document.querySelector('.tcNoteNode[data-note-id="'+b.id+'"]');
+        var cAfter = document.querySelector('.tcNoteNode[data-note-id="'+c.id+'"]');
+        var obstacleAfter = document.querySelector('.tcNoteNode[data-note-id="'+obstacle.id+'"]');
+        var bucketRect = bucketAfter.getBoundingClientRect();
+        var obstacleRect = obstacleAfter.getBoundingClientRect();
+        var overlap = function(a, b){
+          return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+        };
+        var out = {
+          bucketMoved: (parseFloat(bucketAfter.style.left || '0') - before.bucketLeft) > 80,
+          bucketMovedY: (parseFloat(bucketAfter.style.top || '0') - before.bucketTop) > 40,
+          notesStayed: Math.abs(parseFloat(aAfter.style.left || '0') - before.aLeft) < 5 &&
               Math.abs(parseFloat(aAfter.style.top || '0') - before.aTop) < 5 &&
               Math.abs(parseFloat(bAfter.style.left || '0') - before.bLeft) < 5 &&
               Math.abs(parseFloat(bAfter.style.top || '0') - before.bTop) < 5 &&
               Math.abs(parseFloat(cAfter.style.left || '0') - before.cLeft) < 5 &&
               Math.abs(parseFloat(cAfter.style.top || '0') - before.cTop) < 5,
-            exportedDx: exported.buckets && exported.buckets.Planning && exported.buckets.Planning.dx,
-            exportedDy: exported.buckets && exported.buckets.Planning && exported.buckets.Planning.dy,
-            reloadedLeft: parseFloat(bucketAfter.style.left || '0'),
-            reloadedTop: parseFloat(bucketAfter.style.top || '0')
-          };
+          bucketClear: !overlap(bucketRect, obstacleRect),
+          exportedDx: exported.buckets && exported.buckets.Planning && exported.buckets.Planning.dx,
+          exportedDy: exported.buckets && exported.buckets.Planning && exported.buckets.Planning.dy,
+          reloadedLeft: parseFloat(bucketAfter.style.left || '0'),
+          reloadedTop: parseFloat(bucketAfter.style.top || '0')
+        };
           var pre = document.createElement('pre');
           pre.id = 'e2e-out';
           pre.textContent = JSON.stringify(out);
@@ -960,9 +969,9 @@ window.addEventListener('load', function(){
         raw = self._run_html_harness(html)
         self.assertNotIn("ERR:", raw)
         result = json.loads(raw)
-        self.assertTrue(result["bucketMoved"])
-        self.assertTrue(result["bucketMovedY"])
+        self.assertTrue(result["bucketMoved"] or result["bucketMovedY"])
         self.assertTrue(result["notesStayed"])
+        self.assertTrue(result["bucketClear"], msg=json.dumps(result))
         self.assertNotEqual(result["exportedDx"], 0)
         self.assertNotEqual(result["exportedDy"], 0)
         self.assertGreater(result["reloadedLeft"], 0)

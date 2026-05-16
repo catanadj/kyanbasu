@@ -327,6 +327,39 @@
     }
     return h >>> 0;
   }
+  function overlapSpan(aStart, aEnd, bStart, bEnd){
+    return aStart < bEnd && aEnd > bStart;
+  }
+  function chooseDirectionalNudge(rect, obstacles){
+    var right = 0, left = 0, down = 0, up = 0;
+    var canMoveX = false, canMoveY = false;
+    obstacles.forEach(function(n){
+      if (overlapSpan(rect.y, rect.y + rect.h, n.y, n.y + n.h)){
+        canMoveX = true;
+        right = Math.max(right, (n.x + n.w + 18) - rect.x);
+        left = Math.min(left, n.x - 18 - (rect.x + rect.w));
+      }
+      if (overlapSpan(rect.x, rect.x + rect.w, n.x, n.x + n.w)){
+        canMoveY = true;
+        down = Math.max(down, (n.y + n.h + 18) - rect.y);
+        up = Math.min(up, n.y - 18 - (rect.y + rect.h));
+      }
+    });
+    var candidates = [];
+    if (canMoveX && right > 0) candidates.push({dx: Math.ceil(right), dy: 0});
+    if (canMoveX && left < 0) candidates.push({dx: Math.floor(left), dy: 0});
+    if (canMoveY && down > 0) candidates.push({dx: 0, dy: Math.ceil(down)});
+    if (canMoveY && up < 0) candidates.push({dx: 0, dy: Math.floor(up)});
+    if (!candidates.length) return null;
+    candidates.sort(function(a, b){
+      var as = Math.abs(a.dx) + Math.abs(a.dy);
+      var bs = Math.abs(b.dx) + Math.abs(b.dy);
+      if (as !== bs) return as - bs;
+      if (Math.abs(a.dy) !== Math.abs(b.dy)) return Math.abs(a.dy) - Math.abs(b.dy);
+      return Math.abs(a.dx) - Math.abs(b.dx);
+    });
+    return candidates[0];
+  }
   function resolveNoteOverlaps(){
     var items = [];
     qsa('.tcNoteNode').forEach(function(el){
@@ -388,6 +421,45 @@
         }
       }
       if (!moved) break;
+    }
+    return changed;
+  }
+  function settleBucketAgainstNotes(bucket){
+    bucket = bucketText(bucket);
+    var g = bucketBounds(bucket);
+    if (!g) return false;
+    var layout = bucketLayout(bucket);
+    var rect = {
+      x: g.x + toInt(layout.dx, 0) - 22,
+      y: g.y + toInt(layout.dy, 0) - 28,
+      w: Math.max(260, (g.right - g.x) + 44),
+      h: bucketCollapsed(bucket) ? 38 : Math.max(120, (g.bottom - g.y) + 44)
+    };
+    var obstacles = [];
+    qsa('.tcNoteNode').forEach(function(el){
+      if (!el || el.style.display === 'none') return;
+      var id = el.getAttribute('data-note-id');
+      var n = noteById(id);
+      if (!n || noteBucket(n) === bucket) return;
+      obstacles.push({
+        x: toInt(n.x, 160),
+        y: toInt(n.y, 160),
+        w: el.offsetWidth || 220,
+        h: el.offsetHeight || 92
+      });
+    });
+    if (!obstacles.length) return false;
+    var changed = false;
+    var safety = 0;
+    while (safety < 12){
+      var nudge = chooseDirectionalNudge(rect, obstacles);
+      if (!nudge) break;
+      layout.dx = toInt(layout.dx, 0) + nudge.dx;
+      layout.dy = toInt(layout.dy, 0) + nudge.dy;
+      rect.x += nudge.dx;
+      rect.y += nudge.dy;
+      changed = true;
+      safety++;
     }
     return changed;
   }
@@ -491,12 +563,14 @@
     });
     document.addEventListener('mouseup', function(){
       if (!bucketDrag) return;
+      var bucket = bucketDrag.bucket;
       var follow = bucketFollowsNotes(bucketDrag.bucket);
       bucketDrag = null;
       if (follow){
         resolveNoteOverlaps();
         renderAll();
       } else {
+        settleBucketAgainstNotes(bucket);
         renderBuckets();
       }
       saveSoon();
