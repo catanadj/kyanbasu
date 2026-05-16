@@ -1570,8 +1570,8 @@ window.addEventListener('load', function(){
         var firstNote = byContent.First && byContent.First[0];
         var newNotes = notes.filter(function(n){ return root && firstNote && n.id !== root.id && n.id !== firstNote.id; });
         newNotes.sort(function(a, b){ return (a.x - b.x) || (a.y - b.y); });
-        var sibling = newNotes.filter(function(n){ return firstNote && Math.abs(n.x - firstNote.x) < 80 && Math.abs(n.y - firstNote.y) < 160; })[0] || null;
-        var child = newNotes.filter(function(n){ return firstNote && n.x > firstNote.x + 220; })[0] || null;
+        var sibling = newNotes.filter(function(n){ return firstNote && Math.abs(n.x - firstNote.x) < 80 && n.y > firstNote.y + 80; })[0] || null;
+        var child = newNotes.filter(function(n){ return firstNote && n.x > firstNote.x + 220 && Math.abs(n.y - firstNote.y) < 120; })[0] || null;
         var rootChildren = links.filter(function(l){ return l.type === 'child' && l.from === root.id; });
         var firstChildren = links.filter(function(l){ return l.type === 'child' && l.from === first.id; });
         var selected = document.querySelectorAll('.tcNoteNode.selected').length;
@@ -1581,7 +1581,7 @@ window.addEventListener('load', function(){
           childLinks: links.filter(function(l){ return l.type === 'child'; }).length,
           rootChildren: rootChildren.length,
           firstChildren: firstChildren.length,
-          siblingNear: !!(sibling && firstNote && Math.abs(sibling.y - firstNote.y) < 120),
+          siblingBelow: !!(sibling && firstNote && sibling.y > firstNote.y + 80),
           childRight: !!(child && firstNote && child.x > firstNote.x + 220),
           selected: selected,
           focusedText: !!(document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('tcNoteText')),
@@ -1611,7 +1611,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["childLinks"], 3)
         self.assertEqual(result["rootChildren"], 2)
         self.assertEqual(result["firstChildren"], 1)
-        self.assertTrue(result["siblingNear"])
+        self.assertTrue(result["siblingBelow"])
         self.assertTrue(result["childRight"])
         self.assertEqual(result["selected"], 1)
         self.assertTrue(result["focusedText"])

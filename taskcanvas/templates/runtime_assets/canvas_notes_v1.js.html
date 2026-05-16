@@ -363,7 +363,10 @@
   function findNearestOpenNoteMove(rect, obstacles, opts){
     var bounds = noteStageBounds();
     var gap = 24;
-    var verticalWeight = opts && opts.preferHorizontal ? 2.25 : 1;
+    var horizontalWeight = 1;
+    var verticalWeight = 1;
+    if (opts && opts.preferHorizontal) verticalWeight = 2.25;
+    if (opts && opts.preferVertical) horizontalWeight = 2.25;
     var xs = [rect.x, bounds.minX, Math.max(bounds.minX, bounds.maxX - rect.w)];
     var ys = [rect.y, bounds.minY, Math.max(bounds.minY, bounds.maxY - rect.h)];
     var seenX = Object.create(null);
@@ -400,7 +403,7 @@
         if (!clearAt(x, y)) return;
         var dx = x - rect.x;
         var dy = y - rect.y;
-        var dist = Math.abs(dx) + Math.abs(dy) * verticalWeight;
+        var dist = Math.abs(dx) * horizontalWeight + Math.abs(dy) * verticalWeight;
         if (!best || dist < best.dist || (dist === best.dist && Math.abs(dy) < best.absDy) || (dist === best.dist && Math.abs(dy) === best.absDy && Math.abs(dx) < best.absDx)){
           best = { dx: dx, dy: dy, dist: dist, absDx: Math.abs(dx), absDy: Math.abs(dy) };
         }
@@ -550,7 +553,7 @@
     }
     return changed;
   }
-  function placeNoteNearReference(note, reference){
+  function placeNoteNearReference(note, reference, mode){
     if (!note || !note.id) return false;
     var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(note.id)+'"]');
     if (!el || el.style.display === 'none') return false;
@@ -560,16 +563,8 @@
       w: el.offsetWidth || 220,
       h: el.offsetHeight || 92
     };
-    if (reference && isFinite(reference.x) && isFinite(reference.y)){
-      rect.x = toInt(reference.x, rect.x);
-      rect.y = toInt(reference.y, rect.y);
-      note.x = rect.x;
-      note.y = rect.y;
-      el.style.left = note.x + 'px';
-      el.style.top = note.y + 'px';
-    }
     var obstacles = noteObstacleRects(note.id).concat(noteBucketRects(noteBucket(note)));
-    var nudge = findNearestOpenNoteMove(rect, obstacles);
+    var nudge = findNearestOpenNoteMove(rect, obstacles, mode === 'down' ? { preferVertical: true } : { preferHorizontal: true });
     if (nudge){
       note.x = Math.max(0, toInt(note.x, 160) + nudge.dx);
       note.y = Math.max(0, toInt(note.y, 160) + nudge.dy);
@@ -1267,11 +1262,12 @@
     parent.collapsed = false;
     var anchor = anchorId ? noteById(anchorId) : null;
     var existing = childLinksFrom(parentId).length;
+    var childX = parent.x + 300;
     var childY = anchor ? toInt(anchor.y, parent.y + existing * 124) : parent.y + existing * 124;
-    var child = createNote(parent.x + 300, childY, title || 'New branch', body || '', noteBucket(parent), anchor ? { skipAutoLayout: true } : null);
+    var child = createNote(childX, childY, title || 'New branch', body || '', noteBucket(parent), anchor ? { skipAutoLayout: true } : null);
     links.push({from: parent.id, to: child.id, type: 'child'});
     if (anchor){
-      placeNoteNearReference(child, anchor);
+      placeNoteNearReference(child, anchor, 'right');
       renderBuckets();
       renderLinks();
     }
@@ -1284,8 +1280,19 @@
     var n = noteById(id);
     if (!n) return null;
     var parentLink = parentLinkFor(id);
-    if (parentLink) return createChildNote(parentLink.from, title, body, id);
-    var sibling = createNote(n.x + 300, n.y, title || 'New branch', body || '', noteBucket(n));
+    if (parentLink){
+      var siblingOf = noteById(parentLink.from);
+      if (!siblingOf) return null;
+      var sibling = createNote(n.x, n.y + 132, title || 'New branch', body || '', noteBucket(n), { skipAutoLayout: true });
+      links.push({from: parentLink.from, to: sibling.id, type: 'child'});
+      placeNoteNearReference(sibling, n, 'down');
+      selectNote(sibling.id);
+      focusNoteText(sibling.id);
+      saveSoon();
+      return sibling;
+    }
+    var sibling = createNote(n.x, n.y + 132, title || 'New branch', body || '', noteBucket(n), { skipAutoLayout: true });
+    placeNoteNearReference(sibling, n, 'down');
     selectNote(sibling.id);
     focusNoteText(sibling.id);
     saveSoon();
