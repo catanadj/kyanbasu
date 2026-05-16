@@ -843,8 +843,8 @@ window.addEventListener('load', function(){
         var out = {
           bucketMoved: parseFloat(bucketAfter.style.left || '0') - before.left,
           bucketMovedY: parseFloat(bucketAfter.style.top || '0') - before.top,
-          aStayed: Math.abs(notesByContent.One.x - before.aLeft) < 5 && Math.abs(notesByContent.One.y - before.aTop) < 5,
-          bStayed: Math.abs(notesByContent.Two.x - before.bLeft) < 5 && Math.abs(notesByContent.Two.y - before.bTop) < 5,
+          aMoved: Math.abs(notesByContent.One.x - before.aLeft) > 70 || Math.abs(notesByContent.One.y - before.aTop) > 40,
+          bMoved: Math.abs(notesByContent.Two.x - before.bLeft) > 70 || Math.abs(notesByContent.Two.y - before.bTop) > 40,
           cStayed: Math.abs(notesByContent.Three.x - before.cLeft) < 5 && Math.abs(notesByContent.Three.y - before.cTop) < 5,
           bucketLabel: (document.querySelector('.tcNoteBucket[data-bucket="Planning"] .tcNoteBucketTitle') || {}).textContent || ""
         };
@@ -869,8 +869,8 @@ window.addEventListener('load', function(){
         result = json.loads(raw)
         self.assertGreater(result["bucketMoved"], 80)
         self.assertGreater(result["bucketMovedY"], 40)
-        self.assertTrue(result["aStayed"])
-        self.assertTrue(result["bStayed"])
+        self.assertTrue(result["aMoved"])
+        self.assertTrue(result["bMoved"])
         self.assertTrue(result["cStayed"])
         self.assertEqual(result["bucketLabel"], "Planning")
 
@@ -892,6 +892,9 @@ window.addEventListener('load', function(){
       var aEl = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]');
       var bEl = document.querySelector('.tcNoteNode[data-note-id="'+b.id+'"]');
       var cEl = document.querySelector('.tcNoteNode[data-note-id="'+c.id+'"]');
+      bucket.querySelector('.tcNoteBucketFollow').click();
+      bucket = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
+      head = bucket.querySelector('.tcNoteBucketHead');
       var before = {
         bucketLeft: parseFloat(bucket.style.left || '0'),
         bucketTop: parseFloat(bucket.style.top || '0'),
@@ -988,7 +991,6 @@ window.addEventListener('load', function(){
         bLeft: parseFloat(beforeB.style.left || '0'),
         bTop: parseFloat(beforeB.style.top || '0')
       };
-      followBtn.click();
       bucket = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
       followBtn = bucket.querySelector('.tcNoteBucketFollow');
       head = bucket.querySelector('.tcNoteBucketHead');
@@ -1017,7 +1019,8 @@ window.addEventListener('load', function(){
             movedA: Math.abs(parseFloat(aAfter.style.left || '0') - base.aLeft) > 70 || Math.abs(parseFloat(aAfter.style.top || '0') - base.aTop) > 40,
             movedB: Math.abs(parseFloat(bAfter.style.left || '0') - base.bLeft) > 70 || Math.abs(parseFloat(bAfter.style.top || '0') - base.bTop) > 40,
             exportedFollow: exported.buckets && exported.buckets.Planning && exported.buckets.Planning.followNotes,
-            reloadedFollow: followAfter && followAfter.getAttribute('aria-pressed') === 'true'
+            reloadedFollow: followAfter && followAfter.getAttribute('aria-pressed') === 'true',
+            defaultFollow: followBtn && followBtn.getAttribute('aria-pressed') === 'true'
           };
           var pre = document.createElement('pre');
           pre.id = 'e2e-out';
@@ -1043,6 +1046,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["movedB"])
         self.assertTrue(result["exportedFollow"])
         self.assertTrue(result["reloadedFollow"])
+        self.assertTrue(result["defaultFollow"])
 
     def test_canvas_notes_rejects_overlapping_notes(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")

@@ -173,7 +173,7 @@
       var parsed = JSON.parse(raw);
       bucketFollowState = Object.create(null);
       Object.keys(parsed || {}).forEach(function(k){
-        bucketFollowState[bucketText(k)] = !!parsed[k];
+        bucketFollowState[bucketText(k)] = parsed[k] !== false;
       });
     }catch(_){ bucketFollowState = Object.create(null); }
   }
@@ -186,7 +186,7 @@
     return bucketLayoutState[bucket];
   }
   function bucketFollowsNotes(bucket){
-    return !!bucketFollowState[bucketText(bucket)];
+    return bucketFollowState[bucketText(bucket)] !== false;
   }
   function toggleBucketFollow(bucket){
     bucket = bucketText(bucket);
@@ -1086,7 +1086,7 @@
         dx: toInt(layout.dx, 0),
         dy: toInt(layout.dy, 0),
         collapsed: !!bucketUiState[bucket],
-        followNotes: !!bucketFollowState[bucket]
+        followNotes: bucketFollowsNotes(bucket)
       };
     });
     return {
@@ -1144,7 +1144,7 @@
           dx: toInt(entry.dx, 0),
           dy: toInt(entry.dy, 0)
         };
-        bucketFollowState[bucket] = !!entry.followNotes;
+        bucketFollowState[bucket] = entry.followNotes !== false;
       });
     }
     selectedNoteId = null;
