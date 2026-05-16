@@ -14,6 +14,11 @@
   var bucketUiState = Object.create(null);
   var bucketLayoutState = Object.create(null);
   var bucketFollowState = Object.create(null);
+  var bucketColorState = Object.create(null);
+  var bucketPalette = [
+    '#5b8def', '#2fbf71', '#f2b84b', '#ec7a72', '#9b7df2',
+    '#42c5c7', '#f18ab2', '#93c85a', '#f08b3e', '#4d8bff'
+  ];
 
   function qs(s, root){ return (root || document).querySelector(s); }
   function qsa(s, root){ return Array.prototype.slice.call((root || document).querySelectorAll(s)); }
@@ -40,6 +45,9 @@
   }
   function bucketFollowKey(){
     return key() + ':bucket-follow';
+  }
+  function bucketColorKey(){
+    return key() + ':bucket-color';
   }
   function uid(){ return 'note-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7); }
   function noteById(id){
@@ -83,6 +91,10 @@
       bucketFollowState[nextBucket] = bucketFollowState[oldBucket];
       delete bucketFollowState[oldBucket];
     }
+    if (Object.prototype.hasOwnProperty.call(bucketColorState, oldBucket)){
+      bucketColorState[nextBucket] = bucketColorState[oldBucket];
+      delete bucketColorState[oldBucket];
+    }
     notes.forEach(function(n){
       if (noteBucket(n) === oldBucket){
         n.bucket = nextBucket;
@@ -93,6 +105,8 @@
       renderAll();
       saveBucketState();
       saveBucketLayoutState();
+      saveBucketFollowState();
+      saveBucketColorState();
     }
     return changed;
   }
@@ -180,6 +194,21 @@
   function saveBucketFollowState(){
     try{ localStorage.setItem(bucketFollowKey(), JSON.stringify(bucketFollowState)); }catch(_){}
   }
+  function loadBucketColorState(){
+    try{
+      var raw = localStorage.getItem(bucketColorKey());
+      if (!raw) return;
+      var parsed = JSON.parse(raw);
+      bucketColorState = Object.create(null);
+      Object.keys(parsed || {}).forEach(function(k){
+        var color = String(parsed[k] || '').trim();
+        if (color) bucketColorState[bucketText(k)] = color;
+      });
+    }catch(_){ bucketColorState = Object.create(null); }
+  }
+  function saveBucketColorState(){
+    try{ localStorage.setItem(bucketColorKey(), JSON.stringify(bucketColorState)); }catch(_){}
+  }
   function bucketLayout(bucket){
     bucket = bucketText(bucket);
     if (!bucketLayoutState[bucket]) bucketLayoutState[bucket] = {dx:0, dy:0};
@@ -194,6 +223,48 @@
     renderBuckets();
     saveBucketFollowState();
     return !!bucketFollowState[bucket];
+  }
+  function hexToRgb(hex){
+    hex = String(hex || '').replace('#', '');
+    if (hex.length === 3) hex = hex.replace(/(.)/g, '$1$1');
+    if (hex.length !== 6) return null;
+    var n = parseInt(hex, 16);
+    if (!isFinite(n)) return null;
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  function rgbaFromHex(hex, alpha){
+    var rgb = hexToRgb(hex);
+    if (!rgb) return 'rgba(242, 177, 74, ' + alpha + ')';
+    return 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + alpha + ')';
+  }
+  function bucketColorIndex(bucket){
+    return hash32(bucketText(bucket)) % bucketPalette.length;
+  }
+  function defaultBucketColor(bucket){
+    return bucketPalette[bucketColorIndex(bucket)];
+  }
+  function bucketColor(bucket){
+    bucket = bucketText(bucket);
+    if (!bucketColorState[bucket]) bucketColorState[bucket] = defaultBucketColor(bucket);
+    return bucketColorState[bucket];
+  }
+  function bucketColorVars(bucket){
+    var color = bucketColor(bucket);
+    return {
+      accent: color,
+      soft: rgbaFromHex(color, 0.14),
+      faint: rgbaFromHex(color, 0.08),
+      glow: rgbaFromHex(color, 0.28)
+    };
+  }
+  function cycleBucketColor(bucket){
+    bucket = bucketText(bucket);
+    var current = bucketColor(bucket);
+    var idx = bucketPalette.indexOf(current);
+    bucketColorState[bucket] = bucketPalette[(idx + 1) % bucketPalette.length];
+    renderAll();
+    saveBucketColorState();
+    return bucketColorState[bucket];
   }
   function normalizeNote(n){
     n = n || {};
@@ -216,6 +287,7 @@
     saveBucketState();
     saveBucketLayoutState();
     saveBucketFollowState();
+    saveBucketColorState();
   }
   function loadState(){
     try{
@@ -554,6 +626,11 @@
       st.appendChild(el);
       wireNote(el);
     }
+    var vars = bucketColorVars(noteBucket(n));
+    el.style.setProperty('--note-accent', vars.accent);
+    el.style.setProperty('--note-accent-soft', vars.soft);
+    el.style.setProperty('--note-accent-faint', vars.faint);
+    el.style.setProperty('--note-accent-glow', vars.glow);
     el.style.left = toInt(n.x, 160) + 'px';
     el.style.top = toInt(n.y, 160) + 'px';
     el.classList.toggle('collapsed', !!n.collapsed);
@@ -827,11 +904,24 @@
       box.className = 'tcNoteBucket';
       if (bucketCollapsed(bucket)) box.classList.add('collapsed');
       box.setAttribute('data-bucket', bucket);
+      var colorVars = bucketColorVars(bucket);
+      box.style.setProperty('--bucket-accent', colorVars.accent);
+      box.style.setProperty('--bucket-accent-soft', colorVars.soft);
+      box.style.setProperty('--bucket-accent-faint', colorVars.faint);
+      box.style.setProperty('--bucket-accent-glow', colorVars.glow);
       box.style.left = left + 'px';
       box.style.top = top + 'px';
       box.style.width = Math.max(260, (g.right - g.x) + 44) + 'px';
       box.style.height = bucketCollapsed(bucket) ? '38px' : Math.max(120, (g.bottom - g.y) + 44) + 'px';
-      box.innerHTML = '<div class="tcNoteBucketHead"><button type="button" class="tcNoteBucketToggle" title="Collapse bucket"></button><button type="button" class="tcNoteBucketTitle"></button><span class="tcNoteBucketCount"></span></div>';
+      box.innerHTML = '<div class="tcNoteBucketHead"><button type="button" class="tcNoteBucketColor" title="Change bucket color"></button><button type="button" class="tcNoteBucketToggle" title="Collapse bucket"></button><button type="button" class="tcNoteBucketTitle"></button><span class="tcNoteBucketCount"></span></div>';
+      var colorBtn = qs('.tcNoteBucketColor', box);
+      colorBtn.style.backgroundColor = colorVars.accent;
+      colorBtn.setAttribute('aria-label', 'Change bucket color');
+      colorBtn.addEventListener('click', function(ev){
+        ev.preventDefault();
+        ev.stopPropagation();
+        cycleBucketColor(bucket);
+      });
       var toggle = qs('.tcNoteBucketToggle', box);
       toggle.textContent = bucketCollapsed(bucket) ? '▸' : '▾';
       toggle.title = bucketCollapsed(bucket) ? 'Expand bucket' : 'Collapse bucket';
@@ -1086,7 +1176,8 @@
         dx: toInt(layout.dx, 0),
         dy: toInt(layout.dy, 0),
         collapsed: !!bucketUiState[bucket],
-        followNotes: bucketFollowsNotes(bucket)
+        followNotes: bucketFollowsNotes(bucket),
+        color: bucketColor(bucket)
       };
     });
     return {
@@ -1135,6 +1226,7 @@
     bucketUiState = Object.create(null);
     bucketLayoutState = Object.create(null);
     bucketFollowState = Object.create(null);
+    bucketColorState = Object.create(null);
     if (data.buckets && typeof data.buckets === 'object'){
       Object.keys(data.buckets).forEach(function(bucket){
         var entry = data.buckets[bucket] || {};
@@ -1145,6 +1237,7 @@
           dy: toInt(entry.dy, 0)
         };
         bucketFollowState[bucket] = entry.followNotes !== false;
+        if (entry.color) bucketColorState[bucket] = String(entry.color).trim();
       });
     }
     selectedNoteId = null;
@@ -1190,6 +1283,7 @@
     loadBucketState();
     loadBucketLayoutState();
     loadBucketFollowState();
+    loadBucketColorState();
     renderAll();
     installCanvasClick();
     installLassoSelection();

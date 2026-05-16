@@ -1048,6 +1048,68 @@ window.addEventListener('load', function(){
         self.assertTrue(result["reloadedFollow"])
         self.assertTrue(result["defaultFollow"])
 
+    def test_canvas_notes_colours_bucket_and_notes_and_persists_them(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_BUCKET_COLOR_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var a = window.TaskCanvasNotes.createNote(200, 220, "Alpha", "", "Planning");
+      window.TaskCanvasNotes.createNote(520, 260, "Beta", "", "Delivery");
+      var bucket = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
+      var note = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]');
+      var colorBtn = bucket.querySelector('.tcNoteBucketColor');
+      var initialBucket = bucket.style.getPropertyValue('--bucket-accent').trim();
+      var initialNote = note.style.getPropertyValue('--note-accent').trim();
+      colorBtn.click();
+      setTimeout(function(){
+        var bucketAfter = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
+        var noteAfter = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]');
+        var exported = window.TaskCanvasNotes.exportData();
+        window.TaskCanvasNotes.importJSON(JSON.stringify(exported));
+        setTimeout(function(){
+          var bucketReloaded = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
+          var noteReloaded = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]');
+          var out = {
+            initialBucket: initialBucket,
+            initialNote: initialNote,
+            afterBucket: bucketAfter.style.getPropertyValue('--bucket-accent').trim(),
+            afterNote: noteAfter.style.getPropertyValue('--note-accent').trim(),
+            exportedColor: exported.buckets && exported.buckets.Planning && exported.buckets.Planning.color,
+            reloadedBucket: bucketReloaded.style.getPropertyValue('--bucket-accent').trim(),
+            reloadedNote: noteReloaded.style.getPropertyValue('--note-accent').trim()
+          };
+          var pre = document.createElement('pre');
+          pre.id = 'e2e-out';
+          pre.textContent = JSON.stringify(out);
+          document.body.appendChild(pre);
+        }, 180);
+      }, 180);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["initialBucket"], result["initialNote"])
+        self.assertEqual(result["afterBucket"], result["afterNote"])
+        self.assertEqual(result["reloadedBucket"], result["reloadedNote"])
+        self.assertNotEqual(result["initialBucket"], result["afterBucket"])
+        self.assertEqual(result["afterBucket"], result["exportedColor"])
+        self.assertEqual(result["reloadedBucket"], result["afterBucket"])
+
     def test_canvas_notes_rejects_overlapping_notes(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
