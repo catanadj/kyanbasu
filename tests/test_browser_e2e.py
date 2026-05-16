@@ -1217,6 +1217,46 @@ window.addEventListener('load', function(){
         self.assertTrue(result["projectClear"], msg=json.dumps(result))
         self.assertTrue(result["taskClear"], msg=json.dumps(result))
 
+    def test_project_nearest_open_slot_prefers_close_diagonal_position(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_PROJECT_SLOT_HARNESS">
+window.addEventListener('load', function(){
+  try{
+    var rect = {x:100, y:100, w:100, h:100};
+    var obstacles = [
+      {x:180, y:100, w:60, h:60},
+      {x:100, y:180, w:60, h:60},
+      {x:248, y:100, w:60, h:60},
+      {x:100, y:248, w:60, h:60}
+    ];
+    var move = findNearestProjectMove(rect, obstacles);
+    var pre = document.createElement('pre');
+    pre.id = 'e2e-out';
+    pre.textContent = JSON.stringify({
+      dx: move && move.dx,
+      dy: move && move.dy
+    });
+    document.body.appendChild(pre);
+  }catch(e){
+    var pre2 = document.createElement('pre');
+    pre2.id = 'e2e-out';
+    pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+    document.body.appendChild(pre2);
+  }
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["dx"], -80)
+        self.assertEqual(result["dy"], -80)
+
     def test_canvas_notes_rejects_overlapping_notes(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

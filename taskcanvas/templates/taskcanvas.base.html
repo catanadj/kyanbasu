@@ -1777,8 +1777,8 @@ function resolveProjectOverlaps(){
         var A=projs[i].pa, B=projs[j].pa;
         var aRect={x:A.x,y:A.y,w:A.w,h:A.h}, bRect={x:B.x,y:B.y,w:B.w,h:B.h};
         if (!rectsOverlap(aRect,bRect)) continue;
-        var nudgeA = chooseProjectNoteNudge(aRect, [bRect]);
-        var nudgeB = chooseProjectNoteNudge(bRect, [aRect]);
+        var nudgeA = findNearestProjectMove(aRect, projectObstacleRects(projs[i].name).filter(function(r){ return r !== aRect; }));
+        var nudgeB = findNearestProjectMove(bRect, projectObstacleRects(projs[j].name).filter(function(r){ return r !== bRect; }));
         if (nudgeA && nudgeB){
           var da = Math.abs(nudgeA.dx) + Math.abs(nudgeA.dy);
           var db = Math.abs(nudgeB.dx) + Math.abs(nudgeB.dy);
@@ -1818,50 +1818,66 @@ function noteRects(){
   return rects;
 }
 
+function projectObstacleRects(excludeProject){
+  var rects = noteRects();
+  projectAreas.forEach(function(pa, name){
+    if (name === excludeProject) return;
+    rects.push({x: pa.x, y: pa.y, w: pa.w, h: pa.h});
+  });
+  return rects;
+}
+
 function overlapSpan(aStart, aEnd, bStart, bEnd){
   return aStart < bEnd && aEnd > bStart;
 }
 
-function chooseProjectNoteNudge(pa, notes){
-  var rect = {x: pa.x, y: pa.y, w: pa.w, h: pa.h};
+function findNearestProjectMove(rect, obstacles){
   var bounds = stageBounds();
-  var right = 0, left = 0, down = 0, up = 0;
-  var canMoveX = false, canMoveY = false;
+  var gap = LAYOUT.AREA_GAP;
+  var xs = [rect.x, bounds.minX, Math.max(bounds.minX, bounds.maxX - rect.w)];
+  var ys = [rect.y, bounds.minY, Math.max(bounds.minY, bounds.maxY - rect.h)];
+  var seenX = Object.create(null);
+  var seenY = Object.create(null);
+  var best = null;
 
-  notes.forEach(function(n){
-    if (overlapSpan(rect.y, rect.y + rect.h, n.y, n.y + n.h)){
-      canMoveX = true;
-      right = Math.max(right, (n.x + n.w + LAYOUT.AREA_GAP) - rect.x);
-      left = Math.min(left, n.x - LAYOUT.AREA_GAP - (rect.x + rect.w));
-    }
-    if (overlapSpan(rect.x, rect.x + rect.w, n.x, n.x + n.w)){
-      canMoveY = true;
-      down = Math.max(down, (n.y + n.h + LAYOUT.AREA_GAP) - rect.y);
-      up = Math.min(up, n.y - LAYOUT.AREA_GAP - (rect.y + rect.h));
-    }
-  });
-
-  var candidates = [];
-  function withinBounds(dx, dy){
-    return (rect.x + dx) >= bounds.minX &&
-      (rect.y + dy) >= bounds.minY &&
-      (rect.x + rect.w + dx) <= bounds.maxX &&
-      (rect.y + rect.h + dy) <= bounds.maxY;
+  function addValue(list, seen, value){
+    if (!isFinite(value)) return;
+    value = Math.round(value);
+    var key = String(value);
+    if (seen[key]) return;
+    seen[key] = true;
+    list.push(value);
   }
-  if (canMoveX && right > 0 && withinBounds(Math.ceil(right), 0)) candidates.push({dx: Math.ceil(right), dy: 0});
-  if (canMoveX && left < 0 && withinBounds(Math.floor(left), 0)) candidates.push({dx: Math.floor(left), dy: 0});
-  if (canMoveY && down > 0 && withinBounds(0, Math.ceil(down))) candidates.push({dx: 0, dy: Math.ceil(down)});
-  if (canMoveY && up < 0 && withinBounds(0, Math.floor(up))) candidates.push({dx: 0, dy: Math.floor(up)});
-  if (!candidates.length) return null;
 
-  candidates.sort(function(a, b){
-    var as = Math.abs(a.dx) + Math.abs(a.dy);
-    var bs = Math.abs(b.dx) + Math.abs(b.dy);
-    if (as !== bs) return as - bs;
-    if (Math.abs(a.dy) !== Math.abs(b.dy)) return Math.abs(a.dy) - Math.abs(b.dy);
-    return Math.abs(a.dx) - Math.abs(b.dx);
+  obstacles.forEach(function(o){
+    addValue(xs, seenX, o.x - rect.w - gap);
+    addValue(xs, seenX, o.x + o.w + gap);
+    addValue(ys, seenY, o.y - rect.h - gap);
+    addValue(ys, seenY, o.y + o.h + gap);
   });
-  return candidates[0];
+
+  function clearAt(x, y){
+    if (x < bounds.minX || y < bounds.minY || x + rect.w > bounds.maxX || y + rect.h > bounds.maxY) return false;
+    var probe = {x:x, y:y, w:rect.w, h:rect.h};
+    for (var i=0;i<obstacles.length;i++){
+      if (rectsOverlap(probe, obstacles[i])) return false;
+    }
+    return true;
+  }
+
+  xs.forEach(function(x){
+    ys.forEach(function(y){
+      if (!clearAt(x, y)) return;
+      var dx = x - rect.x;
+      var dy = y - rect.y;
+      var dist = Math.abs(dx) + Math.abs(dy);
+      if (!best || dist < best.dist || (dist === best.dist && Math.abs(dy) < best.absDy) || (dist === best.dist && Math.abs(dy) === best.absDy && Math.abs(dx) < best.absDx)){
+        best = {dx: dx, dy: dy, dist: dist, absDx: Math.abs(dx), absDy: Math.abs(dy)};
+      }
+    });
+  });
+
+  return best ? {dx: best.dx, dy: best.dy} : null;
 }
 
 function resolveProjectNoteOverlaps(){
@@ -1878,7 +1894,7 @@ function resolveProjectNoteOverlaps(){
     for (var i = 0; i < projs.length; i++){
       var item = projs[i];
       var pa = item.pa;
-      var nudge = chooseProjectNoteNudge(pa, notes);
+      var nudge = findNearestProjectMove({x:pa.x, y:pa.y, w:pa.w, h:pa.h}, projectObstacleRects(item.name));
       if (nudge){
         moveWholeProject(item.name, nudge.dx, nudge.dy);
         moved = true;
