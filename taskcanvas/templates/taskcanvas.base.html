@@ -1725,9 +1725,32 @@ function resolveTagOverlaps(project){
 }
 
 /* Project-level magnetic push (between projects) */
+function stageBounds(){
+  var w = (builderStage && builderStage.offsetWidth) || 5000;
+  var h = (builderStage && builderStage.offsetHeight) || 4000;
+  return {
+    minX: 20,
+    minY: 20,
+    maxX: Math.max(20, w - 20),
+    maxY: Math.max(20, h - 20)
+  };
+}
+function clampProjectPosition(pa, x, y){
+  var b = stageBounds();
+  var maxX = Math.max(b.minX, b.maxX - pa.w);
+  var maxY = Math.max(b.minY, b.maxY - pa.h);
+  return {
+    x: Math.max(b.minX, Math.min(x, maxX)),
+    y: Math.max(b.minY, Math.min(y, maxY))
+  };
+}
 function moveWholeProject(project, dx, dy){
   var pa = projectAreas.get(project); if (!pa) return;
-  pa.x += dx; pa.y += dy;
+  var pos = clampProjectPosition(pa, pa.x + dx, pa.y + dy);
+  dx = pos.x - pa.x;
+  dy = pos.y - pa.y;
+  if (!dx && !dy) return;
+  pa.x = pos.x; pa.y = pos.y;
   if (pa.el){ pa.el.style.left=(pa.x|0)+"px"; pa.el.style.top=(pa.y|0)+"px"; }
   if (pa.labelEl){ pa.labelEl.style.left=((pa.x + 14)|0)+"px"; pa.labelEl.style.top=((pa.y + 14)|0)+"px"; }
   // move children tags and their nodes
@@ -1754,13 +1777,25 @@ function resolveProjectOverlaps(){
         var A=projs[i].pa, B=projs[j].pa;
         var aRect={x:A.x,y:A.y,w:A.w,h:A.h}, bRect={x:B.x,y:B.y,w:B.w,h:B.h};
         if (!rectsOverlap(aRect,bRect)) continue;
-        // push the lower one down
-        var targetIdx = (A.y <= B.y) ? j : i;
-        var otherIdx  = (targetIdx===j) ? i : j;
-        var target = projs[targetIdx]; var other = projs[otherIdx];
-        var newY = other.pa.y + other.pa.h + LAYOUT.AREA_GAP;
-        var dy = newY - target.pa.y; if (dy<=0) dy = other.pa.h/2 + LAYOUT.AREA_GAP;
-        moveWholeProject(target.name, 0, dy);
+        var nudgeA = chooseProjectNoteNudge(aRect, [bRect]);
+        var nudgeB = chooseProjectNoteNudge(bRect, [aRect]);
+        if (nudgeA && nudgeB){
+          var da = Math.abs(nudgeA.dx) + Math.abs(nudgeA.dy);
+          var db = Math.abs(nudgeB.dx) + Math.abs(nudgeB.dy);
+          if (da <= db) moveWholeProject(projs[i].name, nudgeA.dx, nudgeA.dy);
+          else moveWholeProject(projs[j].name, nudgeB.dx, nudgeB.dy);
+        } else if (nudgeA){
+          moveWholeProject(projs[i].name, nudgeA.dx, nudgeA.dy);
+        } else if (nudgeB){
+          moveWholeProject(projs[j].name, nudgeB.dx, nudgeB.dy);
+        } else {
+          var targetIdx = (A.y <= B.y) ? j : i;
+          var otherIdx  = (targetIdx===j) ? i : j;
+          var target = projs[targetIdx]; var other = projs[otherIdx];
+          var newY = other.pa.y + other.pa.h + LAYOUT.AREA_GAP;
+          var dy = newY - target.pa.y; if (dy<=0) dy = other.pa.h/2 + LAYOUT.AREA_GAP;
+          moveWholeProject(target.name, 0, dy);
+        }
         changed=true;
       }
     }
@@ -1789,6 +1824,7 @@ function overlapSpan(aStart, aEnd, bStart, bEnd){
 
 function chooseProjectNoteNudge(pa, notes){
   var rect = {x: pa.x, y: pa.y, w: pa.w, h: pa.h};
+  var bounds = stageBounds();
   var right = 0, left = 0, down = 0, up = 0;
   var canMoveX = false, canMoveY = false;
 
@@ -1806,10 +1842,16 @@ function chooseProjectNoteNudge(pa, notes){
   });
 
   var candidates = [];
-  if (canMoveX && right > 0) candidates.push({dx: Math.ceil(right), dy: 0});
-  if (canMoveX && left < 0) candidates.push({dx: Math.floor(left), dy: 0});
-  if (canMoveY && down > 0) candidates.push({dx: 0, dy: Math.ceil(down)});
-  if (canMoveY && up < 0) candidates.push({dx: 0, dy: Math.floor(up)});
+  function withinBounds(dx, dy){
+    return (rect.x + dx) >= bounds.minX &&
+      (rect.y + dy) >= bounds.minY &&
+      (rect.x + rect.w + dx) <= bounds.maxX &&
+      (rect.y + rect.h + dy) <= bounds.maxY;
+  }
+  if (canMoveX && right > 0 && withinBounds(Math.ceil(right), 0)) candidates.push({dx: Math.ceil(right), dy: 0});
+  if (canMoveX && left < 0 && withinBounds(Math.floor(left), 0)) candidates.push({dx: Math.floor(left), dy: 0});
+  if (canMoveY && down > 0 && withinBounds(0, Math.ceil(down))) candidates.push({dx: 0, dy: Math.ceil(down)});
+  if (canMoveY && up < 0 && withinBounds(0, Math.floor(up))) candidates.push({dx: 0, dy: Math.floor(up)});
   if (!candidates.length) return null;
 
   candidates.sort(function(a, b){

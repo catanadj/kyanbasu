@@ -1175,21 +1175,24 @@ window.addEventListener('load', function(){
     try{
       window.TaskCanvasNotes.createNote(-180, 20, "Note block", "", "Planning");
       addToBuilder(TASKS[0], null, null);
-      setTimeout(function(){
-        var note = document.querySelector('.tcNoteNode');
-        var proj = document.querySelector('.projArea[data-proj="Alpha"]');
-        var task = document.querySelector('.node[data-short="task-1"]');
-        var nr = note.getBoundingClientRect();
-        var pr = proj.getBoundingClientRect();
-        var tr = task.getBoundingClientRect();
-        var overlap = function(a, b){
-          return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
-        };
-        var out = {
-          projectMovedSideways: Math.abs(pr.top - nr.top) <= 1 && (pr.right <= nr.left - 5 || pr.left >= nr.right + 5),
-          projectClear: !overlap(nr, pr),
-          taskClear: !overlap(nr, tr)
-        };
+        setTimeout(function(){
+          var note = document.querySelector('.tcNoteNode');
+          var proj = document.querySelector('.projArea[data-proj="Alpha"]');
+          var task = document.querySelector('.node[data-short="task-1"]');
+          var stage = document.getElementById('builderStage');
+          var nr = note.getBoundingClientRect();
+          var pr = proj.getBoundingClientRect();
+          var sr = stage.getBoundingClientRect();
+          var tr = task.getBoundingClientRect();
+          var overlap = function(a, b){
+            return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+          };
+          var out = {
+            projectMovedSideways: Math.abs(pr.top - nr.top) <= 1 && (pr.right <= nr.left - 5 || pr.left >= nr.right + 5),
+            projectInBounds: pr.left >= sr.left - 1 && pr.top >= sr.top - 1 && pr.right <= sr.right + 1 && pr.bottom <= sr.bottom + 1,
+            projectClear: !overlap(nr, pr),
+            taskClear: !overlap(nr, tr)
+          };
         var pre = document.createElement('pre');
         pre.id = 'e2e-out';
         pre.textContent = JSON.stringify(out);
@@ -1210,6 +1213,7 @@ window.addEventListener('load', function(){
         self.assertNotIn("ERR:", raw)
         result = json.loads(raw)
         self.assertTrue(result["projectMovedSideways"], msg=json.dumps(result))
+        self.assertTrue(result["projectInBounds"], msg=json.dumps(result))
         self.assertTrue(result["projectClear"], msg=json.dumps(result))
         self.assertTrue(result["taskClear"], msg=json.dumps(result))
 
