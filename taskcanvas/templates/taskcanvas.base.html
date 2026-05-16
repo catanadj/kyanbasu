@@ -1783,6 +1783,45 @@ function noteRects(){
   return rects;
 }
 
+function overlapSpan(aStart, aEnd, bStart, bEnd){
+  return aStart < bEnd && aEnd > bStart;
+}
+
+function chooseProjectNoteNudge(pa, notes){
+  var rect = {x: pa.x, y: pa.y, w: pa.w, h: pa.h};
+  var right = 0, left = 0, down = 0, up = 0;
+  var canMoveX = false, canMoveY = false;
+
+  notes.forEach(function(n){
+    if (overlapSpan(rect.y, rect.y + rect.h, n.y, n.y + n.h)){
+      canMoveX = true;
+      right = Math.max(right, (n.x + n.w + LAYOUT.AREA_GAP) - rect.x);
+      left = Math.min(left, n.x - LAYOUT.AREA_GAP - (rect.x + rect.w));
+    }
+    if (overlapSpan(rect.x, rect.x + rect.w, n.x, n.x + n.w)){
+      canMoveY = true;
+      down = Math.max(down, (n.y + n.h + LAYOUT.AREA_GAP) - rect.y);
+      up = Math.min(up, n.y - LAYOUT.AREA_GAP - (rect.y + rect.h));
+    }
+  });
+
+  var candidates = [];
+  if (canMoveX && right > 0) candidates.push({dx: Math.ceil(right), dy: 0});
+  if (canMoveX && left < 0) candidates.push({dx: Math.floor(left), dy: 0});
+  if (canMoveY && down > 0) candidates.push({dx: 0, dy: Math.ceil(down)});
+  if (canMoveY && up < 0) candidates.push({dx: 0, dy: Math.floor(up)});
+  if (!candidates.length) return null;
+
+  candidates.sort(function(a, b){
+    var as = Math.abs(a.dx) + Math.abs(a.dy);
+    var bs = Math.abs(b.dx) + Math.abs(b.dy);
+    if (as !== bs) return as - bs;
+    if (Math.abs(a.dy) !== Math.abs(b.dy)) return Math.abs(a.dy) - Math.abs(b.dy);
+    return Math.abs(a.dx) - Math.abs(b.dx);
+  });
+  return candidates[0];
+}
+
 function resolveProjectNoteOverlaps(){
   var notes = noteRects();
   if (!notes.length) return false;
@@ -1797,15 +1836,9 @@ function resolveProjectNoteOverlaps(){
     for (var i = 0; i < projs.length; i++){
       var item = projs[i];
       var pa = item.pa;
-      var rect = {x:pa.x, y:pa.y, w:pa.w, h:pa.h};
-      var push = 0;
-      for (var j = 0; j < notes.length; j++){
-        var n = notes[j];
-        if (!rectsOverlap(rect, n)) continue;
-        push = Math.max(push, (n.y + n.h + LAYOUT.AREA_GAP) - pa.y);
-      }
-      if (push > 0){
-        moveWholeProject(item.name, 0, push);
+      var nudge = chooseProjectNoteNudge(pa, notes);
+      if (nudge){
+        moveWholeProject(item.name, nudge.dx, nudge.dy);
         moved = true;
         changed = true;
         notes = noteRects();

@@ -1125,7 +1125,7 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      window.TaskCanvasNotes.createNote(24, 24, "Note block", "", "Planning");
+      window.TaskCanvasNotes.createNote(-180, 20, "Note block", "", "Planning");
       addToBuilder(TASKS[0], null, null);
       setTimeout(function(){
         var note = document.querySelector('.tcNoteNode');
@@ -1138,7 +1138,7 @@ window.addEventListener('load', function(){
           return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
         };
         var out = {
-          projectMoved: Math.abs(pr.left - 20) > 5 || Math.abs(pr.top - 20) > 5,
+          projectMovedSideways: Math.abs(pr.top - nr.top) <= 1 && (pr.right <= nr.left - 5 || pr.left >= nr.right + 5),
           projectClear: !overlap(nr, pr),
           taskClear: !overlap(nr, tr)
         };
@@ -1161,9 +1161,9 @@ window.addEventListener('load', function(){
         raw = self._run_html_harness(html)
         self.assertNotIn("ERR:", raw)
         result = json.loads(raw)
-        self.assertTrue(result["projectMoved"])
-        self.assertTrue(result["projectClear"])
-        self.assertTrue(result["taskClear"])
+        self.assertTrue(result["projectMovedSideways"], msg=json.dumps(result))
+        self.assertTrue(result["projectClear"], msg=json.dumps(result))
+        self.assertTrue(result["taskClear"], msg=json.dumps(result))
 
     def test_canvas_notes_rejects_overlapping_notes(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
