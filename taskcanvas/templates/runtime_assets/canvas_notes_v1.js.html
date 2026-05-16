@@ -13,6 +13,7 @@
   var bucketDrag = null;
   var bucketUiState = Object.create(null);
   var bucketLayoutState = Object.create(null);
+  var bucketFollowState = Object.create(null);
 
   function qs(s, root){ return (root || document).querySelector(s); }
   function qsa(s, root){ return Array.prototype.slice.call((root || document).querySelectorAll(s)); }
@@ -36,6 +37,9 @@
   }
   function bucketLayoutKey(){
     return key() + ':bucket-layout';
+  }
+  function bucketFollowKey(){
+    return key() + ':bucket-follow';
   }
   function uid(){ return 'note-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7); }
   function noteById(id){
@@ -74,6 +78,10 @@
     if (Object.prototype.hasOwnProperty.call(bucketLayoutState, oldBucket)){
       bucketLayoutState[nextBucket] = bucketLayoutState[oldBucket];
       delete bucketLayoutState[oldBucket];
+    }
+    if (Object.prototype.hasOwnProperty.call(bucketFollowState, oldBucket)){
+      bucketFollowState[nextBucket] = bucketFollowState[oldBucket];
+      delete bucketFollowState[oldBucket];
     }
     notes.forEach(function(n){
       if (noteBucket(n) === oldBucket){
@@ -158,10 +166,34 @@
   function saveBucketLayoutState(){
     try{ localStorage.setItem(bucketLayoutKey(), JSON.stringify(bucketLayoutState)); }catch(_){}
   }
+  function loadBucketFollowState(){
+    try{
+      var raw = localStorage.getItem(bucketFollowKey());
+      if (!raw) return;
+      var parsed = JSON.parse(raw);
+      bucketFollowState = Object.create(null);
+      Object.keys(parsed || {}).forEach(function(k){
+        bucketFollowState[bucketText(k)] = !!parsed[k];
+      });
+    }catch(_){ bucketFollowState = Object.create(null); }
+  }
+  function saveBucketFollowState(){
+    try{ localStorage.setItem(bucketFollowKey(), JSON.stringify(bucketFollowState)); }catch(_){}
+  }
   function bucketLayout(bucket){
     bucket = bucketText(bucket);
     if (!bucketLayoutState[bucket]) bucketLayoutState[bucket] = {dx:0, dy:0};
     return bucketLayoutState[bucket];
+  }
+  function bucketFollowsNotes(bucket){
+    return !!bucketFollowState[bucketText(bucket)];
+  }
+  function toggleBucketFollow(bucket){
+    bucket = bucketText(bucket);
+    bucketFollowState[bucket] = !bucketFollowsNotes(bucket);
+    renderBuckets();
+    saveBucketFollowState();
+    return !!bucketFollowState[bucket];
   }
   function normalizeNote(n){
     n = n || {};
@@ -183,6 +215,7 @@
     try{ localStorage.setItem(key(), JSON.stringify({notes:notes, links:links})); }catch(_){}
     saveBucketState();
     saveBucketLayoutState();
+    saveBucketFollowState();
   }
   function loadState(){
     try{
@@ -352,7 +385,11 @@
         sy: ev.clientY,
         left: toInt(bucketEl.style.left, bounds.x),
         top: toInt(bucketEl.style.top, bounds.y),
-        bounds: bounds
+        bounds: bounds,
+        items: bucketNotes(bucket).map(function(n){
+          var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(n.id)+'"]');
+          return el ? {n:n, el:el, x:toInt(n.x, 160), y:toInt(n.y, 160)} : null;
+        }).filter(Boolean)
       };
       ev.preventDefault();
       ev.stopPropagation();
@@ -362,15 +399,34 @@
       var scale = window.ZSCALE || 1;
       var dx = (ev.clientX - bucketDrag.sx) / scale;
       var dy = (ev.clientY - bucketDrag.sy) / scale;
-      var layout = bucketLayout(bucketDrag.bucket);
-      layout.dx = (bucketDrag.left + dx) - bucketDrag.bounds.x;
-      layout.dy = (bucketDrag.top + dy) - bucketDrag.bounds.y;
+      if (bucketFollowsNotes(bucketDrag.bucket)){
+        bucketDrag.items.forEach(function(sp){
+          var nx = Math.max(0, (sp.x + dx)|0);
+          var ny = Math.max(0, (sp.y + dy)|0);
+          var el = sp.el;
+          sp.n.x = nx;
+          sp.n.y = ny;
+          el.style.left = nx + 'px';
+          el.style.top = ny + 'px';
+        });
+      } else {
+        var layout = bucketLayout(bucketDrag.bucket);
+        layout.dx = (bucketDrag.left + dx) - bucketDrag.bounds.x;
+        layout.dy = (bucketDrag.top + dy) - bucketDrag.bounds.y;
+      }
       renderBuckets();
+      renderLinks();
     });
     document.addEventListener('mouseup', function(){
       if (!bucketDrag) return;
+      var follow = bucketFollowsNotes(bucketDrag.bucket);
       bucketDrag = null;
-      renderBuckets();
+      if (follow){
+        resolveNoteOverlaps();
+        renderAll();
+      } else {
+        renderBuckets();
+      }
       saveSoon();
     });
   }
@@ -795,6 +851,18 @@
         renameBucket(bucket, next);
         saveSoon();
       });
+      var followBtn = document.createElement('button');
+      followBtn.type = 'button';
+      followBtn.className = 'tcNoteBucketFollow';
+      followBtn.textContent = bucketFollowsNotes(bucket) ? '↔' : '⇢';
+      followBtn.title = bucketFollowsNotes(bucket) ? 'Notes move with bucket' : 'Bucket moves without notes';
+      followBtn.setAttribute('aria-pressed', bucketFollowsNotes(bucket) ? 'true' : 'false');
+      followBtn.addEventListener('click', function(ev){
+        ev.preventDefault();
+        ev.stopPropagation();
+        toggleBucketFollow(bucket);
+      });
+      qs('.tcNoteBucketHead', box).insertBefore(followBtn, qs('.tcNoteBucketCount', box));
       var count = bucketNotes(bucket).length;
       qs('.tcNoteBucketCount', box).textContent = count + ' note' + (count === 1 ? '' : 's');
       layer.appendChild(box);
@@ -1017,7 +1085,8 @@
       bucketData[bucket] = {
         dx: toInt(layout.dx, 0),
         dy: toInt(layout.dy, 0),
-        collapsed: !!bucketUiState[bucket]
+        collapsed: !!bucketUiState[bucket],
+        followNotes: !!bucketFollowState[bucket]
       };
     });
     return {
@@ -1065,6 +1134,7 @@
     links = nextLinks;
     bucketUiState = Object.create(null);
     bucketLayoutState = Object.create(null);
+    bucketFollowState = Object.create(null);
     if (data.buckets && typeof data.buckets === 'object'){
       Object.keys(data.buckets).forEach(function(bucket){
         var entry = data.buckets[bucket] || {};
@@ -1074,6 +1144,7 @@
           dx: toInt(entry.dx, 0),
           dy: toInt(entry.dy, 0)
         };
+        bucketFollowState[bucket] = !!entry.followNotes;
       });
     }
     selectedNoteId = null;
@@ -1118,6 +1189,7 @@
     loadState();
     loadBucketState();
     loadBucketLayoutState();
+    loadBucketFollowState();
     renderAll();
     installCanvasClick();
     installLassoSelection();

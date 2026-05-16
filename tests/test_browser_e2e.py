@@ -965,6 +965,85 @@ window.addEventListener('load', function(){
         self.assertGreater(result["reloadedLeft"], 0)
         self.assertGreater(result["reloadedTop"], 0)
 
+    def test_canvas_notes_follow_toggle_moves_notes_with_bucket_and_persists(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_BUCKET_FOLLOW_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var a = window.TaskCanvasNotes.createNote(180, 220, "One", "", "Planning");
+      var b = window.TaskCanvasNotes.createNote(480, 260, "Two", "", "Planning");
+      var bucket = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
+      var followBtn = bucket.querySelector('.tcNoteBucketFollow');
+      var head = bucket.querySelector('.tcNoteBucketHead');
+      var beforeA = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]');
+      var beforeB = document.querySelector('.tcNoteNode[data-note-id="'+b.id+'"]');
+      var base = {
+        aLeft: parseFloat(beforeA.style.left || '0'),
+        aTop: parseFloat(beforeA.style.top || '0'),
+        bLeft: parseFloat(beforeB.style.left || '0'),
+        bTop: parseFloat(beforeB.style.top || '0')
+      };
+      followBtn.click();
+      bucket = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
+      followBtn = bucket.querySelector('.tcNoteBucketFollow');
+      head = bucket.querySelector('.tcNoteBucketHead');
+      var r = head.getBoundingClientRect();
+      function fire(node, type, x, y){
+        node.dispatchEvent(new MouseEvent(type, {
+          bubbles:true,
+          cancelable:true,
+          button:0,
+          clientX:x,
+          clientY:y
+        }));
+      }
+      fire(head, 'mousedown', r.left + 12, r.top + 12);
+      fire(document, 'mousemove', r.left + 152, r.top + 92);
+      fire(document, 'mouseup', r.left + 152, r.top + 92);
+      setTimeout(function(){
+        var exported = window.TaskCanvasNotes.exportData();
+        window.TaskCanvasNotes.importJSON(JSON.stringify(exported));
+        setTimeout(function(){
+          var aAfter = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]');
+          var bAfter = document.querySelector('.tcNoteNode[data-note-id="'+b.id+'"]');
+          var bucketAfter = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
+          var followAfter = bucketAfter.querySelector('.tcNoteBucketFollow');
+          var out = {
+            movedA: Math.abs(parseFloat(aAfter.style.left || '0') - base.aLeft) > 70 || Math.abs(parseFloat(aAfter.style.top || '0') - base.aTop) > 40,
+            movedB: Math.abs(parseFloat(bAfter.style.left || '0') - base.bLeft) > 70 || Math.abs(parseFloat(bAfter.style.top || '0') - base.bTop) > 40,
+            exportedFollow: exported.buckets && exported.buckets.Planning && exported.buckets.Planning.followNotes,
+            reloadedFollow: followAfter && followAfter.getAttribute('aria-pressed') === 'true'
+          };
+          var pre = document.createElement('pre');
+          pre.id = 'e2e-out';
+          pre.textContent = JSON.stringify(out);
+          document.body.appendChild(pre);
+        }, 180);
+      }, 180);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["movedA"])
+        self.assertTrue(result["movedB"])
+        self.assertTrue(result["exportedFollow"])
+        self.assertTrue(result["reloadedFollow"])
+
     def test_canvas_notes_rejects_overlapping_notes(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
