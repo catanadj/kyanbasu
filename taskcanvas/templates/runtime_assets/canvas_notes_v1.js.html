@@ -424,6 +424,52 @@
     }
     return changed;
   }
+  function noteBucketRects(excludeBucket){
+    var rects = [];
+    bucketNames().forEach(function(bucket){
+      bucket = bucketText(bucket);
+      if (bucket === bucketText(excludeBucket)) return;
+      var g = bucketBounds(bucket);
+      if (!g) return;
+      var layout = bucketLayout(bucket);
+      rects.push({
+        bucket: bucket,
+        x: g.x + toInt(layout.dx, 0) - 22,
+        y: g.y + toInt(layout.dy, 0) - 28,
+        w: Math.max(260, (g.right - g.x) + 44),
+        h: bucketCollapsed(bucket) ? 38 : Math.max(120, (g.bottom - g.y) + 44)
+      });
+    });
+    return rects;
+  }
+  function settleNoteAgainstBuckets(note){
+    if (!note || !note.id) return false;
+    var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(note.id)+'"]');
+    if (!el || el.style.display === 'none') return false;
+    var rect = {
+      x: toInt(note.x, 160),
+      y: toInt(note.y, 160),
+      w: el.offsetWidth || 220,
+      h: el.offsetHeight || 92
+    };
+    var obstacles = noteBucketRects(noteBucket(note));
+    if (!obstacles.length) return false;
+    var changed = false;
+    var safety = 0;
+    while (safety < 12){
+      var nudge = chooseDirectionalNudge(rect, obstacles);
+      if (!nudge) break;
+      note.x = Math.max(0, toInt(note.x, 160) + nudge.dx);
+      note.y = Math.max(0, toInt(note.y, 160) + nudge.dy);
+      rect.x += nudge.dx;
+      rect.y += nudge.dy;
+      el.style.left = note.x + 'px';
+      el.style.top = note.y + 'px';
+      changed = true;
+      safety++;
+    }
+    return changed;
+  }
   function settleBucketAgainstNotes(bucket){
     bucket = bucketText(bucket);
     var g = bucketBounds(bucket);
@@ -681,6 +727,8 @@
     notes.push(n);
     renderNote(n);
     resolveNoteOverlaps();
+    settleNoteAgainstBuckets(n);
+    resolveNoteOverlaps();
     renderBuckets();
     selectNote(n.id);
     renderLinks();
@@ -823,6 +871,11 @@
       if (bucketChanged){
         renderAll();
       } else {
+        resolveNoteOverlaps();
+        start.forEach(function(sp){
+          var n = noteById(sp.id);
+          if (n) settleNoteAgainstBuckets(n);
+        });
         resolveNoteOverlaps();
         renderBuckets();
         renderLinks();

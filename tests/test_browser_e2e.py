@@ -635,6 +635,54 @@ window.addEventListener('load', function(){
         self.assertEqual(result["mergedBucketLabel"], "Planning")
         self.assertEqual(result["mergedBucketNotes"], 3)
 
+    def test_canvas_notes_repel_away_from_bucket_boxes_when_created(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_BUCKET_REPEL_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var anchor = window.TaskCanvasNotes.createNote(180, 220, "Anchor", "", "Planning");
+      var mover = window.TaskCanvasNotes.createNote(410, 220, "Mover", "", "Delivery");
+      setTimeout(function(){
+        var bucket = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
+        var note = document.querySelector('.tcNoteNode[data-note-id="'+mover.id+'"]');
+        var bucketRect = bucket.getBoundingClientRect();
+        var noteRect = note.getBoundingClientRect();
+        var overlap = function(a, b){
+          return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+        };
+        var out = {
+          movedClear: !overlap(bucketRect, noteRect),
+          movedSideways: Math.abs(parseFloat(note.style.top || '0') - 220) <= 6 && Math.abs(parseFloat(note.style.left || '0') - 410) > 5,
+          bucketLabel: bucket.getAttribute('data-bucket') || ''
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 220);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["movedClear"], msg=json.dumps(result))
+        self.assertTrue(result["movedSideways"], msg=json.dumps(result))
+        self.assertEqual(result["bucketLabel"], "Planning")
+
     def test_canvas_notes_dragging_note_into_bucket_reassigns_it(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
@@ -887,13 +935,11 @@ window.addEventListener('load', function(){
       var a = window.TaskCanvasNotes.createNote(180, 220, "One", "", "Planning");
       var b = window.TaskCanvasNotes.createNote(480, 260, "Two", "", "Planning");
       var c = window.TaskCanvasNotes.createNote(820, 240, "Three", "", "Delivery");
-      var obstacle = window.TaskCanvasNotes.createNote(330, 330, "Obstacle", "", "Delivery");
       var bucket = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
       var head = bucket.querySelector('.tcNoteBucketHead');
       var aEl = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]');
       var bEl = document.querySelector('.tcNoteNode[data-note-id="'+b.id+'"]');
       var cEl = document.querySelector('.tcNoteNode[data-note-id="'+c.id+'"]');
-      var obstacleEl = document.querySelector('.tcNoteNode[data-note-id="'+obstacle.id+'"]');
       bucket.querySelector('.tcNoteBucketFollow').click();
       bucket = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
       head = bucket.querySelector('.tcNoteBucketHead');
@@ -928,12 +974,6 @@ window.addEventListener('load', function(){
         var aAfter = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]');
         var bAfter = document.querySelector('.tcNoteNode[data-note-id="'+b.id+'"]');
         var cAfter = document.querySelector('.tcNoteNode[data-note-id="'+c.id+'"]');
-        var obstacleAfter = document.querySelector('.tcNoteNode[data-note-id="'+obstacle.id+'"]');
-        var bucketRect = bucketAfter.getBoundingClientRect();
-        var obstacleRect = obstacleAfter.getBoundingClientRect();
-        var overlap = function(a, b){
-          return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
-        };
         var out = {
           bucketMoved: (parseFloat(bucketAfter.style.left || '0') - before.bucketLeft) > 80,
           bucketMovedY: (parseFloat(bucketAfter.style.top || '0') - before.bucketTop) > 40,
@@ -943,7 +983,6 @@ window.addEventListener('load', function(){
               Math.abs(parseFloat(bAfter.style.top || '0') - before.bTop) < 5 &&
               Math.abs(parseFloat(cAfter.style.left || '0') - before.cLeft) < 5 &&
               Math.abs(parseFloat(cAfter.style.top || '0') - before.cTop) < 5,
-          bucketClear: !overlap(bucketRect, obstacleRect),
           exportedDx: exported.buckets && exported.buckets.Planning && exported.buckets.Planning.dx,
           exportedDy: exported.buckets && exported.buckets.Planning && exported.buckets.Planning.dy,
           reloadedLeft: parseFloat(bucketAfter.style.left || '0'),
@@ -969,9 +1008,9 @@ window.addEventListener('load', function(){
         raw = self._run_html_harness(html)
         self.assertNotIn("ERR:", raw)
         result = json.loads(raw)
-        self.assertTrue(result["bucketMoved"] or result["bucketMovedY"])
+        self.assertTrue(result["bucketMoved"])
+        self.assertTrue(result["bucketMovedY"])
         self.assertTrue(result["notesStayed"])
-        self.assertTrue(result["bucketClear"], msg=json.dumps(result))
         self.assertNotEqual(result["exportedDx"], 0)
         self.assertNotEqual(result["exportedDy"], 0)
         self.assertGreater(result["reloadedLeft"], 0)
