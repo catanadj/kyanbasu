@@ -12,6 +12,7 @@
   var lasso = null;
   var bucketDrag = null;
   var bucketUiState = Object.create(null);
+  var bucketLayoutState = Object.create(null);
 
   function qs(s, root){ return (root || document).querySelector(s); }
   function qsa(s, root){ return Array.prototype.slice.call((root || document).querySelectorAll(s)); }
@@ -32,6 +33,9 @@
   }
   function bucketStateKey(){
     return key() + ':buckets';
+  }
+  function bucketLayoutKey(){
+    return key() + ':bucket-layout';
   }
   function uid(){ return 'note-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7); }
   function noteById(id){
@@ -67,6 +71,10 @@
       bucketUiState[nextBucket] = bucketUiState[oldBucket];
       delete bucketUiState[oldBucket];
     }
+    if (Object.prototype.hasOwnProperty.call(bucketLayoutState, oldBucket)){
+      bucketLayoutState[nextBucket] = bucketLayoutState[oldBucket];
+      delete bucketLayoutState[oldBucket];
+    }
     notes.forEach(function(n){
       if (noteBucket(n) === oldBucket){
         n.bucket = nextBucket;
@@ -76,6 +84,7 @@
     if (changed){
       renderAll();
       saveBucketState();
+      saveBucketLayoutState();
     }
     return changed;
   }
@@ -131,6 +140,29 @@
   function saveBucketState(){
     try{ localStorage.setItem(bucketStateKey(), JSON.stringify(bucketUiState)); }catch(_){}
   }
+  function loadBucketLayoutState(){
+    try{
+      var raw = localStorage.getItem(bucketLayoutKey());
+      if (!raw) return;
+      var parsed = JSON.parse(raw);
+      bucketLayoutState = Object.create(null);
+      Object.keys(parsed || {}).forEach(function(k){
+        var entry = parsed[k] || {};
+        bucketLayoutState[bucketText(k)] = {
+          dx: toInt(entry.dx, 0),
+          dy: toInt(entry.dy, 0)
+        };
+      });
+    }catch(_){ bucketLayoutState = Object.create(null); }
+  }
+  function saveBucketLayoutState(){
+    try{ localStorage.setItem(bucketLayoutKey(), JSON.stringify(bucketLayoutState)); }catch(_){}
+  }
+  function bucketLayout(bucket){
+    bucket = bucketText(bucket);
+    if (!bucketLayoutState[bucket]) bucketLayoutState[bucket] = {dx:0, dy:0};
+    return bucketLayoutState[bucket];
+  }
   function normalizeNote(n){
     n = n || {};
     if (!n.id) n.id = uid();
@@ -150,6 +182,7 @@
   function saveNow(){
     try{ localStorage.setItem(key(), JSON.stringify({notes:notes, links:links})); }catch(_){}
     saveBucketState();
+    saveBucketLayoutState();
   }
   function loadState(){
     try{
@@ -278,6 +311,28 @@
     bucket = bucketText(bucket);
     return notes.filter(function(n){ return noteBucket(n) === bucket; });
   }
+  function bucketBounds(bucket){
+    bucket = bucketText(bucket);
+    var g = null;
+    notes.forEach(function(n){
+      if (noteBucket(n) !== bucket) return;
+      var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(n.id)+'"]');
+      var x = toInt(n.x, 160);
+      var y = toInt(n.y, 160);
+      var w = el && el.offsetWidth ? el.offsetWidth : 220;
+      var h = el && el.offsetHeight ? el.offsetHeight : 92;
+      if (!g){
+        g = {x:x, y:y, right:x+w, bottom:y+h};
+      } else {
+        g.x = Math.min(g.x, x);
+        g.y = Math.min(g.y, y);
+        g.right = Math.max(g.right, x + w);
+        g.bottom = Math.max(g.bottom, y + h);
+      }
+    });
+    if (!g) return null;
+    return g;
+  }
   function installBucketDragging(){
     var layer = document.getElementById('tcNoteBucketsLayer');
     if (!layer || layer.__bucketDragWired) return;
@@ -289,43 +344,34 @@
       var bucketEl = ev.target.closest('.tcNoteBucket');
       if (!bucketEl) return;
       var bucket = bucketEl.getAttribute('data-bucket') || '(no bucket)';
+      var bounds = bucketBounds(bucket);
+      if (!bounds) return;
       bucketDrag = {
         bucket: bucket,
         sx: ev.clientX,
         sy: ev.clientY,
-        items: bucketNotes(bucket).map(function(n){
-          var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(n.id)+'"]');
-          return el ? {id:n.id, n:n, el:el, x:toInt(n.x, 160), y:toInt(n.y, 160)} : null;
-        }).filter(Boolean)
+        left: toInt(bucketEl.style.left, bounds.x),
+        top: toInt(bucketEl.style.top, bounds.y),
+        bounds: bounds
       };
       ev.preventDefault();
       ev.stopPropagation();
     }, true);
     document.addEventListener('mousemove', function(ev){
-      if (!bucketDrag || !bucketDrag.items.length) return;
+      if (!bucketDrag) return;
       var scale = window.ZSCALE || 1;
       var dx = (ev.clientX - bucketDrag.sx) / scale;
       var dy = (ev.clientY - bucketDrag.sy) / scale;
-      bucketDrag.items.forEach(function(sp){
-        var nx = Math.max(0, (sp.x + dx)|0);
-        var ny = Math.max(0, (sp.y + dy)|0);
-        sp.n.x = nx;
-        sp.n.y = ny;
-        sp.el.style.left = nx + 'px';
-        sp.el.style.top = ny + 'px';
-      });
+      var layout = bucketLayout(bucketDrag.bucket);
+      layout.dx = (bucketDrag.left + dx) - bucketDrag.bounds.x;
+      layout.dy = (bucketDrag.top + dy) - bucketDrag.bounds.y;
       renderBuckets();
-      renderLinks();
     });
     document.addEventListener('mouseup', function(){
       if (!bucketDrag) return;
-      var moved = bucketDrag.items.length > 0;
       bucketDrag = null;
-      if (moved){
-        resolveNoteOverlaps();
-        renderAll();
-        saveSoon();
-      }
+      renderBuckets();
+      saveSoon();
     });
   }
   function ensureToolbar(){
@@ -715,33 +761,18 @@
     if (!layer) return;
     installBucketDragging();
     layer.innerHTML = '';
-    var groups = Object.create(null);
-    notes.forEach(function(n){
-      var bucket = noteBucket(n);
-      var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(n.id)+'"]');
-      var x = toInt(n.x, 160);
-      var y = toInt(n.y, 160);
-      var w = el && el.offsetWidth ? el.offsetWidth : 220;
-      var h = el && el.offsetHeight ? el.offsetHeight : 92;
-      var g = groups[bucket];
-      if (!g){
-        g = groups[bucket] = {x:x, y:y, right:x+w, bottom:y+h, count:0};
-      }
-      g.x = Math.min(g.x, x);
-      g.y = Math.min(g.y, y);
-      g.right = Math.max(g.right, x + w);
-      g.bottom = Math.max(g.bottom, y + h);
-      g.count++;
-    });
     bucketNames().forEach(function(bucket){
-      var g = groups[bucket];
+      var g = bucketBounds(bucket);
       if (!g) return;
+      var layout = bucketLayout(bucket);
+      var left = Math.max(0, g.x + toInt(layout.dx, 0) - 22);
+      var top = Math.max(0, g.y + toInt(layout.dy, 0) - 28);
       var box = document.createElement('div');
       box.className = 'tcNoteBucket';
       if (bucketCollapsed(bucket)) box.classList.add('collapsed');
       box.setAttribute('data-bucket', bucket);
-      box.style.left = Math.max(0, g.x - 22) + 'px';
-      box.style.top = Math.max(0, g.y - 28) + 'px';
+      box.style.left = left + 'px';
+      box.style.top = top + 'px';
       box.style.width = Math.max(260, (g.right - g.x) + 44) + 'px';
       box.style.height = bucketCollapsed(bucket) ? '38px' : Math.max(120, (g.bottom - g.y) + 44) + 'px';
       box.innerHTML = '<div class="tcNoteBucketHead"><button type="button" class="tcNoteBucketToggle" title="Collapse bucket"></button><button type="button" class="tcNoteBucketTitle"></button><span class="tcNoteBucketCount"></span></div>';
@@ -764,7 +795,8 @@
         renameBucket(bucket, next);
         saveSoon();
       });
-      qs('.tcNoteBucketCount', box).textContent = g.count + ' note' + (g.count === 1 ? '' : 's');
+      var count = bucketNotes(bucket).length;
+      qs('.tcNoteBucketCount', box).textContent = count + ' note' + (count === 1 ? '' : 's');
       layer.appendChild(box);
     });
   }
@@ -979,6 +1011,15 @@
     });
   }
   function exportData(){
+    var bucketData = {};
+    bucketNames().forEach(function(bucket){
+      var layout = bucketLayoutState[bucket] || {dx:0, dy:0};
+      bucketData[bucket] = {
+        dx: toInt(layout.dx, 0),
+        dy: toInt(layout.dy, 0),
+        collapsed: !!bucketUiState[bucket]
+      };
+    });
     return {
       kind: 'taskcanvas.notes',
       version: 1,
@@ -988,7 +1029,8 @@
       }),
       links: links.map(function(l){
         return {from:l.from, to:l.to, type:l.type || 'manual'};
-      })
+      }),
+      buckets: bucketData
     };
   }
   function exportJSON(){
@@ -1021,6 +1063,19 @@
     }) : [];
     notes = nextNotes;
     links = nextLinks;
+    bucketUiState = Object.create(null);
+    bucketLayoutState = Object.create(null);
+    if (data.buckets && typeof data.buckets === 'object'){
+      Object.keys(data.buckets).forEach(function(bucket){
+        var entry = data.buckets[bucket] || {};
+        bucket = bucketText(bucket);
+        bucketUiState[bucket] = !!entry.collapsed;
+        bucketLayoutState[bucket] = {
+          dx: toInt(entry.dx, 0),
+          dy: toInt(entry.dy, 0)
+        };
+      });
+    }
     selectedNoteId = null;
     selectedNoteIds = {};
     renderAll();
@@ -1062,6 +1117,7 @@
     ensureToolbar();
     loadState();
     loadBucketState();
+    loadBucketLayoutState();
     renderAll();
     installCanvasClick();
     installLassoSelection();
