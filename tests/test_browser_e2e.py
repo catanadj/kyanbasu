@@ -1110,6 +1110,61 @@ window.addEventListener('load', function(){
         self.assertEqual(result["afterBucket"], result["exportedColor"])
         self.assertEqual(result["reloadedBucket"], result["afterBucket"])
 
+    def test_drawer_tasks_repel_away_from_notes_when_added_to_canvas(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({
+            "tasks": [
+                {"uuid": "task-1", "short": "task-1", "desc": "Alpha task", "project": "Alpha", "tags": ["Planning"], "has_depends": False}
+            ],
+            "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}
+        })
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_DRAWER_REPEL_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      window.TaskCanvasNotes.createNote(24, 24, "Note block", "", "Planning");
+      addToBuilder(TASKS[0], null, null);
+      setTimeout(function(){
+        var note = document.querySelector('.tcNoteNode');
+        var proj = document.querySelector('.projArea[data-proj="Alpha"]');
+        var task = document.querySelector('.node[data-short="task-1"]');
+        var nr = note.getBoundingClientRect();
+        var pr = proj.getBoundingClientRect();
+        var tr = task.getBoundingClientRect();
+        var overlap = function(a, b){
+          return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+        };
+        var out = {
+          projectMoved: Math.abs(pr.left - 20) > 5 || Math.abs(pr.top - 20) > 5,
+          projectClear: !overlap(nr, pr),
+          taskClear: !overlap(nr, tr)
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 220);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["projectMoved"])
+        self.assertTrue(result["projectClear"])
+        self.assertTrue(result["taskClear"])
+
     def test_canvas_notes_rejects_overlapping_notes(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

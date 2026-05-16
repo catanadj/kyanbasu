@@ -1448,6 +1448,7 @@ function rebuildCanvasProjects(projectStates){
     if (dx || dy) moveWholeProject(projectName, dx, dy);
   }
   recomputeAreasAndTags();
+  settleCanvasAgainstNotes();
   drawLinks();
   updateConsole();
   try{ if (typeof refreshDepHandleLetters === 'function') refreshDepHandleLetters(); }catch(_){}
@@ -1764,6 +1765,66 @@ function resolveProjectOverlaps(){
       }
     }
   }
+}
+
+function noteRects(){
+  var rects = [];
+  try{
+    document.querySelectorAll('.tcNoteNode').forEach(function(el){
+      if (!el || el.style.display === 'none') return;
+      rects.push({
+        x: parseInt(el.style.left || '0', 10) || 0,
+        y: parseInt(el.style.top || '0', 10) || 0,
+        w: el.offsetWidth || 220,
+        h: el.offsetHeight || 92
+      });
+    });
+  }catch(_){}
+  return rects;
+}
+
+function resolveProjectNoteOverlaps(){
+  var notes = noteRects();
+  if (!notes.length) return false;
+  var changed = false;
+  var safety = 0;
+  while (safety < 30){
+    var moved = false;
+    var projs = [];
+    projectAreas.forEach(function(pa, name){ projs.push({name:name, pa:pa}); });
+    projs.sort(function(a,b){ return (a.pa.y - b.pa.y) || (a.pa.x - b.pa.x); });
+
+    for (var i = 0; i < projs.length; i++){
+      var item = projs[i];
+      var pa = item.pa;
+      var rect = {x:pa.x, y:pa.y, w:pa.w, h:pa.h};
+      var push = 0;
+      for (var j = 0; j < notes.length; j++){
+        var n = notes[j];
+        if (!rectsOverlap(rect, n)) continue;
+        push = Math.max(push, (n.y + n.h + LAYOUT.AREA_GAP) - pa.y);
+      }
+      if (push > 0){
+        moveWholeProject(item.name, 0, push);
+        moved = true;
+        changed = true;
+        notes = noteRects();
+      }
+    }
+    if (!moved) break;
+    safety++;
+  }
+  return changed;
+}
+
+function settleCanvasAgainstNotes(){
+  var changed = false;
+  changed = resolveProjectNoteOverlaps() || changed;
+  resolveProjectOverlaps();
+  changed = resolveProjectNoteOverlaps() || changed;
+  resolveProjectOverlaps();
+  changed = resolveProjectNoteOverlaps() || changed;
+  return changed;
 }
 
 /* ===== Relayout (no task overlap inside a tag) ===== */
@@ -2423,7 +2484,7 @@ function makeDraggable(node){
       var cy = parseInt(n.style.top ||"0",10) + (n.offsetHeight/2);
       var hit = areaAtPoint(cx, cy);
 
-      if (hit && hit.type==='tag'){
+    if (hit && hit.type==='tag'){
         var ta = hit.area;
         if (ta.project !== oldProj){
           t.project = ta.project; n.setAttribute('data-proj', t.project);
@@ -2446,6 +2507,7 @@ function makeDraggable(node){
         }
       }
     }
+    settleCanvasAgainstNotes();
     updateConsole();
     drawLinks();
     queueInspectorRender(0);
@@ -2500,6 +2562,7 @@ function onTagUp(e){
   recomputeAreasAndTags();
   relayoutTag(newProj, dragTag.tag);           // also resolves overlaps
   resolveProjectOverlaps();
+  settleCanvasAgainstNotes();
 
   dragTag = null; dragTagStart = null; dragTagNodes = null;
   updateConsole();
@@ -2550,6 +2613,7 @@ function onProjUp(e){
   document.removeEventListener('mousemove', onProjMove);
   // snap against other projects if overlapping
   resolveProjectOverlaps();
+  settleCanvasAgainstNotes();
   if (dragProjMoved) lastProjectDragAt = Date.now();
   dragProj = null; dragProjStart = null; dragProjTags = null; dragProjNodes = null; dragProjName = null;
   dragProjMoved = false;
@@ -2605,6 +2669,7 @@ function addToBuilder(task, cx, cy){
   if (x!=null && y!=null){
     relayoutTag(task.project || "(no project)", firstTag(task));
   }
+  settleCanvasAgainstNotes();
   updateConsole();
   drawLinks();
   return n;
@@ -2765,6 +2830,7 @@ function addProjectTasks(projName){
   for (var i3=0;i3<tags.length;i3++){ relayoutTag(projName, tags[i3]); }
   resolveTagOverlaps(projName);
   resolveProjectOverlaps();
+  settleCanvasAgainstNotes();
   drawLinks();
   updateConsole();
   return added;
@@ -2795,6 +2861,7 @@ function addFilteredTasks(){
     resolveTagOverlaps(p);
   });
   resolveProjectOverlaps();
+  settleCanvasAgainstNotes();
   if (skipped>0){ alert("Skipped "+skipped+" task(s) from projects not on the canvas."); }
   drawLinks();
   updateConsole();
