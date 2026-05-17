@@ -11,6 +11,7 @@
   var saveTimer = 0;
   var lasso = null;
   var bucketDrag = null;
+  var noteDragActive = false;
   var bucketUiState = Object.create(null);
   var bucketLayoutState = Object.create(null);
   var bucketFollowState = Object.create(null);
@@ -512,16 +513,8 @@
     bucketNames().forEach(function(bucket){
       bucket = bucketText(bucket);
       if (bucket === bucketText(excludeBucket)) return;
-      var g = bucketBounds(bucket);
-      if (!g) return;
-      var layout = bucketLayout(bucket);
-      rects.push({
-        bucket: bucket,
-        x: g.x + toInt(layout.dx, 0) - 22,
-        y: g.y + toInt(layout.dy, 0) - 28,
-        w: Math.max(260, (g.right - g.x) + 44),
-        h: bucketCollapsed(bucket) ? 38 : Math.max(120, (g.bottom - g.y) + 44)
-      });
+      var rect = bucketVisualRect(bucket);
+      if (rect) rects.push(rect);
     });
     return rects;
   }
@@ -699,6 +692,73 @@
     });
     if (!g) return null;
     return g;
+  }
+  function bucketVisualRect(bucket){
+    bucket = bucketText(bucket);
+    var g = bucketBounds(bucket);
+    if (!g) return null;
+    var layout = bucketLayout(bucket);
+    return {
+      bucket: bucket,
+      x: Math.max(0, g.x + toInt(layout.dx, 0) - 22),
+      y: Math.max(0, g.y + toInt(layout.dy, 0) - 28),
+      w: Math.max(260, (g.right - g.x) + 44),
+      h: bucketCollapsed(bucket) ? 38 : Math.max(120, (g.bottom - g.y) + 44)
+    };
+  }
+  function moveBucketForSeparation(bucket, dx, dy){
+    bucket = bucketText(bucket);
+    if (!dx && !dy) return false;
+    if (bucketFollowsNotes(bucket)){
+      bucketNotes(bucket).forEach(function(n){
+        var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(n.id)+'"]');
+        n.x = Math.max(0, toInt(n.x, 160) + dx);
+        n.y = Math.max(0, toInt(n.y, 160) + dy);
+        if (el){
+          el.style.left = n.x + 'px';
+          el.style.top = n.y + 'px';
+        }
+      });
+    } else {
+      var layout = bucketLayout(bucket);
+      layout.dx = toInt(layout.dx, 0) + dx;
+      layout.dy = toInt(layout.dy, 0) + dy;
+    }
+    return true;
+  }
+  function separateBucketLayouts(){
+    var rects = bucketNames().map(bucketVisualRect).filter(Boolean);
+    if (rects.length < 2) return false;
+    rects.sort(function(a, b){ return (a.y - b.y) || (a.x - b.x); });
+    var changed = false;
+    var gap = 32;
+    for (var iter = 0; iter < 20; iter++){
+      var moved = false;
+      for (var i = 0; i < rects.length; i++){
+        for (var j = i + 1; j < rects.length; j++){
+          var a = rects[i], b = rects[j];
+          if (!rectsOverlap(a, b)) continue;
+          var right = (a.x + a.w + gap) - b.x;
+          var down = (a.y + a.h + gap) - b.y;
+          var dx = 0, dy = 0;
+          if (right > 0 && down > 0){
+            if (right < down) dx = Math.ceil(right);
+            else dy = Math.ceil(down);
+          } else if (right > 0) dx = Math.ceil(right);
+          else if (down > 0) dy = Math.ceil(down);
+          if (!dx && !dy) continue;
+          if (moveBucketForSeparation(b.bucket, dx, dy)){
+            b.x += dx;
+            b.y += dy;
+            moved = true;
+            changed = true;
+          }
+        }
+      }
+      if (!moved) break;
+    }
+    if (changed) saveBucketLayoutState();
+    return changed;
   }
   function installBucketDragging(){
     var layer = document.getElementById('tcNoteBucketsLayer');
@@ -972,6 +1032,7 @@
     qs('.tcNoteHead', el).addEventListener('mousedown', function(ev){
       if (ev.button !== 0 || ev.target.closest('button')) return;
       dragging = true;
+      noteDragActive = true;
       sx = ev.clientX; sy = ev.clientY;
       var id = el.getAttribute('data-note-id');
       var additive = !!(ev.ctrlKey || ev.metaKey || ev.shiftKey);
@@ -1016,6 +1077,7 @@
           bucketChanged = true;
         }
       });
+      noteDragActive = false;
       start = [];
       if (bucketChanged){
         renderAll();
@@ -1169,13 +1231,11 @@
     var layer = ensureBucketLayer();
     if (!layer) return;
     installBucketDragging();
+    if (!bucketDrag && !noteDragActive) separateBucketLayouts();
     layer.innerHTML = '';
     bucketNames().forEach(function(bucket){
-      var g = bucketBounds(bucket);
-      if (!g) return;
-      var layout = bucketLayout(bucket);
-      var left = Math.max(0, g.x + toInt(layout.dx, 0) - 22);
-      var top = Math.max(0, g.y + toInt(layout.dy, 0) - 28);
+      var rect = bucketVisualRect(bucket);
+      if (!rect) return;
       var box = document.createElement('div');
       box.className = 'tcNoteBucket';
       if (bucketCollapsed(bucket)) box.classList.add('collapsed');
@@ -1185,10 +1245,10 @@
       box.style.setProperty('--bucket-accent-soft', colorVars.soft);
       box.style.setProperty('--bucket-accent-faint', colorVars.faint);
       box.style.setProperty('--bucket-accent-glow', colorVars.glow);
-      box.style.left = left + 'px';
-      box.style.top = top + 'px';
-      box.style.width = Math.max(260, (g.right - g.x) + 44) + 'px';
-      box.style.height = bucketCollapsed(bucket) ? '38px' : Math.max(120, (g.bottom - g.y) + 44) + 'px';
+      box.style.left = rect.x + 'px';
+      box.style.top = rect.y + 'px';
+      box.style.width = rect.w + 'px';
+      box.style.height = rect.h + 'px';
       box.innerHTML = '<div class="tcNoteBucketHead"><button type="button" class="tcNoteBucketColor" title="Change bucket color"></button><button type="button" class="tcNoteBucketToggle" title="Collapse bucket"></button><button type="button" class="tcNoteBucketTitle"></button><span class="tcNoteBucketCount"></span></div>';
       var colorBtn = qs('.tcNoteBucketColor', box);
       colorBtn.style.backgroundColor = colorVars.accent;

@@ -690,6 +690,66 @@ window.addEventListener('load', function(){
         self.assertEqual(result["mergedBucketLabel"], "Planning")
         self.assertEqual(result["mergedBucketNotes"], 3)
 
+    def test_canvas_notes_separates_overlapping_bucket_areas(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_BUCKET_SEPARATION_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      window.TaskCanvasNotes.importJSON(JSON.stringify({
+        kind:'taskcanvas.notes',
+        version:1,
+        notes:[
+          {id:'plan-note', x:220, y:240, content:'Plan', bucket:'Planning'},
+          {id:'ship-note', x:250, y:265, content:'Ship', bucket:'Delivery'}
+        ],
+        links:[],
+        buckets:{
+          Planning:{dx:0, dy:0, followNotes:true},
+          Delivery:{dx:0, dy:0, followNotes:true}
+        }
+      }));
+      setTimeout(function(){
+        var a = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
+        var b = document.querySelector('.tcNoteBucket[data-bucket="Delivery"]');
+        var deliveryNote = document.querySelector('.tcNoteNode[data-note-id="ship-note"]');
+        var ar = a.getBoundingClientRect();
+        var br = b.getBoundingClientRect();
+        var nr = deliveryNote.getBoundingClientRect();
+        var overlap = !(ar.right <= br.left || ar.left >= br.right || ar.bottom <= br.top || ar.top >= br.bottom);
+        var noteInsideBucket = nr.left >= br.left && nr.top >= br.top && nr.right <= br.right && nr.bottom <= br.bottom;
+        var out = {
+          bucketCount: document.querySelectorAll('.tcNoteBucket').length,
+          overlap: overlap,
+          noteInsideBucket: noteInsideBucket
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 180);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["bucketCount"], 2)
+        self.assertFalse(result["overlap"], msg=json.dumps(result))
+        self.assertTrue(result["noteInsideBucket"], msg=json.dumps(result))
+
     def test_canvas_notes_repel_away_from_bucket_boxes_when_created(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
