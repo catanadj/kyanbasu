@@ -564,15 +564,31 @@
       h: el.offsetHeight || 92
     };
     var obstacles = noteObstacleRects(note.id).concat(noteBucketRects(noteBucket(note)));
-    var nudge = findNearestOpenNoteMove(rect, obstacles, mode === 'down' ? { preferVertical: true } : { preferHorizontal: true });
-    if (nudge){
-      note.x = Math.max(0, toInt(note.x, 160) + nudge.dx);
-      note.y = Math.max(0, toInt(note.y, 160) + nudge.dy);
+    var changed = false;
+    var safety = 0;
+    while (safety < 12){
+      var dx = 0;
+      var dy = 0;
+      obstacles.forEach(function(o){
+        if (!rectsOverlap(rect, o)) return;
+        if (mode === 'down'){
+          dy = Math.max(dy, (o.y + o.h + 24) - rect.y);
+        } else {
+          dx = Math.max(dx, (o.x + o.w + 24) - rect.x);
+        }
+      });
+      if (!dx && !dy) break;
+      note.x = Math.max(0, toInt(note.x, 160) + dx);
+      note.y = Math.max(0, toInt(note.y, 160) + dy);
+      rect.x = note.x;
+      rect.y = note.y;
       el.style.left = note.x + 'px';
       el.style.top = note.y + 'px';
+      changed = true;
+      safety++;
     }
-    settleNoteAgainstBuckets(note);
-    return !!nudge;
+    settleNoteAgainstBuckets(note, mode !== 'down');
+    return changed;
   }
   function settleNewNote(note){
     if (!note || !note.id) return false;

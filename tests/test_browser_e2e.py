@@ -1672,6 +1672,59 @@ window.addEventListener('load', function(){
         self.assertTrue(result["focusedText"])
         self.assertEqual(result["console"], "")
 
+    def test_canvas_notes_enter_places_sibling_below_not_far_right(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_SIBLING_PLACEMENT_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var root = window.TaskCanvasNotes.createNote(180, 240, "Root", "", "Planning");
+      var first = window.TaskCanvasNotes.createChildNote(root.id, "First", "");
+      window.TaskCanvasNotes.createNote(first.x + 360, first.y + 12, "Right side", "", "Planning");
+      window.TaskCanvasNotes.selectNote(first.id);
+      document.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true, cancelable:true}));
+      setTimeout(function(){
+        var notes = window.TaskCanvasNotes.notes();
+        var links = window.TaskCanvasNotes.links();
+        var siblingIds = {};
+        links.filter(function(l){ return l.type === 'child' && l.from === root.id; }).forEach(function(l){ siblingIds[l.to] = true; });
+        var sibling = notes.filter(function(n){ return siblingIds[n.id] && n.id !== first.id; }).sort(function(a, b){ return b.y - a.y; })[0];
+        var out = {
+          siblingX: sibling && sibling.x,
+          siblingY: sibling && sibling.y,
+          sourceX: first.x,
+          sourceY: first.y,
+          below: !!(sibling && sibling.y > first.y + 80),
+          sameColumn: !!(sibling && Math.abs(sibling.x - first.x) < 80),
+          notFarRight: !!(sibling && sibling.x < first.x + 160)
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 140);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["below"], msg=json.dumps(result))
+        self.assertTrue(result["sameColumn"], msg=json.dumps(result))
+        self.assertTrue(result["notFarRight"], msg=json.dumps(result))
+
     def test_canvas_notes_multiselect_deletes_selected_notes_and_links(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
