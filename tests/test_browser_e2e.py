@@ -1746,6 +1746,8 @@ window.addEventListener('load', function(){
       var first = window.TaskCanvasNotes.createChildNote(root.id, "First", "");
       window.TaskCanvasNotes.createNote(first.x + 360, first.y + 12, "Right side", "", "Planning");
       window.TaskCanvasNotes.createNote(first.x + 260, first.y + 8, "Other bucket", "", "Delivery");
+      var lower = window.TaskCanvasNotes.createNote(first.x, first.y + 132, "Lower", "", "Planning", {skipAutoLayout: true});
+      var lowerStartY = lower.y;
       window.TaskCanvasNotes.selectNote(first.id);
       document.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true, cancelable:true}));
       setTimeout(function(){
@@ -1754,12 +1756,15 @@ window.addEventListener('load', function(){
         var siblingIds = {};
         links.filter(function(l){ return l.type === 'child' && l.from === root.id; }).forEach(function(l){ siblingIds[l.to] = true; });
         var sibling = notes.filter(function(n){ return siblingIds[n.id] && n.id !== first.id; }).sort(function(a, b){ return b.y - a.y; })[0];
+        var lowerAfter = notes.filter(function(n){ return n.id === lower.id; })[0];
         var out = {
           siblingX: sibling && sibling.x,
           siblingY: sibling && sibling.y,
           sourceX: first.x,
           sourceY: first.y,
           below: !!(sibling && sibling.y > first.y + 80),
+          insertedNearSource: !!(sibling && Math.abs(sibling.y - (first.y + 132)) < 16),
+          pushedLowerDown: !!(lowerAfter && lowerAfter.y > lowerStartY + 80),
           sameColumn: !!(sibling && Math.abs(sibling.x - first.x) < 80),
           notFarRight: !!(sibling && sibling.x < first.x + 160),
           sameBucket: !!(sibling && sibling.bucket === 'Planning')
@@ -1784,6 +1789,8 @@ window.addEventListener('load', function(){
         self.assertNotIn("ERR:", raw)
         result = json.loads(raw)
         self.assertTrue(result["below"], msg=json.dumps(result))
+        self.assertTrue(result["insertedNearSource"], msg=json.dumps(result))
+        self.assertTrue(result["pushedLowerDown"], msg=json.dumps(result))
         self.assertTrue(result["sameColumn"], msg=json.dumps(result))
         self.assertTrue(result["notFarRight"], msg=json.dumps(result))
         self.assertTrue(result["sameBucket"], msg=json.dumps(result))

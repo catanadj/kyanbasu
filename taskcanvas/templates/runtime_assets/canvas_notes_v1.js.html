@@ -353,6 +353,58 @@
     });
     return rects;
   }
+  function noteRect(note){
+    if (!note || !note.id) return null;
+    var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(note.id)+'"]');
+    if (!el || el.style.display === 'none') return null;
+    return {
+      x: toInt(note.x, 160),
+      y: toInt(note.y, 160),
+      w: el.offsetWidth || 220,
+      h: el.offsetHeight || 92
+    };
+  }
+  function moveNoteTo(note, x, y){
+    if (!note || !note.id) return;
+    note.x = Math.max(0, Math.round(x));
+    note.y = Math.max(0, Math.round(y));
+    var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(note.id)+'"]');
+    if (el){
+      el.style.left = note.x + 'px';
+      el.style.top = note.y + 'px';
+    }
+  }
+  function insertNoteBelowReference(note, reference){
+    if (!note || !reference) return false;
+    var inserted = noteRect(note);
+    if (!inserted) return false;
+    var bucket = noteBucket(note);
+    var pad = 24;
+    var changed = false;
+    var lane = [];
+    notes.forEach(function(other){
+      if (!other || other.id === note.id) return;
+      if (noteBucket(other) !== bucket) return;
+      var rect = noteRect(other);
+      if (!rect || rect.y < inserted.y) return;
+      if (!overlapSpan(inserted.x, inserted.x + inserted.w, rect.x, rect.x + rect.w)) return;
+      lane.push({ note: other, rect: rect });
+    });
+    lane.sort(function(a, b){
+      if (a.rect.y !== b.rect.y) return a.rect.y - b.rect.y;
+      return a.rect.x - b.rect.x;
+    });
+    var nextY = inserted.y + inserted.h + pad;
+    lane.forEach(function(item){
+      if (item.rect.y < nextY){
+        moveNoteTo(item.note, item.rect.x, nextY);
+        item.rect.y = nextY;
+        changed = true;
+      }
+      nextY = item.rect.y + item.rect.h + pad;
+    });
+    return changed;
+  }
   function hash32(str){
     var h = 2166136261;
     str = String(str || '');
@@ -1366,14 +1418,18 @@
       if (!siblingOf) return null;
       var sibling = createNote(n.x, n.y + 132, title || 'New branch', body || '', noteBucket(n), { skipAutoLayout: true });
       links.push({from: parentLink.from, to: sibling.id, type: 'child'});
-      placeNoteNearReference(sibling, n, 'down');
+      insertNoteBelowReference(sibling, n);
+      renderBuckets();
+      renderLinks();
       selectNote(sibling.id);
       focusNoteText(sibling.id);
       saveSoon();
       return sibling;
     }
     var sibling = createNote(n.x, n.y + 132, title || 'New branch', body || '', noteBucket(n), { skipAutoLayout: true });
-    placeNoteNearReference(sibling, n, 'down');
+    insertNoteBelowReference(sibling, n);
+    renderBuckets();
+    renderLinks();
     selectNote(sibling.id);
     focusNoteText(sibling.id);
     saveSoon();
