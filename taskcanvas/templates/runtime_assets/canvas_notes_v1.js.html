@@ -405,6 +405,37 @@
     });
     return changed;
   }
+  function insertNoteRightOfReference(note, reference){
+    if (!note || !reference) return false;
+    var inserted = noteRect(note);
+    if (!inserted) return false;
+    var bucket = noteBucket(note);
+    var pad = 24;
+    var changed = false;
+    var lane = [];
+    notes.forEach(function(other){
+      if (!other || other.id === note.id) return;
+      if (noteBucket(other) !== bucket) return;
+      var rect = noteRect(other);
+      if (!rect || rect.x < inserted.x) return;
+      if (!overlapSpan(inserted.y, inserted.y + inserted.h, rect.y, rect.y + rect.h)) return;
+      lane.push({ note: other, rect: rect });
+    });
+    lane.sort(function(a, b){
+      if (a.rect.x !== b.rect.x) return a.rect.x - b.rect.x;
+      return a.rect.y - b.rect.y;
+    });
+    var nextX = inserted.x + inserted.w + pad;
+    lane.forEach(function(item){
+      if (item.rect.x < nextX){
+        moveNoteTo(item.note, nextX, item.rect.y);
+        item.rect.x = nextX;
+        changed = true;
+      }
+      nextX = item.rect.x + item.rect.w + pad;
+    });
+    return changed;
+  }
   function hash32(str){
     var h = 2166136261;
     str = String(str || '');
@@ -1400,7 +1431,7 @@
     var child = createNote(childX, childY, title || 'New branch', body || '', noteBucket(parent), anchor ? { skipAutoLayout: true } : null);
     links.push({from: parent.id, to: child.id, type: 'child'});
     if (anchor){
-      placeNoteNearReference(child, anchor, 'right');
+      insertNoteRightOfReference(child, anchor);
       renderBuckets();
       renderLinks();
     }
@@ -1570,7 +1601,7 @@
       if (ev.target && ev.target.closest && ev.target.closest('[contenteditable="true"]') && !ev.target.closest('.tcNoteText')) return;
       if (ev.key === 'Tab'){
         ev.preventDefault();
-        createChildNote(selectedNoteId);
+        createChildNote(selectedNoteId, null, null, selectedNoteId);
       } else if (ev.key === 'Enter'){
         ev.preventDefault();
         createSiblingNote(selectedNoteId);

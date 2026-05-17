@@ -1732,6 +1732,63 @@ window.addEventListener('load', function(){
         self.assertTrue(result["focusedText"])
         self.assertEqual(result["console"], "")
 
+    def test_canvas_notes_tab_places_child_right_and_pushes_blocker(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_TAB_PLACEMENT_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var root = window.TaskCanvasNotes.createNote(180, 240, "Root", "", "Planning", {skipAutoLayout: true});
+      var blocker = window.TaskCanvasNotes.createNote(root.x + 300, root.y, "Blocker", "", "Planning", {skipAutoLayout: true});
+      var blockerStartX = blocker.x;
+      window.TaskCanvasNotes.createNote(root.x + 300, root.y + 220, "Other bucket", "", "Delivery", {skipAutoLayout: true});
+      window.TaskCanvasNotes.selectNote(root.id);
+      document.dispatchEvent(new KeyboardEvent('keydown', {key:'Tab', bubbles:true, cancelable:true}));
+      setTimeout(function(){
+        var notes = window.TaskCanvasNotes.notes();
+        var links = window.TaskCanvasNotes.links();
+        var childIds = {};
+        links.filter(function(l){ return l.type === 'child' && l.from === root.id; }).forEach(function(l){ childIds[l.to] = true; });
+        var child = notes.filter(function(n){ return childIds[n.id]; })[0];
+        var blockerAfter = notes.filter(function(n){ return n.id === blocker.id; })[0];
+        var out = {
+          childX: child && child.x,
+          childY: child && child.y,
+          sourceX: root.x,
+          sourceY: root.y,
+          childRightNear: !!(child && Math.abs(child.x - (root.x + 300)) < 16),
+          childSameRow: !!(child && Math.abs(child.y - root.y) < 16),
+          pushedBlockerRight: !!(blockerAfter && blockerAfter.x > blockerStartX + 80),
+          sameBucket: !!(child && child.bucket === 'Planning')
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 140);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["childRightNear"], msg=json.dumps(result))
+        self.assertTrue(result["childSameRow"], msg=json.dumps(result))
+        self.assertTrue(result["pushedBlockerRight"], msg=json.dumps(result))
+        self.assertTrue(result["sameBucket"], msg=json.dumps(result))
+
     def test_canvas_notes_enter_places_sibling_below_not_far_right(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
