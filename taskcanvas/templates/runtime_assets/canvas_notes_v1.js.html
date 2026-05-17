@@ -855,7 +855,9 @@
     var n = {id: uid(), x: toInt(x, 160), y: toInt(y, 160), content: noteText(title, body), bucket: bucketText(bucket), collapsed: false};
     notes.push(n);
     renderNote(n);
-    if (!opts || !opts.skipAutoLayout){
+    if (opts && opts.preservePosition){
+      settleNewNote(n);
+    } else if (!opts || !opts.skipAutoLayout){
       resolveNoteOverlaps();
       settleNoteAgainstBuckets(n);
       resolveNoteOverlaps();
@@ -1359,7 +1361,7 @@
       if (!noteMode) return;
       if (ev.target.closest('.node, .tcNoteNode, .projAreaLabel, .tagAreaLabel, .depHandle')) return;
       var p = screenToStage(ev.clientX, ev.clientY);
-      createNote(p.x, p.y);
+      createNote(p.x, p.y, '', '', null, { preservePosition: true });
       noteMode = false;
       syncButtons();
       ev.preventDefault();

@@ -499,6 +499,61 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "")
         self.assertGreaterEqual(result["savedKeys"], 1)
 
+    def test_canvas_note_mode_click_places_note_at_clicked_position(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_CLICK_PLACEMENT_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      window.TaskCanvasNotes.createNote(760, 220, "Existing", "", "Planning");
+      var stage = document.getElementById('builderStage');
+      var noteBtn = document.getElementById('noteModeBtn');
+      var sr = stage.getBoundingClientRect();
+      var target = {x:260, y:360};
+      noteBtn.click();
+      stage.dispatchEvent(new MouseEvent('click', {
+        bubbles:true,
+        cancelable:true,
+        clientX:sr.left + target.x,
+        clientY:sr.top + target.y
+      }));
+      setTimeout(function(){
+        var notes = window.TaskCanvasNotes.notes();
+        var created = notes.filter(function(n){ return n.content === 'New note'; })[0];
+        var out = {
+          notes: notes.length,
+          x: created && created.x,
+          y: created && created.y,
+          nearClick: !!(created && Math.abs(created.x - target.x) <= 8 && Math.abs(created.y - target.y) <= 8),
+          notFarRight: !!(created && created.x < target.x + 80)
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 140);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["notes"], 2)
+        self.assertTrue(result["nearClick"], msg=json.dumps(result))
+        self.assertTrue(result["notFarRight"], msg=json.dumps(result))
+
     def test_canvas_notes_import_export_round_trips_json_without_commands(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
