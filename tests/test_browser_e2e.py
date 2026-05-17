@@ -1745,6 +1745,7 @@ window.addEventListener('load', function(){
       var root = window.TaskCanvasNotes.createNote(180, 240, "Root", "", "Planning");
       var first = window.TaskCanvasNotes.createChildNote(root.id, "First", "");
       window.TaskCanvasNotes.createNote(first.x + 360, first.y + 12, "Right side", "", "Planning");
+      window.TaskCanvasNotes.createNote(first.x + 260, first.y + 8, "Other bucket", "", "Delivery");
       window.TaskCanvasNotes.selectNote(first.id);
       document.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true, cancelable:true}));
       setTimeout(function(){
@@ -1760,7 +1761,8 @@ window.addEventListener('load', function(){
           sourceY: first.y,
           below: !!(sibling && sibling.y > first.y + 80),
           sameColumn: !!(sibling && Math.abs(sibling.x - first.x) < 80),
-          notFarRight: !!(sibling && sibling.x < first.x + 160)
+          notFarRight: !!(sibling && sibling.x < first.x + 160),
+          sameBucket: !!(sibling && sibling.bucket === 'Planning')
         };
         var pre = document.createElement('pre');
         pre.id = 'e2e-out';
@@ -1784,6 +1786,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["below"], msg=json.dumps(result))
         self.assertTrue(result["sameColumn"], msg=json.dumps(result))
         self.assertTrue(result["notFarRight"], msg=json.dumps(result))
+        self.assertTrue(result["sameBucket"], msg=json.dumps(result))
 
     def test_canvas_notes_multiselect_deletes_selected_notes_and_links(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")

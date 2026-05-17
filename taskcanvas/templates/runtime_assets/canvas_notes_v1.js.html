@@ -334,12 +334,16 @@
     }
     return { minX: 24, minY: 24, maxX: Math.max(24, w - 24), maxY: Math.max(24, h - 24) };
   }
-  function noteObstacleRects(excludeId){
+  function noteObstacleRects(excludeId, bucketFilter){
     var rects = [];
     qsa('.tcNoteNode').forEach(function(el){
       if (!el || el.style.display === 'none') return;
       var id = el.getAttribute('data-note-id');
       if (id === excludeId) return;
+      if (bucketFilter != null){
+        var note = noteById(id);
+        if (!note || noteBucket(note) !== bucketText(bucketFilter)) return;
+      }
       rects.push({
         x: toInt(el.style.left, 0),
         y: toInt(el.style.top, 0),
@@ -556,7 +560,7 @@
       w: el.offsetWidth || 220,
       h: el.offsetHeight || 92
     };
-    var obstacles = noteObstacleRects(note.id).concat(noteBucketRects(noteBucket(note)));
+    var obstacles = noteObstacleRects(note.id, noteBucket(note));
     var changed = false;
     var safety = 0;
     while (safety < 12){
@@ -580,7 +584,6 @@
       changed = true;
       safety++;
     }
-    settleNoteAgainstBuckets(note, mode !== 'down');
     return changed;
   }
   function settleNewNote(note){
