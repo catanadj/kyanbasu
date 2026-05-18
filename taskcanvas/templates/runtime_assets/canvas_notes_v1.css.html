@@ -110,8 +110,32 @@
     border-bottom: 1px solid var(--note-accent, rgba(242,177,74,.20));
     cursor: move;
   }
+  .tcNoteMeta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  .tcNoteCode {
+    flex: 0 0 auto;
+    min-width: 25px;
+    max-width: 74px;
+    padding: 3px 5px;
+    border: 1px solid var(--note-accent, rgba(242,177,74,.30));
+    border-radius: 6px;
+    background: rgba(0,0,0,.20);
+    color: #fff1cf;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .tcNoteBucketLabel {
-    max-width: 130px;
+    max-width: 84px;
     min-width: 0;
     padding: 0;
     border: 0;

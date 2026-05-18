@@ -126,6 +126,57 @@
     }
     return null;
   }
+  function noteCodePrefix(index){
+    var n = Math.max(0, index);
+    var out = '';
+    do {
+      out = String.fromCharCode(65 + (n % 26)) + out;
+      n = Math.floor(n / 26) - 1;
+    } while (n >= 0);
+    return out;
+  }
+  function sortRootsForLabels(items){
+    return items.slice().sort(function(a, b){
+      var ax = toInt(a.x, 160), bx = toInt(b.x, 160);
+      if (ax !== bx) return ax - bx;
+      var ay = toInt(a.y, 160), by = toInt(b.y, 160);
+      if (ay !== by) return ay - by;
+      return String(a.id).localeCompare(String(b.id));
+    });
+  }
+  function sortChildrenForLabels(items){
+    return items.slice().sort(function(a, b){
+      var ay = toInt(a.y, 160), by = toInt(b.y, 160);
+      if (ay !== by) return ay - by;
+      var ax = toInt(a.x, 160), bx = toInt(b.x, 160);
+      if (ax !== bx) return ax - bx;
+      return String(a.id).localeCompare(String(b.id));
+    });
+  }
+  function computeNoteLabels(){
+    var labels = {};
+    var roots = sortRootsForLabels(notes.filter(function(n){ return n && !hasChildParent(n.id); }));
+    function walk(n, label, seen){
+      if (!n || seen[n.id]) return;
+      seen[n.id] = true;
+      labels[n.id] = label;
+      var kids = sortChildrenForLabels(childLinksFrom(n.id).map(function(l){ return noteById(l.to); }).filter(Boolean));
+      kids.forEach(function(child, idx){ walk(child, label + '-' + (idx + 1), Object.assign({}, seen)); });
+    }
+    roots.forEach(function(root, idx){ walk(root, noteCodePrefix(idx) + '1', {}); });
+    return labels;
+  }
+  function syncNoteLabels(){
+    var labels = computeNoteLabels();
+    notes.forEach(function(n){
+      var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(n.id)+'"] .tcNoteCode');
+      if (!el) return;
+      var label = labels[n.id] || '';
+      el.textContent = label;
+      el.title = label ? 'Note ' + label : 'Note';
+    });
+    return labels;
+  }
   function noteText(title, body){
     var a = String(title || '').trim();
     var b = String(body || '').trim();
@@ -1025,6 +1076,7 @@
       resolveNoteOverlaps();
     }
     renderBuckets();
+    syncNoteLabels();
     selectNote(n.id);
     renderLinks();
     saveSoon();
@@ -1038,7 +1090,7 @@
       el.className = 'tcNoteNode';
       el.setAttribute('data-note-id', n.id);
       el.innerHTML =
-        '<div class="tcNoteHead"><button type="button" class="tcNoteBucketLabel" title="Edit bucket"></button><div class="tcNoteActions"><button type="button" data-note-collapse title="Collapse branch">v</button><button type="button" data-note-child title="Add child note">+</button><button type="button" data-note-link title="Link from this note">L</button><button type="button" data-note-delete title="Delete selected notes">x</button></div></div>' +
+        '<div class="tcNoteHead"><div class="tcNoteMeta"><span class="tcNoteCode" title="Note"></span><button type="button" class="tcNoteBucketLabel" title="Edit bucket"></button></div><div class="tcNoteActions"><button type="button" data-note-collapse title="Collapse branch">v</button><button type="button" data-note-child title="Add child note">+</button><button type="button" data-note-link title="Link from this note">L</button><button type="button" data-note-delete title="Delete selected notes">x</button></div></div>' +
         '<div class="tcNoteText" contenteditable="true"></div>';
       st.appendChild(el);
       wireNote(el);
@@ -1057,6 +1109,7 @@
       bucketLabel.textContent = noteBucket(n);
       bucketLabel.title = 'Edit bucket (' + noteBucket(n) + ')';
     }
+    syncNoteLabels();
     qs('.tcNoteText', el).textContent = n.content || 'New note';
     syncCollapseButton(n);
     return el;
@@ -1430,6 +1483,7 @@
     var childY = anchor ? toInt(anchor.y, parent.y + existing * 124) : parent.y + existing * 124;
     var child = createNote(childX, childY, title || 'New branch', body || '', noteBucket(parent), anchor ? { skipAutoLayout: true } : null);
     links.push({from: parent.id, to: child.id, type: 'child'});
+    syncNoteLabels();
     if (anchor){
       insertNoteRightOfReference(child, anchor);
       renderBuckets();
@@ -1450,6 +1504,7 @@
       var sibling = createNote(n.x, n.y + 132, title || 'New branch', body || '', noteBucket(n), { skipAutoLayout: true });
       links.push({from: parentLink.from, to: sibling.id, type: 'child'});
       insertNoteBelowReference(sibling, n);
+      syncNoteLabels();
       renderBuckets();
       renderLinks();
       selectNote(sibling.id);
@@ -1459,6 +1514,7 @@
     }
     var sibling = createNote(n.x, n.y + 132, title || 'New branch', body || '', noteBucket(n), { skipAutoLayout: true });
     insertNoteBelowReference(sibling, n);
+    syncNoteLabels();
     renderBuckets();
     renderLinks();
     selectNote(sibling.id);
@@ -1514,6 +1570,7 @@
   function renderAll(){
     qsa('.tcNoteNode').forEach(function(el){ el.remove(); });
     notes.forEach(renderNote);
+    syncNoteLabels();
     if (selectedNoteId) syncSelection();
     applyVisibility();
     resolveNoteOverlaps();
@@ -1745,7 +1802,7 @@
     importData: importData,
     importJSON: importJSON,
     stageSelectedNotesAsTasks: stageSelectedNotesAsTasks,
-    linkNotes: function(from, to, type){ if (from && to && from !== to && !linkExists(from, to)){ links.push({from:from, to:to, type:type || 'manual'}); renderLinks(); saveSoon(); } },
+    linkNotes: function(from, to, type){ if (from && to && from !== to && !linkExists(from, to)){ links.push({from:from, to:to, type:type || 'manual'}); syncNoteLabels(); renderLinks(); saveSoon(); } },
     reflowMindMap: reflowMindMap,
     toggleCollapse: toggleCollapse,
     setBucket: setBucket,
@@ -1753,6 +1810,7 @@
     selectedNotes: function(){ return selectedIds(); },
     notes: function(){ return notes.slice(); },
     links: function(){ return links.slice(); },
+    noteLabels: function(){ return syncNoteLabels(); },
     render: renderAll,
     save: saveNow
   };

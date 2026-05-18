@@ -1732,6 +1732,76 @@ window.addEventListener('load', function(){
         self.assertTrue(result["focusedText"])
         self.assertEqual(result["console"], "")
 
+    def test_canvas_notes_dynamic_reference_labels_follow_mind_map(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_LABELS_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var a = window.TaskCanvasNotes.createNote(180, 240, "Root A", "", "Planning", {skipAutoLayout: true});
+      var b = window.TaskCanvasNotes.createNote(620, 240, "Root B", "", "Planning", {skipAutoLayout: true});
+      var aChild = window.TaskCanvasNotes.createChildNote(a.id, "A child", "");
+      var aNested = window.TaskCanvasNotes.createChildNote(aChild.id, "A nested", "");
+      var aSibling = window.TaskCanvasNotes.createSiblingNote(aChild.id, "A sibling", "");
+      setTimeout(function(){
+        var labels = window.TaskCanvasNotes.noteLabels();
+        function badge(id){
+          var el = document.querySelector('.tcNoteNode[data-note-id="'+id+'"] .tcNoteCode');
+          return el ? el.textContent : "";
+        }
+        var exported = window.TaskCanvasNotes.exportData();
+        var out = {
+          labels: {
+            a: labels[a.id],
+            b: labels[b.id],
+            aChild: labels[aChild.id],
+            aSibling: labels[aSibling.id],
+            aNested: labels[aNested.id]
+          },
+          badges: {
+            a: badge(a.id),
+            b: badge(b.id),
+            aChild: badge(aChild.id),
+            aSibling: badge(aSibling.id),
+            aNested: badge(aNested.id)
+          },
+          exportedHasGeneratedLabel: exported.notes.some(function(n){
+            return Object.prototype.hasOwnProperty.call(n, 'label') ||
+              Object.prototype.hasOwnProperty.call(n, 'code') ||
+              Object.prototype.hasOwnProperty.call(n, 'reference');
+          })
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 160);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["labels"]["a"], "A1", msg=json.dumps(result))
+        self.assertEqual(result["labels"]["b"], "B1", msg=json.dumps(result))
+        self.assertEqual(result["labels"]["aChild"], "A1-1", msg=json.dumps(result))
+        self.assertEqual(result["labels"]["aSibling"], "A1-2", msg=json.dumps(result))
+        self.assertEqual(result["labels"]["aNested"], "A1-1-1", msg=json.dumps(result))
+        self.assertEqual(result["badges"], result["labels"], msg=json.dumps(result))
+        self.assertFalse(result["exportedHasGeneratedLabel"], msg=json.dumps(result))
+
     def test_canvas_notes_tab_places_child_right_and_pushes_blocker(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
