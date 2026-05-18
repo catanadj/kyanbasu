@@ -1802,6 +1802,74 @@ window.addEventListener('load', function(){
         self.assertEqual(result["badges"], result["labels"], msg=json.dumps(result))
         self.assertFalse(result["exportedHasGeneratedLabel"], msg=json.dumps(result))
 
+    def test_canvas_notes_search_matches_label_text_and_bucket(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_SEARCH_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var root = window.TaskCanvasNotes.createNote(180, 240, "Planning root", "", "Planning", {skipAutoLayout: true});
+      var child = window.TaskCanvasNotes.createChildNote(root.id, "Risk register", "");
+      var delivery = window.TaskCanvasNotes.createNote(620, 260, "Ship checklist", "", "Delivery", {skipAutoLayout: true});
+      var input = document.getElementById('noteSearchInput');
+      function runQuery(q){
+        input.value = q;
+        input.dispatchEvent(new Event('input', {bubbles:true}));
+        return {
+          ids: window.TaskCanvasNotes.searchNotes(q),
+          resultCodes: Array.prototype.slice.call(document.querySelectorAll('#noteSearchResults .tcNoteSearchCode')).map(function(el){ return el.textContent; }),
+          highlighted: Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode.searchMatch')).map(function(el){ return el.getAttribute('data-note-id'); })
+        };
+      }
+      var byLabel = runQuery('A1-1');
+      var byText = runQuery('risk');
+      var byBucket = runQuery('delivery');
+      input.value = 'A1-1';
+      input.dispatchEvent(new Event('input', {bubbles:true}));
+      input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true, cancelable:true}));
+      setTimeout(function(){
+        var out = {
+          hasInput: !!input,
+          byLabel: byLabel,
+          byText: byText,
+          byBucket: byBucket,
+          selected: window.TaskCanvasNotes.selectedNotes(),
+          childId: child.id,
+          deliveryId: delivery.id,
+          resultsVisible: !document.getElementById('noteSearchResults').hidden
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 160);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["hasInput"], msg=json.dumps(result))
+        self.assertIn(result["childId"], result["byLabel"]["ids"], msg=json.dumps(result))
+        self.assertIn("A1-1", result["byLabel"]["resultCodes"], msg=json.dumps(result))
+        self.assertIn(result["childId"], result["byLabel"]["highlighted"], msg=json.dumps(result))
+        self.assertIn(result["childId"], result["byText"]["ids"], msg=json.dumps(result))
+        self.assertIn(result["deliveryId"], result["byBucket"]["ids"], msg=json.dumps(result))
+        self.assertEqual(result["selected"], [result["childId"]], msg=json.dumps(result))
+        self.assertTrue(result["resultsVisible"], msg=json.dumps(result))
+
     def test_canvas_notes_tab_places_child_right_and_pushes_blocker(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

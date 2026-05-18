@@ -16,6 +16,8 @@
   var bucketLayoutState = Object.create(null);
   var bucketFollowState = Object.create(null);
   var bucketColorState = Object.create(null);
+  var noteSearchQuery = '';
+  var noteSearchMatches = [];
   var bucketPalette = [
     '#5b8def', '#2fbf71', '#f2b84b', '#ec7a72', '#9b7df2',
     '#42c5c7', '#f18ab2', '#93c85a', '#f08b3e', '#4d8bff'
@@ -176,6 +178,103 @@
       el.title = label ? 'Note ' + label : 'Note';
     });
     return labels;
+  }
+  function noteSearchHaystack(note, label){
+    return [
+      label || '',
+      note && note.content || '',
+      noteBucket(note)
+    ].join(' ').toLowerCase();
+  }
+  function searchNotes(query){
+    query = String(query || '').trim().toLowerCase();
+    if (!query) return [];
+    var labels = computeNoteLabels();
+    return notes.filter(function(n){
+      return noteSearchHaystack(n, labels[n.id]).indexOf(query) !== -1;
+    }).sort(function(a, b){
+      var al = labels[a.id] || '';
+      var bl = labels[b.id] || '';
+      var ac = noteSearchHaystack(a, al).indexOf(query);
+      var bc = noteSearchHaystack(b, bl).indexOf(query);
+      if (ac !== bc) return ac - bc;
+      if (al !== bl) return al.localeCompare(bl);
+      return String(a.id).localeCompare(String(b.id));
+    });
+  }
+  function syncNoteSearchHighlights(){
+    var ids = Object.create(null);
+    noteSearchMatches.forEach(function(n){ ids[n.id] = true; });
+    qsa('.tcNoteNode').forEach(function(el){
+      el.classList.toggle('searchMatch', !!ids[el.getAttribute('data-note-id')]);
+    });
+  }
+  function renderNoteSearchResults(){
+    var box = document.getElementById('noteSearchResults');
+    if (!box) return;
+    box.innerHTML = '';
+    if (!noteSearchQuery){
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    var labels = computeNoteLabels();
+    if (!noteSearchMatches.length){
+      var empty = document.createElement('div');
+      empty.className = 'tcNoteSearchEmpty';
+      empty.textContent = 'No notes found';
+      box.appendChild(empty);
+      return;
+    }
+    noteSearchMatches.slice(0, 8).forEach(function(n){
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tcNoteSearchResult';
+      btn.setAttribute('data-note-id', n.id);
+      btn.innerHTML = '<span class="tcNoteSearchCode"></span><span class="tcNoteSearchText"></span>';
+      qs('.tcNoteSearchCode', btn).textContent = labels[n.id] || '';
+      qs('.tcNoteSearchText', btn).textContent = (n.content || 'New note').replace(/\s+/g, ' ').slice(0, 64);
+      btn.addEventListener('click', function(ev){
+        ev.preventDefault();
+        focusSearchResult(n.id);
+      });
+      box.appendChild(btn);
+    });
+  }
+  function updateNoteSearch(){
+    var input = document.getElementById('noteSearchInput');
+    noteSearchQuery = input ? input.value.trim() : noteSearchQuery;
+    noteSearchMatches = searchNotes(noteSearchQuery);
+    syncNoteSearchHighlights();
+    renderNoteSearchResults();
+    return noteSearchMatches.slice();
+  }
+  function revealNote(id){
+    var n = noteById(id);
+    if (!n) return false;
+    var cursor = id;
+    var guard = 0;
+    while (guard++ < 100){
+      var parent = parentLinkFor(cursor);
+      if (!parent) break;
+      var p = noteById(parent.from);
+      if (p) p.collapsed = false;
+      cursor = parent.from;
+    }
+    bucketUiState[noteBucket(n)] = false;
+    renderAll();
+    return true;
+  }
+  function focusSearchResult(id){
+    if (!revealNote(id)) return false;
+    selectNote(id);
+    var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(id)+'"]');
+    if (el && el.scrollIntoView){
+      try{ el.scrollIntoView({block:'center', inline:'center', behavior:'smooth'}); }
+      catch(_){ el.scrollIntoView(); }
+    }
+    updateNoteSearch();
+    return true;
   }
   function noteText(title, body){
     var a = String(title || '').trim();
@@ -1004,6 +1103,10 @@
     createTasksBtn.type = 'button';
     createTasksBtn.textContent = 'Create tasks';
     createTasksBtn.title = 'Stage Taskwarrior add commands for selected notes';
+    var searchWrap = document.createElement('div');
+    searchWrap.id = 'noteSearchWrap';
+    searchWrap.innerHTML = '<input id="noteSearchInput" class="tcInput" type="search" autocomplete="off" placeholder="Search notes"><div id="noteSearchResults" hidden></div>';
+    var searchInput = qs('#noteSearchInput', searchWrap);
     var importInput = document.createElement('input');
     importInput.id = 'noteImportInput';
     importInput.type = 'file';
@@ -1014,8 +1117,21 @@
     parent.insertBefore(exportBtn, importBtn);
     parent.insertBefore(createTasksBtn, exportBtn);
     parent.insertBefore(reflowBtn, anchor.nextSibling);
+    parent.insertBefore(searchWrap, reflowBtn);
     parent.insertBefore(linkBtn, reflowBtn);
     parent.insertBefore(noteBtn, linkBtn);
+    searchInput.addEventListener('input', updateNoteSearch);
+    searchInput.addEventListener('keydown', function(ev){
+      if (ev.key === 'Enter'){
+        if (noteSearchMatches[0]){
+          ev.preventDefault();
+          focusSearchResult(noteSearchMatches[0].id);
+        }
+      } else if (ev.key === 'Escape'){
+        searchInput.value = '';
+        updateNoteSearch();
+      }
+    });
     noteBtn.addEventListener('click', function(){
       noteMode = !noteMode;
       if (noteMode) linkMode = false;
@@ -1571,6 +1687,7 @@
     qsa('.tcNoteNode').forEach(function(el){ el.remove(); });
     notes.forEach(renderNote);
     syncNoteLabels();
+    updateNoteSearch();
     if (selectedNoteId) syncSelection();
     applyVisibility();
     resolveNoteOverlaps();
@@ -1811,6 +1928,8 @@
     notes: function(){ return notes.slice(); },
     links: function(){ return links.slice(); },
     noteLabels: function(){ return syncNoteLabels(); },
+    searchNotes: function(query){ return searchNotes(query).map(function(n){ return n.id; }); },
+    focusSearchResult: focusSearchResult,
     render: renderAll,
     save: saveNow
   };
