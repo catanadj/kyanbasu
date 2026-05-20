@@ -1870,6 +1870,79 @@ window.addEventListener('load', function(){
         self.assertEqual(result["selected"], [result["childId"]], msg=json.dumps(result))
         self.assertTrue(result["resultsVisible"], msg=json.dumps(result))
 
+    def test_canvas_notes_links_selected_note_to_existing_task(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({
+            "tasks": [
+                {
+                    "uuid": "task-alpha-uuid",
+                    "short": "alpha",
+                    "desc": "Alpha implementation",
+                    "project": "Work",
+                    "tags": ["next"],
+                    "has_depends": False,
+                }
+            ],
+            "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
+        })
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_TASK_LINK_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var note = window.TaskCanvasNotes.createNote(180, 240, "Plan Alpha", "", "Planning", {skipAutoLayout: true});
+      var task = window.TASK_BY_SHORT && window.TASK_BY_SHORT.alpha;
+      var node = window.addNodeForTask(task, 540, 240, {deferLayout:true});
+      window.TaskCanvasNotes.selectNote(note.id);
+      document.getElementById('noteTaskLinkBtn').click();
+      node.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, cancelable:true, button:0}));
+      setTimeout(function(){
+        var refs = window.TaskCanvasNotes.linkedTasks(note.id);
+        var exported = window.TaskCanvasNotes.exportData();
+        var noteOut = exported.notes.filter(function(n){ return n.id === note.id; })[0];
+        var badge = document.querySelector('.tcNoteNode[data-note-id="'+note.id+'"] .tcNoteTaskBadge');
+        badge.click();
+        var out = {
+          refs: refs,
+          exportedRefs: noteOut && noteOut.taskRefs,
+          badgeText: badge && badge.textContent,
+          badgeHidden: badge && badge.hidden,
+          nodeUuid: node.getAttribute('data-uuid'),
+          highlighted: node.classList.contains('noteTaskLinked'),
+          selectedNote: window.TaskCanvasNotes.selectedNotes()
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 160);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(len(result["refs"]), 1, msg=json.dumps(result))
+        self.assertEqual(result["refs"][0]["uuid"], "task-alpha-uuid", msg=json.dumps(result))
+        self.assertEqual(result["refs"][0]["short"], "alpha", msg=json.dumps(result))
+        self.assertEqual(result["refs"][0]["desc"], "Alpha implementation", msg=json.dumps(result))
+        self.assertEqual(result["exportedRefs"], result["refs"], msg=json.dumps(result))
+        self.assertEqual(result["badgeText"], "1 task", msg=json.dumps(result))
+        self.assertFalse(result["badgeHidden"], msg=json.dumps(result))
+        self.assertEqual(result["nodeUuid"], "task-alpha-uuid", msg=json.dumps(result))
+        self.assertTrue(result["highlighted"], msg=json.dumps(result))
+        self.assertEqual(len(result["selectedNote"]), 1, msg=json.dumps(result))
+
     def test_canvas_notes_tab_places_child_right_and_pushes_blocker(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

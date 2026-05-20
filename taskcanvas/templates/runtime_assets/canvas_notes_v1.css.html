@@ -283,8 +283,26 @@
     stroke-width: 2.8;
   }
   #noteModeBtn.active,
-  #noteLinkModeBtn.active {
+  #noteLinkModeBtn.active,
+  #noteTaskLinkBtn.active {
     border-color: rgba(242,177,74,.65);
     background: rgba(242,177,74,.16);
+  }
+  .tcNoteTaskBadge {
+    flex: 0 0 auto;
+    padding: 3px 6px;
+    border: 1px solid rgba(97,208,255,.32);
+    border-radius: 6px;
+    background: rgba(97,208,255,.12);
+    color: #bdeeff;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .node.noteTaskLinked {
+    outline: 2px solid rgba(97,208,255,.82);
+    box-shadow: 0 0 0 6px rgba(97,208,255,.18), 0 14px 34px rgba(0,0,0,.28);
   }
 </style>

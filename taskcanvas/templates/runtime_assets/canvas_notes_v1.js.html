@@ -5,6 +5,7 @@
   var links = [];
   var noteMode = false;
   var linkMode = false;
+  var taskLinkMode = false;
   var linkFrom = null;
   var selectedNoteId = null;
   var selectedNoteIds = {};
@@ -427,7 +428,101 @@
     n.y = toInt(n.y, 160);
     n.bucket = bucketText(n.bucket);
     n.collapsed = !!n.collapsed;
+    n.taskRefs = Array.isArray(n.taskRefs) ? n.taskRefs.map(normalizeTaskRef).filter(Boolean) : [];
     return n;
+  }
+  function normalizeTaskRef(ref){
+    if (!ref) return null;
+    var uuid = String(ref.uuid || '').trim();
+    var short = String(ref.short || '').trim();
+    if (!uuid && !short) return null;
+    return {
+      uuid: uuid,
+      short: short,
+      desc: String(ref.desc || '').trim(),
+      project: String(ref.project || '').trim()
+    };
+  }
+  function taskById(id){
+    id = String(id || '');
+    if (!id) return null;
+    if (window.TASK_BY_SHORT && window.TASK_BY_SHORT[id]) return window.TASK_BY_SHORT[id];
+    var arr = window.TASKS || (window.DATA && DATA.tasks) || [];
+    for (var i=0;i<arr.length;i++){
+      var t = arr[i];
+      if (t && (String(t.uuid || '') === id || String(t.short || '') === id)) return t;
+    }
+    return null;
+  }
+  function taskRefFromTask(task){
+    if (!task) return null;
+    return normalizeTaskRef({
+      uuid: task.uuid || '',
+      short: task.short || '',
+      desc: task.desc || '',
+      project: task.project || ''
+    });
+  }
+  function taskRefFromElement(el){
+    if (!el) return null;
+    var id = el.getAttribute('data-uuid') || el.getAttribute('data-short') || '';
+    return taskRefFromTask(taskById(id)) || normalizeTaskRef({
+      uuid: el.getAttribute('data-uuid') || '',
+      short: el.getAttribute('data-short') || '',
+      desc: (el.querySelector('.title, .desc') || {}).textContent || '',
+      project: el.getAttribute('data-proj') || ''
+    });
+  }
+  function taskRefKey(ref){
+    return String((ref && (ref.uuid || ref.short)) || '');
+  }
+  function noteTaskRefs(note){
+    if (!note) return [];
+    note.taskRefs = Array.isArray(note.taskRefs) ? note.taskRefs.map(normalizeTaskRef).filter(Boolean) : [];
+    return note.taskRefs;
+  }
+  function linkNoteToTask(noteId, taskOrId){
+    var n = noteById(noteId);
+    if (!n) return false;
+    var task = typeof taskOrId === 'string' ? taskById(taskOrId) : taskOrId;
+    var ref = taskRefFromTask(task) || normalizeTaskRef(taskOrId);
+    if (!ref) return false;
+    var refs = noteTaskRefs(n);
+    var key = taskRefKey(ref);
+    for (var i=0;i<refs.length;i++) if (taskRefKey(refs[i]) === key) return false;
+    refs.push(ref);
+    syncNoteTaskBadges();
+    saveSoon();
+    return true;
+  }
+  function syncNoteTaskBadges(){
+    notes.forEach(function(n){
+      var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(n.id)+'"] .tcNoteTaskBadge');
+      if (!el) return;
+      var refs = noteTaskRefs(n);
+      el.hidden = refs.length === 0;
+      el.textContent = refs.length ? refs.length + ' task' + (refs.length === 1 ? '' : 's') : '';
+      el.title = refs.length ? refs.map(function(ref){ return (ref.short || ref.uuid) + (ref.desc ? ': ' + ref.desc : ''); }).join('\n') : 'No linked tasks';
+    });
+  }
+  function highlightLinkedTasks(noteId){
+    var n = noteById(noteId);
+    if (!n) return 0;
+    qsa('.node.noteTaskLinked').forEach(function(el){ el.classList.remove('noteTaskLinked'); });
+    var count = 0;
+    noteTaskRefs(n).forEach(function(ref){
+      var selectors = [];
+      if (ref.uuid) selectors.push('.node[data-uuid="'+escAttr(ref.uuid)+'"]');
+      if (ref.short) selectors.push('.node[data-short="'+escAttr(ref.short)+'"]');
+      selectors.forEach(function(sel){
+        qsa(sel).forEach(function(el){
+          el.classList.add('noteTaskLinked');
+          count++;
+          try{ el.scrollIntoView({block:'center', inline:'center', behavior:'smooth'}); }catch(_){}
+        });
+      });
+    });
+    return count;
   }
   function saveSoon(){
     clearTimeout(saveTimer);
@@ -1079,6 +1174,12 @@
     linkBtn.type = 'button';
     linkBtn.textContent = 'Link notes';
     linkBtn.title = 'Select two notes to link them';
+    var taskLinkBtn = document.createElement('button');
+    taskLinkBtn.id = 'noteTaskLinkBtn';
+    taskLinkBtn.className = 'btn ghost';
+    taskLinkBtn.type = 'button';
+    taskLinkBtn.textContent = 'Link task';
+    taskLinkBtn.title = 'Link the selected note to the next clicked task';
     var reflowBtn = document.createElement('button');
     reflowBtn.id = 'noteReflowBtn';
     reflowBtn.className = 'btn ghost';
@@ -1118,6 +1219,7 @@
     parent.insertBefore(createTasksBtn, exportBtn);
     parent.insertBefore(reflowBtn, anchor.nextSibling);
     parent.insertBefore(searchWrap, reflowBtn);
+    parent.insertBefore(taskLinkBtn, searchWrap);
     parent.insertBefore(linkBtn, reflowBtn);
     parent.insertBefore(noteBtn, linkBtn);
     searchInput.addEventListener('input', updateNoteSearch);
@@ -1134,13 +1236,22 @@
     });
     noteBtn.addEventListener('click', function(){
       noteMode = !noteMode;
-      if (noteMode) linkMode = false;
+      if (noteMode){ linkMode = false; taskLinkMode = false; }
       syncButtons();
     });
     linkBtn.addEventListener('click', function(){
       linkMode = !linkMode;
-      if (linkMode) noteMode = false;
+      if (linkMode){ noteMode = false; taskLinkMode = false; }
       linkFrom = null;
+      syncButtons();
+    });
+    taskLinkBtn.addEventListener('click', function(){
+      if (!selectedNoteId || !noteById(selectedNoteId)){
+        if (window.alert) window.alert('Select a note first.');
+        return;
+      }
+      taskLinkMode = !taskLinkMode;
+      if (taskLinkMode){ noteMode = false; linkMode = false; linkFrom = null; }
       syncButtons();
     });
     reflowBtn.addEventListener('click', function(){
@@ -1175,13 +1286,15 @@
   function syncButtons(){
     var noteBtn = document.getElementById('noteModeBtn');
     var linkBtn = document.getElementById('noteLinkModeBtn');
+    var taskLinkBtn = document.getElementById('noteTaskLinkBtn');
     if (noteBtn) noteBtn.classList.toggle('active', !!noteMode);
     if (linkBtn) linkBtn.classList.toggle('active', !!linkMode);
+    if (taskLinkBtn) taskLinkBtn.classList.toggle('active', !!taskLinkMode);
   }
   function createNote(x, y, title, body){
     var bucket = arguments.length > 4 ? arguments[4] : null;
     var opts = arguments.length > 5 ? arguments[5] : null;
-    var n = {id: uid(), x: toInt(x, 160), y: toInt(y, 160), content: noteText(title, body), bucket: bucketText(bucket), collapsed: false};
+    var n = {id: uid(), x: toInt(x, 160), y: toInt(y, 160), content: noteText(title, body), bucket: bucketText(bucket), collapsed: false, taskRefs: []};
     notes.push(n);
     renderNote(n);
     if (opts && opts.preservePosition){
@@ -1206,7 +1319,7 @@
       el.className = 'tcNoteNode';
       el.setAttribute('data-note-id', n.id);
       el.innerHTML =
-        '<div class="tcNoteHead"><div class="tcNoteMeta"><span class="tcNoteCode" title="Note"></span><button type="button" class="tcNoteBucketLabel" title="Edit bucket"></button></div><div class="tcNoteActions"><button type="button" data-note-collapse title="Collapse branch">v</button><button type="button" data-note-child title="Add child note">+</button><button type="button" data-note-link title="Link from this note">L</button><button type="button" data-note-delete title="Delete selected notes">x</button></div></div>' +
+        '<div class="tcNoteHead"><div class="tcNoteMeta"><span class="tcNoteCode" title="Note"></span><button type="button" class="tcNoteBucketLabel" title="Edit bucket"></button><button type="button" class="tcNoteTaskBadge" title="No linked tasks" hidden></button></div><div class="tcNoteActions"><button type="button" data-note-collapse title="Collapse branch">v</button><button type="button" data-note-child title="Add child note">+</button><button type="button" data-note-link title="Link from this note">L</button><button type="button" data-note-delete title="Delete selected notes">x</button></div></div>' +
         '<div class="tcNoteText" contenteditable="true"></div>';
       st.appendChild(el);
       wireNote(el);
@@ -1226,6 +1339,7 @@
       bucketLabel.title = 'Edit bucket (' + noteBucket(n) + ')';
     }
     syncNoteLabels();
+    syncNoteTaskBadges();
     qs('.tcNoteText', el).textContent = n.content || 'New note';
     syncCollapseButton(n);
     return el;
@@ -1246,6 +1360,10 @@
     qs('.tcNoteBucketLabel', el).addEventListener('click', function(ev){
       ev.preventDefault(); ev.stopPropagation();
       editBucket(id);
+    });
+    qs('.tcNoteTaskBadge', el).addEventListener('click', function(ev){
+      ev.preventDefault(); ev.stopPropagation();
+      highlightLinkedTasks(id);
     });
     el.addEventListener('mousedown', function(ev){
       if (ev.button !== 0 || ev.target.closest('button')) return;
@@ -1708,6 +1826,26 @@
       ev.stopPropagation();
     }, true);
   }
+  function installTaskLinking(){
+    if (document.__notesTaskLinking) return;
+    document.__notesTaskLinking = true;
+    document.addEventListener('mousedown', function(ev){
+      if (!taskLinkMode) return;
+      var target = ev.target && ev.target.closest ? ev.target.closest('.node[data-short], .item[data-short]') : null;
+      if (!target) return;
+      var noteId = selectedNoteId;
+      var ref = taskRefFromElement(target);
+      if (noteId && ref){
+        linkNoteToTask(noteId, ref);
+        taskLinkMode = false;
+        syncButtons();
+        syncNoteTaskBadges();
+        selectNote(noteId);
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
+    }, true);
+  }
   function installLassoSelection(){
     var st = stage(); if (!st || st.__notesLasso) return;
     st.__notesLasso = true;
@@ -1803,7 +1941,7 @@
       version: 1,
       exportedAt: new Date().toISOString(),
       notes: notes.map(function(n){
-        return {id:n.id, x:toInt(n.x, 160), y:toInt(n.y, 160), content:n.content || 'New note', bucket:noteBucket(n), collapsed:!!n.collapsed};
+        return {id:n.id, x:toInt(n.x, 160), y:toInt(n.y, 160), content:n.content || 'New note', bucket:noteBucket(n), collapsed:!!n.collapsed, taskRefs:noteTaskRefs(n).slice()};
       }),
       links: links.map(function(l){
         return {from:l.from, to:l.to, type:l.type || 'manual'};
@@ -1904,6 +2042,7 @@
     loadBucketColorState();
     renderAll();
     installCanvasClick();
+    installTaskLinking();
     installLassoSelection();
     installKeyboardShortcuts();
     wrapDrawLinks();
@@ -1930,6 +2069,9 @@
     noteLabels: function(){ return syncNoteLabels(); },
     searchNotes: function(query){ return searchNotes(query).map(function(n){ return n.id; }); },
     focusSearchResult: focusSearchResult,
+    linkNoteToTask: linkNoteToTask,
+    linkedTasks: function(noteId){ return noteTaskRefs(noteById(noteId)).slice(); },
+    highlightLinkedTasks: highlightLinkedTasks,
     render: renderAll,
     save: saveNow
   };

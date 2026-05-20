@@ -1563,6 +1563,8 @@ function renderList(){
     for(var k=0;k<arr.length;k++){
       var t=arr[k];
       var el=document.createElement('div'); el.className="item";
+      if (t.uuid) el.setAttribute('data-uuid', t.uuid);
+      if (t.short) el.setAttribute('data-short', t.short);
       var primaryTag = firstTag(t);
       el.innerHTML =
         '<div class="itemTop">' +
@@ -2732,6 +2734,7 @@ function addNodeForTask(task, cx, cy, opts){
     '<div class="nodeTop"><span class="nodeShortBadge">'+escapeHtml(task.short)+'</span></div>' +
     '<div class="title">'+escapeHtml(task.desc)+'</div>';
   node.setAttribute('data-short', task.short);
+  if (task.uuid) node.setAttribute('data-uuid', task.uuid);
   node.setAttribute('data-proj', proj);
   node.setAttribute('data-tag', tag);
   builderStage.appendChild(node);
