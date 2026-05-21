@@ -1903,14 +1903,30 @@ window.addEventListener('load', function(){
         var exported = window.TaskCanvasNotes.exportData();
         var noteOut = exported.notes.filter(function(n){ return n.id === note.id; })[0];
         var badge = document.querySelector('.tcNoteNode[data-note-id="'+note.id+'"] .tcNoteTaskBadge');
+        var badgeText = badge && badge.textContent;
+        var badgeHidden = badge && badge.hidden;
         badge.click();
+        var popover = document.getElementById('tcNoteTaskPopover');
+        var focusBtn = popover && popover.querySelector('[data-task-focus]');
+        if (focusBtn) focusBtn.click();
+        var highlightedFromMenu = node.classList.contains('noteTaskLinked');
+        var unlinkBtn = popover && popover.querySelector('[data-task-unlink]');
+        if (unlinkBtn) unlinkBtn.click();
+        var refsAfterUnlink = window.TaskCanvasNotes.linkedTasks(note.id);
+        var exportedAfterUnlink = window.TaskCanvasNotes.exportData();
+        var noteAfterUnlink = exportedAfterUnlink.notes.filter(function(n){ return n.id === note.id; })[0];
         var out = {
           refs: refs,
           exportedRefs: noteOut && noteOut.taskRefs,
-          badgeText: badge && badge.textContent,
-          badgeHidden: badge && badge.hidden,
+          badgeText: badgeText,
+          badgeHidden: badgeHidden,
           nodeUuid: node.getAttribute('data-uuid'),
-          highlighted: node.classList.contains('noteTaskLinked'),
+          popoverRows: popover ? popover.querySelectorAll('.tcNoteTaskRow').length : 0,
+          highlighted: highlightedFromMenu,
+          refsAfterUnlink: refsAfterUnlink,
+          exportedRefsAfterUnlink: noteAfterUnlink && noteAfterUnlink.taskRefs,
+          badgeAfterUnlink: badge && badge.textContent,
+          badgeHiddenAfterUnlink: badge && badge.hidden,
           selectedNote: window.TaskCanvasNotes.selectedNotes()
         };
         var pre = document.createElement('pre');
@@ -1940,7 +1956,12 @@ window.addEventListener('load', function(){
         self.assertEqual(result["badgeText"], "1 task", msg=json.dumps(result))
         self.assertFalse(result["badgeHidden"], msg=json.dumps(result))
         self.assertEqual(result["nodeUuid"], "task-alpha-uuid", msg=json.dumps(result))
+        self.assertEqual(result["popoverRows"], 1, msg=json.dumps(result))
         self.assertTrue(result["highlighted"], msg=json.dumps(result))
+        self.assertEqual(result["refsAfterUnlink"], [], msg=json.dumps(result))
+        self.assertEqual(result["exportedRefsAfterUnlink"], [], msg=json.dumps(result))
+        self.assertEqual(result["badgeAfterUnlink"], "", msg=json.dumps(result))
+        self.assertTrue(result["badgeHiddenAfterUnlink"], msg=json.dumps(result))
         self.assertEqual(len(result["selectedNote"]), 1, msg=json.dumps(result))
 
     def test_canvas_notes_tab_places_child_right_and_pushes_blocker(self):

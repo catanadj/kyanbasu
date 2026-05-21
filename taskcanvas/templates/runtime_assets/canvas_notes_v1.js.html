@@ -495,6 +495,19 @@
     saveSoon();
     return true;
   }
+  function unlinkNoteTask(noteId, taskKey){
+    var n = noteById(noteId);
+    if (!n) return false;
+    taskKey = String(taskKey || '');
+    var refs = noteTaskRefs(n);
+    var next = refs.filter(function(ref){ return taskRefKey(ref) !== taskKey; });
+    if (next.length === refs.length) return false;
+    n.taskRefs = next;
+    closeNoteTaskPopover();
+    syncNoteTaskBadges();
+    saveSoon();
+    return true;
+  }
   function syncNoteTaskBadges(){
     notes.forEach(function(n){
       var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(n.id)+'"] .tcNoteTaskBadge');
@@ -505,16 +518,69 @@
       el.title = refs.length ? refs.map(function(ref){ return (ref.short || ref.uuid) + (ref.desc ? ': ' + ref.desc : ''); }).join('\n') : 'No linked tasks';
     });
   }
+  function taskNodeSelectors(ref){
+    var selectors = [];
+    if (ref && ref.uuid) selectors.push('.node[data-uuid="'+escAttr(ref.uuid)+'"]');
+    if (ref && ref.short) selectors.push('.node[data-short="'+escAttr(ref.short)+'"]');
+    return selectors;
+  }
+  function focusLinkedTaskRef(ref){
+    if (!ref) return false;
+    var focused = false;
+    qsa('.node.noteTaskLinked').forEach(function(el){ el.classList.remove('noteTaskLinked'); });
+    taskNodeSelectors(ref).forEach(function(sel){
+      qsa(sel).forEach(function(el){
+        el.classList.add('noteTaskLinked');
+        focused = true;
+        try{ el.scrollIntoView({block:'center', inline:'center', behavior:'smooth'}); }catch(_){}
+      });
+    });
+    return focused;
+  }
+  function closeNoteTaskPopover(){
+    var old = document.getElementById('tcNoteTaskPopover');
+    if (old) old.remove();
+  }
+  function openNoteTaskPopover(noteId, anchor){
+    var n = noteById(noteId);
+    if (!n) return false;
+    var refs = noteTaskRefs(n);
+    closeNoteTaskPopover();
+    if (!refs.length) return false;
+    var pop = document.createElement('div');
+    pop.id = 'tcNoteTaskPopover';
+    pop.setAttribute('data-note-id', noteId);
+    refs.forEach(function(ref){
+      var row = document.createElement('div');
+      row.className = 'tcNoteTaskRow';
+      row.innerHTML = '<div class="tcNoteTaskInfo"><span class="tcNoteTaskShort"></span><span class="tcNoteTaskDesc"></span></div><div class="tcNoteTaskActions"><button type="button" data-task-focus>Focus</button><button type="button" data-task-unlink>Unlink</button></div>';
+      qs('.tcNoteTaskShort', row).textContent = ref.short || ref.uuid;
+      qs('.tcNoteTaskDesc', row).textContent = ref.desc || ref.project || 'Linked task';
+      qs('[data-task-focus]', row).addEventListener('click', function(ev){
+        ev.preventDefault();
+        ev.stopPropagation();
+        focusLinkedTaskRef(ref);
+      });
+      qs('[data-task-unlink]', row).addEventListener('click', function(ev){
+        ev.preventDefault();
+        ev.stopPropagation();
+        unlinkNoteTask(noteId, taskRefKey(ref));
+      });
+      pop.appendChild(row);
+    });
+    document.body.appendChild(pop);
+    var r = anchor && anchor.getBoundingClientRect ? anchor.getBoundingClientRect() : null;
+    pop.style.left = Math.max(8, Math.round((r ? r.left : 16))) + 'px';
+    pop.style.top = Math.max(8, Math.round((r ? r.bottom + 6 : 16))) + 'px';
+    return true;
+  }
   function highlightLinkedTasks(noteId){
     var n = noteById(noteId);
     if (!n) return 0;
     qsa('.node.noteTaskLinked').forEach(function(el){ el.classList.remove('noteTaskLinked'); });
     var count = 0;
     noteTaskRefs(n).forEach(function(ref){
-      var selectors = [];
-      if (ref.uuid) selectors.push('.node[data-uuid="'+escAttr(ref.uuid)+'"]');
-      if (ref.short) selectors.push('.node[data-short="'+escAttr(ref.short)+'"]');
-      selectors.forEach(function(sel){
+      taskNodeSelectors(ref).forEach(function(sel){
         qsa(sel).forEach(function(el){
           el.classList.add('noteTaskLinked');
           count++;
@@ -1363,7 +1429,7 @@
     });
     qs('.tcNoteTaskBadge', el).addEventListener('click', function(ev){
       ev.preventDefault(); ev.stopPropagation();
-      highlightLinkedTasks(id);
+      if (!openNoteTaskPopover(id, ev.currentTarget)) highlightLinkedTasks(id);
     });
     el.addEventListener('mousedown', function(ev){
       if (ev.button !== 0 || ev.target.closest('button')) return;
@@ -1830,6 +1896,12 @@
     if (document.__notesTaskLinking) return;
     document.__notesTaskLinking = true;
     document.addEventListener('mousedown', function(ev){
+      var pop = document.getElementById('tcNoteTaskPopover');
+      if (!pop) return;
+      if (ev.target && ev.target.closest && ev.target.closest('#tcNoteTaskPopover, .tcNoteTaskBadge')) return;
+      closeNoteTaskPopover();
+    }, true);
+    document.addEventListener('mousedown', function(ev){
       if (!taskLinkMode) return;
       var target = ev.target && ev.target.closest ? ev.target.closest('.node[data-short], .item[data-short]') : null;
       if (!target) return;
@@ -2070,6 +2142,7 @@
     searchNotes: function(query){ return searchNotes(query).map(function(n){ return n.id; }); },
     focusSearchResult: focusSearchResult,
     linkNoteToTask: linkNoteToTask,
+    unlinkNoteTask: unlinkNoteTask,
     linkedTasks: function(noteId){ return noteTaskRefs(noteById(noteId)).slice(); },
     highlightLinkedTasks: highlightLinkedTasks,
     render: renderAll,

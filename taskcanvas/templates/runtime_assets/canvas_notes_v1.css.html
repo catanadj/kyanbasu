@@ -305,4 +305,61 @@
     outline: 2px solid rgba(97,208,255,.82);
     box-shadow: 0 0 0 6px rgba(97,208,255,.18), 0 14px 34px rgba(0,0,0,.28);
   }
+  #tcNoteTaskPopover {
+    position: fixed;
+    z-index: 180;
+    width: 290px;
+    max-height: 320px;
+    overflow: auto;
+    padding: 6px;
+    border: 1px solid var(--line, rgba(255,255,255,.12));
+    border-radius: 12px;
+    background: rgba(9,16,27,.98);
+    box-shadow: 0 18px 42px rgba(0,0,0,.36);
+    color: var(--fg, #f4ead7);
+  }
+  .tcNoteTaskRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 8px;
+  }
+  .tcNoteTaskRow:hover {
+    background: rgba(97,208,255,.08);
+  }
+  .tcNoteTaskInfo {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .tcNoteTaskShort {
+    color: #bdeeff;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .tcNoteTaskDesc {
+    overflow: hidden;
+    color: rgba(244,234,215,.72);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tcNoteTaskActions {
+    display: flex;
+    gap: 4px;
+    flex: 0 0 auto;
+  }
+  .tcNoteTaskActions button {
+    padding: 5px 7px;
+    border: 1px solid rgba(97,208,255,.24);
+    border-radius: 7px;
+    background: rgba(97,208,255,.10);
+    color: #d9f6ff;
+    cursor: pointer;
+    font-size: 11px;
+    line-height: 1;
+  }
 </style>
