@@ -1476,6 +1476,67 @@ window.addEventListener('load', function(){
         self.assertIn("task add 'Build branch with details'", result["lines"])
         self.assertFalse(result["ignorePresent"])
 
+    def test_top_toolbar_groups_note_and_command_actions(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_TOP_TOOLBAR_GROUPS_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      function parentId(id){
+        var el = document.getElementById(id);
+        return el && el.parentElement ? el.parentElement.id : "";
+      }
+      var out = {
+        groups: Array.prototype.slice.call(document.querySelectorAll('.shellActions .toolbarGroup')).map(function(el){ return el.id || el.getAttribute('data-label'); }),
+        noteParent: parentId('noteModeBtn'),
+        linkParent: parentId('noteLinkModeBtn'),
+        taskLinkParent: parentId('noteTaskLinkBtn'),
+        searchParent: parentId('noteSearchWrap'),
+        reflowParent: parentId('noteReflowBtn'),
+        linkedParent: parentId('noteCreateLinkedTasksBtn'),
+        createParent: parentId('noteCreateTasksBtn'),
+        importParent: parentId('noteImportBtn'),
+        exportParent: parentId('noteExportBtn'),
+        consoleParentClass: document.getElementById('toggleConsole').parentElement.className,
+        resetParentClass: document.getElementById('resetCanvas').parentElement.className
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out';
+      pre.textContent = JSON.stringify(out);
+      document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertIn("noteToolsGroup", result["groups"], msg=json.dumps(result))
+        self.assertIn("noteTaskGroup", result["groups"], msg=json.dumps(result))
+        self.assertIn("noteDataGroup", result["groups"], msg=json.dumps(result))
+        self.assertEqual(result["noteParent"], "noteToolsGroup", msg=json.dumps(result))
+        self.assertEqual(result["linkParent"], "noteToolsGroup", msg=json.dumps(result))
+        self.assertEqual(result["taskLinkParent"], "noteToolsGroup", msg=json.dumps(result))
+        self.assertEqual(result["searchParent"], "noteToolsGroup", msg=json.dumps(result))
+        self.assertEqual(result["reflowParent"], "noteToolsGroup", msg=json.dumps(result))
+        self.assertEqual(result["linkedParent"], "noteTaskGroup", msg=json.dumps(result))
+        self.assertEqual(result["createParent"], "noteTaskGroup", msg=json.dumps(result))
+        self.assertEqual(result["importParent"], "noteDataGroup", msg=json.dumps(result))
+        self.assertEqual(result["exportParent"], "noteDataGroup", msg=json.dumps(result))
+        self.assertIn("toolbarGroupCommands", result["consoleParentClass"], msg=json.dumps(result))
+        self.assertIn("toolbarGroupCanvas", result["resetParentClass"], msg=json.dumps(result))
+
     def test_canvas_notes_create_linked_tasks_stages_and_links_generated_refs(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

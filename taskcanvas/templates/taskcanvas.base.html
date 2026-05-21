@@ -111,7 +111,45 @@
     font-size:12px;
   }
   .toolbarMeta{display:flex;gap:8px;flex-wrap:wrap}
-  .shellActions{justify-content:flex-end;flex:0 1 auto}
+  .shellActions{
+    justify-content:flex-end;
+    align-items:stretch;
+    flex:1 1 620px;
+    gap:8px;
+  }
+  .toolbarGroup{
+    position:relative;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    flex-wrap:wrap;
+    min-height:46px;
+    padding:18px 7px 7px;
+    border:1px solid var(--line);
+    border-radius:14px;
+    background:rgba(15,24,39,.52);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.03);
+  }
+  .toolbarGroup:empty{display:none}
+  .toolbarGroup::before{
+    content:attr(data-label);
+    position:absolute;
+    left:9px;
+    top:4px;
+    color:rgba(144,163,189,.78);
+    font-size:9px;
+    font-weight:700;
+    line-height:1;
+    text-transform:uppercase;
+  }
+  .toolbarGroup .btn,
+  .toolbarGroup #fitBtn{
+    padding:7px 9px;
+    border-radius:9px;
+    font-size:12px;
+  }
+  .toolbarGroupCommands{background:rgba(16,27,43,.72)}
+  .toolbarGroupNoteTasks{border-color:rgba(97,208,255,.18)}
   .tabbar{
     display:flex;
     align-items:center;
@@ -1088,18 +1126,24 @@
       </div>
     </div>
     <div class="row shellActions">
-      <div class="zoomwrap">
-        <span>Zoom</span>
-        <input id="zoom" type="range" min="50" max="200" value="100" />
-        <button id="fitBtn" title="Fit to screen">Fit</button>
-
-        <span id="zoomPct">100%</span>
+      <div class="toolbarGroup toolbarGroupCanvas" data-label="Canvas">
+        <div class="zoomwrap">
+          <span>Zoom</span>
+          <input id="zoom" type="range" min="50" max="200" value="100" />
+          <button id="fitBtn" title="Fit to screen">Fit</button>
+          <span id="zoomPct">100%</span>
+        </div>
+        <button id="resetCanvas" class="btn ghost" title="Reset the current canvas projects to the embedded Taskwarrior snapshot">Reset</button>
+        <button id="clearCanvas" class="btn ghost" title="Clear all projects and tasks from the canvas">Clear</button>
       </div>
-      <button id="toggleConsole" class="btn ghost">Console</button>
-      <button id="resetCanvas" class="btn ghost" title="Reset the current canvas projects to the embedded Taskwarrior snapshot">Reset</button>
-      <button id="clearCanvas" class="btn ghost" title="Clear all projects and tasks from the canvas">Clear</button>
-      <button id="copyBtn" class="btn primary" title="Copy Taskwarrior commands">Copy commands</button>
-      <label class="btn warningToggle"><input type="checkbox" id="removeMode"> Remove mode</label>
+      <div id="noteToolsGroup" class="toolbarGroup toolbarGroupNotes" data-label="Notes"></div>
+      <div id="noteTaskGroup" class="toolbarGroup toolbarGroupNoteTasks" data-label="Note Tasks"></div>
+      <div id="noteDataGroup" class="toolbarGroup toolbarGroupNoteData" data-label="Note Data"></div>
+      <div class="toolbarGroup toolbarGroupCommands" data-label="Commands">
+        <button id="toggleConsole" class="btn ghost">Console</button>
+        <button id="copyBtn" class="btn primary" title="Copy Taskwarrior commands">Copy commands</button>
+        <label class="btn warningToggle"><input type="checkbox" id="removeMode"> Remove mode</label>
+      </div>
     </div>
   </header>
 

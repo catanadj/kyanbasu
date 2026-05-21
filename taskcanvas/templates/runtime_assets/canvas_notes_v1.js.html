@@ -1243,7 +1243,10 @@
     if (document.getElementById('noteModeBtn')) return;
     var anchor = document.getElementById('toggleConsole') || document.getElementById('copyBtn');
     var parent = anchor && anchor.parentNode;
-    if (!parent) return;
+    var noteGroup = document.getElementById('noteToolsGroup') || parent;
+    var taskGroup = document.getElementById('noteTaskGroup') || noteGroup;
+    var dataGroup = document.getElementById('noteDataGroup') || noteGroup;
+    if (!parent || !noteGroup) return;
     var noteBtn = document.createElement('button');
     noteBtn.id = 'noteModeBtn';
     noteBtn.className = 'btn ghost';
@@ -1301,16 +1304,16 @@
     importInput.type = 'file';
     importInput.accept = 'application/json,.json';
     importInput.style.display = 'none';
-    parent.insertBefore(importInput, anchor.nextSibling);
-    parent.insertBefore(importBtn, importInput);
-    parent.insertBefore(exportBtn, importBtn);
-    parent.insertBefore(createTasksBtn, exportBtn);
-    parent.insertBefore(createLinkedTasksBtn, createTasksBtn);
-    parent.insertBefore(reflowBtn, anchor.nextSibling);
-    parent.insertBefore(searchWrap, reflowBtn);
-    parent.insertBefore(taskLinkBtn, searchWrap);
-    parent.insertBefore(linkBtn, reflowBtn);
-    parent.insertBefore(noteBtn, linkBtn);
+    noteGroup.appendChild(noteBtn);
+    noteGroup.appendChild(linkBtn);
+    noteGroup.appendChild(taskLinkBtn);
+    noteGroup.appendChild(searchWrap);
+    noteGroup.appendChild(reflowBtn);
+    taskGroup.appendChild(createLinkedTasksBtn);
+    taskGroup.appendChild(createTasksBtn);
+    dataGroup.appendChild(importBtn);
+    dataGroup.appendChild(exportBtn);
+    dataGroup.appendChild(importInput);
     searchInput.addEventListener('input', updateNoteSearch);
     searchInput.addEventListener('keydown', function(ev){
       if (ev.key === 'Enter'){
