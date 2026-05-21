@@ -1752,6 +1752,7 @@ window.addEventListener('load', function(){
         notes.forEach(function(n){ byContent[n.content] = n; });
         var out = {
           reflowButton: !!document.getElementById('noteReflowBtn'),
+          reflowText: (document.getElementById('noteReflowBtn') || {}).textContent || "",
           actionButtons: document.querySelectorAll('.tcNoteNode [data-note-child]').length,
           notes: notes.length,
           childLinks: links.filter(function(l){ return l.type === 'child'; }).length,
@@ -1780,6 +1781,7 @@ window.addEventListener('load', function(){
         self.assertNotIn("ERR:", raw)
         result = json.loads(raw)
         self.assertTrue(result["reflowButton"])
+        self.assertEqual(result["reflowText"], "Compact map")
         self.assertEqual(result["actionButtons"], 4)
         self.assertEqual(result["notes"], 4)
         self.assertEqual(result["childLinks"], 3)
@@ -1787,6 +1789,91 @@ window.addEventListener('load', function(){
         self.assertTrue(result["designRightOfRoot"])
         self.assertTrue(result["prototypeRightOfDesign"])
         self.assertEqual(result["console"], "")
+
+    def test_canvas_notes_compact_map_packs_bucket_groups(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_COMPACT_MAP_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var a = window.TaskCanvasNotes.createNote(120, 240, "Alpha root", "", "Planning", {skipAutoLayout:true});
+      window.TaskCanvasNotes.createChildNote(a.id, "Alpha child", "");
+      var b = window.TaskCanvasNotes.createNote(2500, 900, "Beta root", "", "Delivery", {skipAutoLayout:true});
+      window.TaskCanvasNotes.createChildNote(b.id, "Beta child", "");
+      var c = window.TaskCanvasNotes.createNote(4200, 1600, "Gamma root", "", "Review", {skipAutoLayout:true});
+      function rects(){
+        return Array.prototype.slice.call(document.querySelectorAll('.tcNoteBucket')).map(function(el){
+          return {
+            bucket: el.getAttribute('data-bucket'),
+            x: parseFloat(el.style.left || '0'),
+            y: parseFloat(el.style.top || '0'),
+            w: parseFloat(el.style.width || '0'),
+            h: parseFloat(el.style.height || '0')
+          };
+        });
+      }
+      function span(rs){
+        var minX = Math.min.apply(null, rs.map(function(r){ return r.x; }));
+        var maxX = Math.max.apply(null, rs.map(function(r){ return r.x + r.w; }));
+        var minY = Math.min.apply(null, rs.map(function(r){ return r.y; }));
+        var maxY = Math.max.apply(null, rs.map(function(r){ return r.y + r.h; }));
+        return {w:maxX-minX, h:maxY-minY};
+      }
+      function overlap(a, b){
+        return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+      }
+      setTimeout(function(){
+        var before = rects();
+        var beforeSpan = span(before);
+        window.TaskCanvasNotes.compactMindMap();
+        setTimeout(function(){
+          var after = rects();
+          var afterSpan = span(after);
+          var overlaps = false;
+          for (var i=0;i<after.length;i++) for (var j=i+1;j<after.length;j++) if (overlap(after[i], after[j])) overlaps = true;
+          var notes = window.TaskCanvasNotes.notes();
+          var byContent = {};
+          notes.forEach(function(n){ byContent[n.content] = n; });
+          var out = {
+            beforeSpan: beforeSpan,
+            afterSpan: afterSpan,
+            buckets: after.length,
+            overlaps: overlaps,
+            alphaChildRight: byContent["Alpha child"].x > byContent["Alpha root"].x,
+            betaChildRight: byContent["Beta child"].x > byContent["Beta root"].x,
+            buttonText: (document.getElementById('noteReflowBtn') || {}).textContent || ""
+          };
+          var pre = document.createElement('pre');
+          pre.id = 'e2e-out';
+          pre.textContent = JSON.stringify(out);
+          document.body.appendChild(pre);
+        }, 120);
+      }, 120);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["buttonText"], "Compact map", msg=json.dumps(result))
+        self.assertEqual(result["buckets"], 3, msg=json.dumps(result))
+        self.assertFalse(result["overlaps"], msg=json.dumps(result))
+        self.assertLess(result["afterSpan"]["w"], result["beforeSpan"]["w"], msg=json.dumps(result))
+        self.assertLess(result["afterSpan"]["h"], result["beforeSpan"]["h"], msg=json.dumps(result))
+        self.assertTrue(result["alphaChildRight"], msg=json.dumps(result))
+        self.assertTrue(result["betaChildRight"], msg=json.dumps(result))
 
     def test_canvas_notes_keyboard_creates_sibling_and_child_notes(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")

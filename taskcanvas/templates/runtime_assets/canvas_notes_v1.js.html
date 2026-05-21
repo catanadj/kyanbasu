@@ -1269,8 +1269,8 @@
     reflowBtn.id = 'noteReflowBtn';
     reflowBtn.className = 'btn ghost';
     reflowBtn.type = 'button';
-    reflowBtn.textContent = 'Reflow map';
-    reflowBtn.title = 'Arrange planning notes as a mind map';
+    reflowBtn.textContent = 'Compact map';
+    reflowBtn.title = 'Arrange note buckets into a compact map';
     var exportBtn = document.createElement('button');
     exportBtn.id = 'noteExportBtn';
     exportBtn.className = 'btn ghost';
@@ -1347,7 +1347,7 @@
       syncButtons();
     });
     reflowBtn.addEventListener('click', function(){
-      reflowMindMap();
+      compactMindMap();
     });
     exportBtn.addEventListener('click', function(){
       downloadExport();
@@ -1883,6 +1883,78 @@
       cursor += slots * rowH;
     });
   }
+  function moveBucketNotes(bucket, dx, dy){
+    bucket = bucketText(bucket);
+    bucketNotes(bucket).forEach(function(n){
+      moveNoteTo(n, toInt(n.x, 160) + dx, toInt(n.y, 160) + dy);
+    });
+  }
+  function bucketTreeRoots(bucket){
+    bucket = bucketText(bucket);
+    var roots = bucketNotes(bucket).filter(function(n){
+      var parent = parentLinkFor(n.id);
+      return !parent || !noteById(parent.from) || noteBucket(noteById(parent.from)) !== bucket;
+    });
+    return roots.sort(function(a, b){ return (toInt(a.y, 160) - toInt(b.y, 160)) || (toInt(a.x, 160) - toInt(b.x, 160)); });
+  }
+  function compactMindMap(){
+    if (!notes.length) return false;
+    qsa('.tcNoteNode').forEach(function(el){ el.remove(); });
+    notes.forEach(renderNote);
+    applyVisibility();
+    var bucketGap = 42;
+    var rowGap = 42;
+    var rowLimit = 1280;
+    var layoutW = rowLimit;
+    var wrap = document.getElementById('builderWrap');
+    if (wrap && wrap.clientWidth) layoutW = Math.max(720, Math.min(1600, (wrap.clientWidth / (window.ZSCALE || 1)) - 120));
+    var originX = 120;
+    var originY = 140;
+    var cursorX = originX;
+    var cursorY = originY;
+    var rowH = 0;
+    var changed = false;
+    var buckets = bucketNames().sort(function(a, b){
+      var ar = bucketVisualRect(a), br = bucketVisualRect(b);
+      if (ar && br){
+        if (ar.y !== br.y) return ar.y - br.y;
+        if (ar.x !== br.x) return ar.x - br.x;
+      }
+      return a.localeCompare(b);
+    });
+    buckets.forEach(function(bucket){
+      var roots = bucketTreeRoots(bucket);
+      if (!roots.length) return;
+      var y = 0;
+      roots.forEach(function(root){
+        var slots = subtreeSlots(root.id, {});
+        var rootY = y + Math.max(0, ((slots - 1) * 132) / 2);
+        placeSubtree(root.id, 0, Math.max(0, rootY|0), {});
+        y += Math.max(132, slots * 132) + 24;
+      });
+      var rect = bucketVisualRect(bucket);
+      if (!rect) return;
+      if (cursorX > originX && cursorX + rect.w > originX + layoutW){
+        cursorX = originX;
+        cursorY += rowH + rowGap;
+        rowH = 0;
+      }
+      var dx = cursorX - rect.x;
+      var dy = cursorY - rect.y;
+      moveBucketNotes(bucket, dx, dy);
+      var layout = bucketLayout(bucket);
+      layout.dx = 0;
+      layout.dy = 0;
+      changed = true;
+      rect = bucketVisualRect(bucket) || rect;
+      cursorX += rect.w + bucketGap;
+      rowH = Math.max(rowH, rect.h);
+    });
+    renderAll();
+    saveBucketLayoutState();
+    saveSoon();
+    return changed;
+  }
   function reflowMindMap(preferredRootId){
     if (!notes.length) return;
     var roots = [];
@@ -2191,6 +2263,7 @@
     createLinkedTasksFromSelectedNotes: createLinkedTasksFromSelectedNotes,
     linkNotes: function(from, to, type){ if (from && to && from !== to && !linkExists(from, to)){ links.push({from:from, to:to, type:type || 'manual'}); syncNoteLabels(); renderLinks(); saveSoon(); } },
     reflowMindMap: reflowMindMap,
+    compactMindMap: compactMindMap,
     toggleCollapse: toggleCollapse,
     setBucket: setBucket,
     selectNote: selectNote,
