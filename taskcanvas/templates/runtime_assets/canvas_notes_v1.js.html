@@ -476,6 +476,22 @@
   function taskRefKey(ref){
     return String((ref && (ref.uuid || ref.short)) || '');
   }
+  function isGeneratedNoteTaskRef(ref){
+    return !!(ref && String(ref.uuid || '').indexOf('new-note-') === 0);
+  }
+  function generatedTaskRefForNote(note){
+    if (!note) return null;
+    var refs = noteTaskRefs(note);
+    for (var i=0;i<refs.length;i++) if (isGeneratedNoteTaskRef(refs[i])) return refs[i];
+    var token = (Date.now().toString(36) + Math.random().toString(36).slice(2, 8)).toLowerCase().replace(/[^a-z0-9]/g, '');
+    var short = 'n-' + token.slice(-8);
+    return normalizeTaskRef({
+      uuid: 'new-note-' + token,
+      short: short,
+      desc: note.content || 'New note task',
+      project: noteBucket(note)
+    });
+  }
   function noteTaskRefs(note){
     if (!note) return [];
     note.taskRefs = Array.isArray(note.taskRefs) ? note.taskRefs.map(normalizeTaskRef).filter(Boolean) : [];
@@ -1270,6 +1286,12 @@
     createTasksBtn.type = 'button';
     createTasksBtn.textContent = 'Create tasks';
     createTasksBtn.title = 'Stage Taskwarrior add commands for selected notes';
+    var createLinkedTasksBtn = document.createElement('button');
+    createLinkedTasksBtn.id = 'noteCreateLinkedTasksBtn';
+    createLinkedTasksBtn.className = 'btn ghost';
+    createLinkedTasksBtn.type = 'button';
+    createLinkedTasksBtn.textContent = 'Create linked';
+    createLinkedTasksBtn.title = 'Stage task add commands and link generated task refs to selected notes';
     var searchWrap = document.createElement('div');
     searchWrap.id = 'noteSearchWrap';
     searchWrap.innerHTML = '<input id="noteSearchInput" class="tcInput" type="search" autocomplete="off" placeholder="Search notes"><div id="noteSearchResults" hidden></div>';
@@ -1283,6 +1305,7 @@
     parent.insertBefore(importBtn, importInput);
     parent.insertBefore(exportBtn, importBtn);
     parent.insertBefore(createTasksBtn, exportBtn);
+    parent.insertBefore(createLinkedTasksBtn, createTasksBtn);
     parent.insertBefore(reflowBtn, anchor.nextSibling);
     parent.insertBefore(searchWrap, reflowBtn);
     parent.insertBefore(taskLinkBtn, searchWrap);
@@ -1332,6 +1355,10 @@
     });
     createTasksBtn.addEventListener('click', function(){
       var count = stageSelectedNotesAsTasks();
+      if (!count && window.alert) window.alert('Select one or more notes first.');
+    });
+    createLinkedTasksBtn.addEventListener('click', function(){
+      var count = createLinkedTasksFromSelectedNotes();
       if (!count && window.alert) window.alert('Select one or more notes first.');
     });
     importInput.addEventListener('change', function(){
@@ -2097,6 +2124,34 @@
     try{ if (typeof updateConsole === 'function') updateConsole(); }catch(_){}
     return ids.length;
   }
+  function createLinkedTasksFromSelectedNotes(){
+    var ids = selectedIds();
+    if (!ids.length && selectedNoteId) ids = [selectedNoteId];
+    ids = ids.filter(function(id){ return !!noteById(id); });
+    if (!ids.length) return 0;
+    var A = window.STAGED_CMDS = Array.isArray(window.STAGED_CMDS) ? window.STAGED_CMDS : [];
+    window.__NOTE_LINKED_TASK_CMD_BY_ID__ = window.__NOTE_LINKED_TASK_CMD_BY_ID__ || {};
+    var count = 0;
+    ids.forEach(function(id){
+      var n = noteById(id);
+      if (!n) return;
+      var ref = generatedTaskRefForNote(n);
+      if (!ref) return;
+      linkNoteToTask(id, ref);
+      var old = window.__NOTE_LINKED_TASK_CMD_BY_ID__[id];
+      if (old){
+        for (var i=A.length-1;i>=0;i--) if (A[i] === old) A.splice(i, 1);
+      }
+      var cmd = 'task add ' + commandText(n.content || ref.desc || 'New note task');
+      window.__NOTE_LINKED_TASK_CMD_BY_ID__[id] = cmd;
+      A.push(cmd);
+      count++;
+    });
+    syncNoteTaskBadges();
+    try{ if (typeof updateConsole === 'function') updateConsole(); }catch(_){}
+    saveSoon();
+    return count;
+  }
   function setBucket(id, bucket){
     var n = noteById(id);
     if (!n) return false;
@@ -2130,6 +2185,7 @@
     importData: importData,
     importJSON: importJSON,
     stageSelectedNotesAsTasks: stageSelectedNotesAsTasks,
+    createLinkedTasksFromSelectedNotes: createLinkedTasksFromSelectedNotes,
     linkNotes: function(from, to, type){ if (from && to && from !== to && !linkExists(from, to)){ links.push({from:from, to:to, type:type || 'manual'}); syncNoteLabels(); renderLinks(); saveSoon(); } },
     reflowMindMap: reflowMindMap,
     toggleCollapse: toggleCollapse,

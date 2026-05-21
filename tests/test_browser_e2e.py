@@ -1476,6 +1476,78 @@ window.addEventListener('load', function(){
         self.assertIn("task add 'Build branch with details'", result["lines"])
         self.assertFalse(result["ignorePresent"])
 
+    def test_canvas_notes_create_linked_tasks_stages_and_links_generated_refs(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_CREATE_LINKED_TASKS_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var a = window.TaskCanvasNotes.createNote(180, 240, "Plan linked", "", "Planning");
+      var b = window.TaskCanvasNotes.createNote(440, 240, "Build linked", "details", "Delivery");
+      window.TaskCanvasNotes.selectNote(a.id);
+      window.TaskCanvasNotes.selectNote(b.id, true);
+      var count1 = window.TaskCanvasNotes.createLinkedTasksFromSelectedNotes();
+      var refsA1 = window.TaskCanvasNotes.linkedTasks(a.id);
+      var refsB1 = window.TaskCanvasNotes.linkedTasks(b.id);
+      var count2 = window.TaskCanvasNotes.createLinkedTasksFromSelectedNotes();
+      if (typeof updateConsole === 'function') updateConsole();
+      setTimeout(function(){
+        var lines = ((document.getElementById('consoleText') || {}).value || "").split(/\\n/).filter(Boolean);
+        var badgeA = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"] .tcNoteTaskBadge');
+        var exported = window.TaskCanvasNotes.exportData();
+        var noteA = exported.notes.filter(function(n){ return n.id === a.id; })[0];
+        var out = {
+          button: !!document.getElementById('noteCreateLinkedTasksBtn'),
+          count1: count1,
+          count2: count2,
+          refsA1: refsA1,
+          refsA2: window.TaskCanvasNotes.linkedTasks(a.id),
+          refsB1: refsB1,
+          lines: lines,
+          staged: Array.isArray(window.STAGED_CMDS) ? window.STAGED_CMDS.slice() : [],
+          badgeAText: badgeA && badgeA.textContent,
+          exportedRefsA: noteA && noteA.taskRefs
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 120);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["button"], msg=json.dumps(result))
+        self.assertEqual(result["count1"], 2, msg=json.dumps(result))
+        self.assertEqual(result["count2"], 2, msg=json.dumps(result))
+        self.assertEqual(len(result["refsA1"]), 1, msg=json.dumps(result))
+        self.assertEqual(result["refsA1"], result["refsA2"], msg=json.dumps(result))
+        self.assertEqual(len(result["refsB1"]), 1, msg=json.dumps(result))
+        self.assertTrue(result["refsA1"][0]["uuid"].startswith("new-note-"), msg=json.dumps(result))
+        self.assertTrue(result["refsA1"][0]["short"].startswith("n-"), msg=json.dumps(result))
+        self.assertEqual(result["refsA1"][0]["desc"], "Plan linked", msg=json.dumps(result))
+        self.assertEqual(result["refsB1"][0]["desc"], "Build linked\ndetails", msg=json.dumps(result))
+        self.assertEqual(len(result["staged"]), 2, msg=json.dumps(result))
+        self.assertEqual(len(result["lines"]), 2, msg=json.dumps(result))
+        self.assertIn("task add 'Plan linked'", result["lines"])
+        self.assertIn("task add 'Build linked details'", result["lines"])
+        self.assertEqual(result["badgeAText"], "1 task", msg=json.dumps(result))
+        self.assertEqual(result["exportedRefsA"], result["refsA1"], msg=json.dumps(result))
+
     def test_console_editor_edits_and_removes_commands_across_updates(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
