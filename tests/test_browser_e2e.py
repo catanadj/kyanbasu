@@ -1273,7 +1273,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["afterBucket"], result["exportedColor"])
         self.assertEqual(result["reloadedBucket"], result["afterBucket"])
 
-    def test_drawer_tasks_repel_away_from_notes_when_added_to_canvas(self):
+    def test_drawer_tasks_make_notes_move_aside_when_added_to_canvas(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({
             "tasks": [
@@ -1303,7 +1303,8 @@ window.addEventListener('load', function(){
             return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
           };
           var out = {
-            projectMovedSideways: Math.abs(pr.top - nr.top) <= 1 && (pr.right <= nr.left - 5 || pr.left >= nr.right + 5),
+            projectStayedAtOrigin: Math.abs(parseFloat(proj.style.left || '0') - 20) <= 1 && Math.abs(parseFloat(proj.style.top || '0') - 20) <= 1,
+            noteMovedAside: parseFloat(note.style.left || '0') >= 0 && (nr.right <= pr.left - 5 || nr.left >= pr.right + 5 || nr.bottom <= pr.top - 5 || nr.top >= pr.bottom + 5),
             projectInBounds: pr.left >= sr.left - 1 && pr.top >= sr.top - 1 && pr.right <= sr.right + 1 && pr.bottom <= sr.bottom + 1,
             projectClear: !overlap(nr, pr),
             taskClear: !overlap(nr, tr)
@@ -1327,10 +1328,324 @@ window.addEventListener('load', function(){
         raw = self._run_html_harness(html)
         self.assertNotIn("ERR:", raw)
         result = json.loads(raw)
-        self.assertTrue(result["projectMovedSideways"], msg=json.dumps(result))
+        self.assertTrue(result["projectStayedAtOrigin"], msg=json.dumps(result))
+        self.assertTrue(result["noteMovedAside"], msg=json.dumps(result))
         self.assertTrue(result["projectInBounds"], msg=json.dumps(result))
         self.assertTrue(result["projectClear"], msg=json.dumps(result))
         self.assertTrue(result["taskClear"], msg=json.dumps(result))
+
+    def test_project_drag_into_note_area_pushes_notes_not_project(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({
+            "tasks": [
+                {"uuid": "task-1", "short": "task-1", "desc": "Alpha task", "project": "Alpha", "tags": ["Planning"], "has_depends": False}
+            ],
+            "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}
+        })
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_PROJECT_DRAG_PUSHES_NOTES_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      window.TaskCanvasNotes.createNote(520, 300, "Note block", "", "Planning");
+      addToBuilder(TASKS[0], null, null);
+      setTimeout(function(){
+        moveWholeProject("Alpha", 500, 280);
+        settleCanvasAgainstNotes();
+        setTimeout(function(){
+          var note = document.querySelector('.tcNoteNode');
+          var proj = document.querySelector('.projArea[data-proj="Alpha"]');
+          var nr = note.getBoundingClientRect();
+          var pr = proj.getBoundingClientRect();
+          var overlap = function(a, b){
+            return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+          };
+          var out = {
+            projectX: parseFloat(proj.style.left || '0'),
+            projectY: parseFloat(proj.style.top || '0'),
+            noteX: parseFloat(note.style.left || '0'),
+            noteY: parseFloat(note.style.top || '0'),
+            projectKeptDrop: Math.abs(parseFloat(proj.style.left || '0') - 520) <= 1 && Math.abs(parseFloat(proj.style.top || '0') - 300) <= 1,
+            noteMoved: Math.abs(parseFloat(note.style.left || '0') - 520) > 5 || Math.abs(parseFloat(note.style.top || '0') - 300) > 5,
+            clear: !overlap(nr, pr)
+          };
+          var pre = document.createElement('pre');
+          pre.id = 'e2e-out';
+          pre.textContent = JSON.stringify(out);
+          document.body.appendChild(pre);
+        }, 160);
+      }, 220);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["projectKeptDrop"], msg=json.dumps(result))
+        self.assertTrue(result["noteMoved"], msg=json.dumps(result))
+        self.assertTrue(result["clear"], msg=json.dumps(result))
+
+    def test_note_placement_in_project_area_pushes_project_aside(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({
+            "tasks": [
+                {"uuid": "task-1", "short": "task-1", "desc": "Alpha task", "project": "Alpha", "tags": ["Planning"], "has_depends": False}
+            ],
+            "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}
+        })
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_NOTE_PLACEMENT_PUSHES_PROJECT_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      addToBuilder(TASKS[0], null, null);
+      setTimeout(function(){
+        window.TaskCanvasNotes.createNote(36, 36, "Note block", "", "Planning");
+        setTimeout(function(){
+          var note = document.querySelector('.tcNoteNode');
+          var bucket = document.querySelector('.tcNoteBucket');
+          var proj = document.querySelector('.projArea[data-proj="Alpha"]');
+          var nr = note.getBoundingClientRect();
+          var br = bucket.getBoundingClientRect();
+          var pr = proj.getBoundingClientRect();
+          var overlap = function(a, b){
+            return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+          };
+          var out = {
+            noteKeptPlacement: Math.abs(parseFloat(note.style.left || '0') - 36) <= 1 && Math.abs(parseFloat(note.style.top || '0') - 36) <= 1,
+            projectMoved: Math.abs(parseFloat(proj.style.left || '0') - 20) > 5 || Math.abs(parseFloat(proj.style.top || '0') - 20) > 5,
+            projectClearOfNote: !overlap(nr, pr),
+            projectClearOfBucket: !overlap(br, pr)
+          };
+          var pre = document.createElement('pre');
+          pre.id = 'e2e-out';
+          pre.textContent = JSON.stringify(out);
+          document.body.appendChild(pre);
+        }, 180);
+      }, 180);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["noteKeptPlacement"], msg=json.dumps(result))
+        self.assertTrue(result["projectMoved"], msg=json.dumps(result))
+        self.assertTrue(result["projectClearOfNote"], msg=json.dumps(result))
+        self.assertTrue(result["projectClearOfBucket"], msg=json.dumps(result))
+
+    def test_note_bucket_move_into_project_area_pushes_project_aside(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({
+            "tasks": [
+                {"uuid": "task-1", "short": "task-1", "desc": "Alpha task", "project": "Alpha", "tags": ["Planning"], "has_depends": False}
+            ],
+            "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}
+        })
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_NOTE_BUCKET_PUSHES_PROJECT_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      addToBuilder(TASKS[0], null, null);
+      setTimeout(function(){
+        var note = window.TaskCanvasNotes.createNote(720, 420, "Note block", "", "Planning", {skipAutoLayout:true});
+        note.x = 36;
+        note.y = 36;
+        window.TaskCanvasNotes.render();
+        settleProjectsAgainstNotes();
+        setTimeout(function(){
+          var bucket = document.querySelector('.tcNoteBucket');
+          var proj = document.querySelector('.projArea[data-proj="Alpha"]');
+          var br = bucket.getBoundingClientRect();
+          var pr = proj.getBoundingClientRect();
+          var overlap = function(a, b){
+            return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+          };
+          var out = {
+            bucketAtDrop: parseFloat(bucket.style.left || '0') < 60 && parseFloat(bucket.style.top || '0') < 60,
+            projectMoved: Math.abs(parseFloat(proj.style.left || '0') - 20) > 5 || Math.abs(parseFloat(proj.style.top || '0') - 20) > 5,
+            clear: !overlap(br, pr)
+          };
+          var pre = document.createElement('pre');
+          pre.id = 'e2e-out';
+          pre.textContent = JSON.stringify(out);
+          document.body.appendChild(pre);
+        }, 180);
+      }, 180);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["bucketAtDrop"], msg=json.dumps(result))
+        self.assertTrue(result["projectMoved"], msg=json.dumps(result))
+        self.assertTrue(result["clear"], msg=json.dumps(result))
+
+    def test_viewer_renders_task_section_and_note_outline(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({
+            "tasks": [
+                {"uuid": "task-1", "short": "A", "desc": "Parent task", "project": "Work", "tags": ["Plan"], "has_depends": False},
+                {"uuid": "task-2", "short": "B", "desc": "Dependent task", "project": "Work", "tags": ["Build"], "has_depends": True},
+                {"uuid": "task-3", "short": "C", "desc": "Dependent task two", "project": "Ops", "tags": ["Run"], "has_depends": True}
+            ],
+            "graph": {"edges": [{"from": "A", "to": "B"}, {"from": "A", "to": "C"}], "parent_current_deps": {"B": ["A"], "C": ["A"]}, "child_to_parents": {"B": ["A"], "C": ["A"]}}
+        })
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_VIEWER_NOTES_OUTLINE_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var root = window.TaskCanvasNotes.createNote(180, 240, "Launch plan", "", "Planning");
+      var child = window.TaskCanvasNotes.createChildNote(root.id, "Build prototype", "");
+      window.TaskCanvasNotes.setBucket(child.id, "Delivery");
+      document.getElementById('tabViewer').click();
+      setTimeout(function(){
+        var sections = Array.prototype.slice.call(document.querySelectorAll('#viewerStage .viewerSectionTitle')).map(function(el){ return el.textContent; });
+        var taskItems = Array.prototype.slice.call(document.querySelectorAll('#viewerStage .viewerItem .desc')).map(function(el){ return el.textContent; });
+        var taskSection = document.querySelectorAll('#viewerStage .viewerSection')[0];
+        var notesSection = document.querySelectorAll('#viewerStage .viewerSection')[1];
+        var tr = taskSection.getBoundingClientRect();
+        var nrSection = notesSection.getBoundingClientRect();
+        var notesHead = notesSection.querySelector('.viewerSectionHead').getBoundingClientRect();
+        var sortControls = notesSection.querySelector('.viewerSectionActions').getBoundingClientRect();
+        var noteRows = Array.prototype.slice.call(document.querySelectorAll('#viewerStage .viewerNote')).map(function(el){
+          return {
+            code: (el.querySelector('.viewerNoteCode') || {}).textContent || "",
+            text: (el.querySelector('.viewerNoteText') || {}).textContent || "",
+            bucket: (el.querySelector('.viewerNoteBucket') || {}).textContent || "",
+            indent: parseFloat(el.style.marginLeft || '0')
+          };
+        });
+        var out = {
+          sections: sections,
+          taskItems: taskItems,
+          noteRows: noteRows,
+          sortButtons: Array.prototype.slice.call(document.querySelectorAll('#viewerStage [data-viewer-note-sort]')).map(function(el){ return el.textContent; }),
+          sectionsSeparated: nrSection.top > tr.bottom + 20,
+          sortControlsBelowHeader: sortControls.top > notesHead.bottom - 1,
+          sortControlsVisible: sortControls.width > 80 && sortControls.height > 20,
+          taskEmpty: !!Array.prototype.slice.call(document.querySelectorAll('#viewerStage .viewerEmpty')).filter(function(el){ return el.textContent === 'No dependent tasks.'; }).length,
+          notesEmpty: !!Array.prototype.slice.call(document.querySelectorAll('#viewerStage .viewerEmpty')).filter(function(el){ return el.textContent === 'No planning notes.'; }).length
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 180);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["sections"], ["Tasks", "Notes"], msg=json.dumps(result))
+        self.assertIn("Dependent task", result["taskItems"], msg=json.dumps(result))
+        self.assertIn("Dependent task two", result["taskItems"], msg=json.dumps(result))
+        self.assertEqual(result["sortButtons"], ["ID", "Bucket"], msg=json.dumps(result))
+        self.assertTrue(result["sectionsSeparated"], msg=json.dumps(result))
+        self.assertTrue(result["sortControlsBelowHeader"], msg=json.dumps(result))
+        self.assertTrue(result["sortControlsVisible"], msg=json.dumps(result))
+        self.assertFalse(result["taskEmpty"], msg=json.dumps(result))
+        self.assertFalse(result["notesEmpty"], msg=json.dumps(result))
+        self.assertEqual([row["text"] for row in result["noteRows"]], ["Launch plan", "Build prototype"], msg=json.dumps(result))
+        self.assertEqual(result["noteRows"][0]["code"], "A1", msg=json.dumps(result))
+        self.assertEqual(result["noteRows"][1]["code"], "A1-1", msg=json.dumps(result))
+        self.assertEqual(result["noteRows"][0]["bucket"], "Planning", msg=json.dumps(result))
+        self.assertEqual(result["noteRows"][1]["bucket"], "Delivery", msg=json.dumps(result))
+        self.assertGreater(result["noteRows"][1]["indent"], result["noteRows"][0]["indent"], msg=json.dumps(result))
+
+    def test_viewer_note_outline_sorts_roots_by_bucket(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_VIEWER_NOTES_SORT_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      localStorage.removeItem('taskcanvas:viewer:notes-sort');
+      var z = window.TaskCanvasNotes.createNote(120, 220, "Zeta root", "", "Zeta", {skipAutoLayout:true});
+      window.TaskCanvasNotes.createChildNote(z.id, "Zeta child", "");
+      window.TaskCanvasNotes.createNote(420, 220, "Alpha root", "", "Alpha", {skipAutoLayout:true});
+      document.getElementById('tabViewer').click();
+      setTimeout(function(){
+        var before = Array.prototype.slice.call(document.querySelectorAll('#viewerStage .viewerNoteText')).map(function(el){ return el.textContent; });
+        document.querySelector('#viewerStage [data-viewer-note-sort="bucket"]').click();
+        setTimeout(function(){
+          var after = Array.prototype.slice.call(document.querySelectorAll('#viewerStage .viewerNoteText')).map(function(el){ return el.textContent; });
+          var active = (document.querySelector('#viewerStage .viewerSortBtn.active') || {}).textContent || "";
+          var stored = localStorage.getItem('taskcanvas:viewer:notes-sort') || "";
+          var indents = Array.prototype.slice.call(document.querySelectorAll('#viewerStage .viewerNote')).map(function(el){ return parseFloat(el.style.marginLeft || '0'); });
+          var out = {before:before, after:after, active:active, stored:stored, indents:indents};
+          var pre = document.createElement('pre');
+          pre.id = 'e2e-out';
+          pre.textContent = JSON.stringify(out);
+          document.body.appendChild(pre);
+        }, 120);
+      }, 180);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["before"], ["Zeta root", "Zeta child", "Alpha root"], msg=json.dumps(result))
+        self.assertEqual(result["after"], ["Alpha root", "Zeta root", "Zeta child"], msg=json.dumps(result))
+        self.assertEqual(result["active"], "Bucket", msg=json.dumps(result))
+        self.assertEqual(result["stored"], "bucket", msg=json.dumps(result))
+        self.assertGreater(result["indents"][2], result["indents"][1], msg=json.dumps(result))
 
     def test_project_nearest_open_slot_prefers_close_diagonal_position(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
@@ -1874,6 +2189,79 @@ window.addEventListener('load', function(){
         self.assertLess(result["afterSpan"]["h"], result["beforeSpan"]["h"], msg=json.dumps(result))
         self.assertTrue(result["alphaChildRight"], msg=json.dumps(result))
         self.assertTrue(result["betaChildRight"], msg=json.dumps(result))
+
+    def test_canvas_notes_compact_map_avoids_task_project_space(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_COMPACT_AVOIDS_TASKS_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var task = {short:"1", uuid:"task-1", desc:"Important task", project:"Work", tags:["next"]};
+      window.TASKS = window.TASKS || [];
+      window.TASKS.push(task);
+      window.TASK_BY_SHORT = window.TASK_BY_SHORT || {};
+      window.TASK_BY_SHORT[task.short] = task;
+      addNodeForTask(task, 160, 140, {deferLayout:true});
+      recomputeAreasAndTags();
+      var a = window.TaskCanvasNotes.createNote(2600, 240, "Alpha root", "", "Planning", {skipAutoLayout:true});
+      window.TaskCanvasNotes.createChildNote(a.id, "Alpha child", "");
+      var b = window.TaskCanvasNotes.createNote(3300, 620, "Beta root", "", "Review", {skipAutoLayout:true});
+      function rectFor(el){
+        return {
+          x: parseFloat(el.style.left || '0'),
+          y: parseFloat(el.style.top || '0'),
+          w: parseFloat(el.style.width || el.offsetWidth || '0'),
+          h: parseFloat(el.style.height || el.offsetHeight || '0')
+        };
+      }
+      function overlap(a, b){
+        return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+      }
+      setTimeout(function(){
+        window.TaskCanvasNotes.compactMindMap();
+        setTimeout(function(){
+          var buckets = Array.prototype.slice.call(document.querySelectorAll('.tcNoteBucket')).map(rectFor);
+          var occupied = Array.prototype.slice.call(document.querySelectorAll('#builderStage .node, #builderStage .projArea, #builderStage .tagArea')).map(rectFor);
+          var overlaps = false;
+          buckets.forEach(function(bucket){
+            occupied.forEach(function(rect){
+              if (overlap(bucket, rect)) overlaps = true;
+            });
+          });
+          var out = {
+            buckets: buckets.length,
+            occupied: occupied.length,
+            overlaps: overlaps,
+            firstBucketX: buckets[0] ? buckets[0].x : null,
+            projectRight: occupied.reduce(function(max, r){ return Math.max(max, r.x + r.w); }, 0)
+          };
+          var pre = document.createElement('pre');
+          pre.id = 'e2e-out';
+          pre.textContent = JSON.stringify(out);
+          document.body.appendChild(pre);
+        }, 120);
+      }, 120);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["buckets"], 2, msg=json.dumps(result))
+        self.assertGreaterEqual(result["occupied"], 3, msg=json.dumps(result))
+        self.assertFalse(result["overlaps"], msg=json.dumps(result))
 
     def test_canvas_notes_keyboard_creates_sibling_and_child_notes(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")

@@ -169,6 +169,26 @@
     roots.forEach(function(root, idx){ walk(root, noteCodePrefix(idx) + '1', {}); });
     return labels;
   }
+  function noteOutline(){
+    var labels = computeNoteLabels();
+    function pack(n, depth, seen){
+      if (!n || seen[n.id]) return null;
+      seen[n.id] = true;
+      var kids = sortChildrenForLabels(childLinksFrom(n.id).map(function(l){ return noteById(l.to); }).filter(Boolean));
+      return {
+        id: n.id,
+        label: labels[n.id] || '',
+        content: n.content || '',
+        bucket: noteBucket(n),
+        depth: depth || 0,
+        collapsed: !!n.collapsed,
+        children: kids.map(function(child){ return pack(child, (depth || 0) + 1, Object.assign({}, seen)); }).filter(Boolean)
+      };
+    }
+    return sortRootsForLabels(notes.filter(function(n){ return n && !hasChildParent(n.id); })).map(function(root){
+      return pack(root, 0, {});
+    }).filter(Boolean);
+  }
   function syncNoteLabels(){
     var labels = computeNoteLabels();
     notes.forEach(function(n){
@@ -646,6 +666,65 @@
   function rectsOverlap(a, b){
     return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
   }
+  function inflatedRect(rect, pad){
+    pad = Math.max(0, toInt(pad, 0));
+    return {x: rect.x - pad, y: rect.y - pad, w: rect.w + pad * 2, h: rect.h + pad * 2};
+  }
+  function canvasElementRect(el){
+    if (!el || el.style.display === 'none') return null;
+    var st = stage();
+    var scale = window.ZSCALE || 1;
+    if (el.style && (el.style.left || el.style.top)){
+      return {
+        x: toInt(el.style.left, 0),
+        y: toInt(el.style.top, 0),
+        w: el.offsetWidth || toInt(el.style.width, 0),
+        h: el.offsetHeight || toInt(el.style.height, 0)
+      };
+    }
+    if (st && el.getBoundingClientRect){
+      var r = el.getBoundingClientRect();
+      var sr = st.getBoundingClientRect ? st.getBoundingClientRect() : {left:0, top:0};
+      return {x:(r.left - sr.left) / scale, y:(r.top - sr.top) / scale, w:r.width / scale, h:r.height / scale};
+    }
+    return null;
+  }
+  function canvasOccupiedRects(){
+    var rects = [];
+    qsa('#builderStage .node, #builderStage .projArea, #builderStage .tagArea').forEach(function(el){
+      var rect = canvasElementRect(el);
+      if (!rect || rect.w <= 0 || rect.h <= 0) return;
+      rects.push(rect);
+    });
+    return rects;
+  }
+  function noteSpaceRects(){
+    var rects = [];
+    qsa('.tcNoteBucket, .tcNoteNode').forEach(function(el){
+      var rect = canvasElementRect(el);
+      if (!rect || rect.w <= 0 || rect.h <= 0) return;
+      rects.push(rect);
+    });
+    return rects;
+  }
+  function overlapsAnyRect(rect, rects){
+    for (var i = 0; i < rects.length; i++) if (rectsOverlap(rect, rects[i])) return true;
+    return false;
+  }
+  function compactSlotForRect(rect, occupied, placed, originX, originY, layoutW, gap){
+    var bounds = noteStageBounds();
+    var step = 28;
+    var maxX = Math.max(originX, Math.min(bounds.maxX - rect.w, originX + layoutW - rect.w));
+    var maxY = Math.max(originY, bounds.maxY - rect.h);
+    var all = occupied.concat(placed);
+    for (var y = originY; y <= maxY; y += step){
+      for (var x = originX; x <= maxX; x += step){
+        var candidate = {x:x, y:y, w:rect.w, h:rect.h};
+        if (!overlapsAnyRect(inflatedRect(candidate, gap), all)) return candidate;
+      }
+    }
+    return {x: originX, y: maxY + gap, w: rect.w, h: rect.h};
+  }
   function noteStageBounds(){
     var st = stage();
     var cv = canvas();
@@ -996,6 +1075,47 @@
     }
     return changed;
   }
+  function makeSpaceForRects(rects){
+    rects = Array.isArray(rects) ? rects.filter(function(r){
+      return r && isFinite(r.x) && isFinite(r.y) && isFinite(r.w) && isFinite(r.h) && r.w > 0 && r.h > 0;
+    }) : [];
+    if (!rects.length) return false;
+    var changed = false;
+    var safety = 0;
+    while (safety < 20){
+      var moved = false;
+      var visible = notes.map(function(n){
+        var rect = noteRect(n);
+        return rect ? {note:n, rect:rect} : null;
+      }).filter(Boolean);
+      for (var i = 0; i < visible.length; i++){
+        var item = visible[i];
+        if (!overlapsAnyRect(item.rect, rects)) continue;
+        var otherNotes = visible.filter(function(other){ return other.note.id !== item.note.id; }).map(function(other){ return other.rect; });
+        var move = findNearestOpenNoteMove(item.rect, rects.concat(otherNotes), {preferVertical:true});
+        if (!move) move = chooseDirectionalNudge(item.rect, rects, false);
+        if (!move) continue;
+        moveNoteTo(item.note, item.rect.x + move.dx, item.rect.y + move.dy);
+        moved = true;
+        changed = true;
+      }
+      if (!moved) break;
+      safety++;
+    }
+    if (changed){
+      resolveNoteOverlaps();
+      renderAll();
+      saveSoon();
+    }
+    return changed;
+  }
+  function requestCanvasSpaceForNotes(){
+    try{
+      if (typeof window.settleProjectsAgainstNotes === 'function') return !!window.settleProjectsAgainstNotes();
+      if (typeof settleProjectsAgainstNotes === 'function') return !!settleProjectsAgainstNotes();
+    }catch(_){}
+    return false;
+  }
   function settleNewNote(note){
     if (!note || !note.id) return false;
     var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(note.id)+'"]');
@@ -1018,7 +1138,7 @@
       el.style.left = note.x + 'px';
       el.style.top = note.y + 'px';
     }
-    return settleNoteAgainstBuckets(note) || !!nudge;
+    return requestCanvasSpaceForNotes() || settleNoteAgainstBuckets(note) || !!nudge;
   }
   function settleBucketAgainstNotes(bucket){
     bucket = bucketText(bucket);
@@ -1231,9 +1351,11 @@
       bucketDrag = null;
       if (follow){
         resolveNoteOverlaps();
+        requestCanvasSpaceForNotes();
         renderAll();
       } else {
         settleBucketAgainstNotes(bucket);
+        requestCanvasSpaceForNotes();
         renderBuckets();
       }
       saveSoon();
@@ -1399,6 +1521,7 @@
       resolveNoteOverlaps();
       settleNoteAgainstBuckets(n);
       resolveNoteOverlaps();
+      requestCanvasSpaceForNotes();
     }
     renderBuckets();
     syncNoteLabels();
@@ -1549,14 +1672,17 @@
       noteDragActive = false;
       start = [];
       if (bucketChanged){
+        requestCanvasSpaceForNotes();
         renderAll();
       } else {
+        var movedIds = start.map(function(sp){ return sp.id; });
         resolveNoteOverlaps();
-        start.forEach(function(sp){
-          var n = noteById(sp.id);
+        movedIds.forEach(function(noteId){
+          var n = noteById(noteId);
           if (n) settleNoteAgainstBuckets(n);
         });
         resolveNoteOverlaps();
+        requestCanvasSpaceForNotes();
         renderBuckets();
         renderLinks();
       }
@@ -1910,9 +2036,8 @@
     if (wrap && wrap.clientWidth) layoutW = Math.max(720, Math.min(1600, (wrap.clientWidth / (window.ZSCALE || 1)) - 120));
     var originX = 120;
     var originY = 140;
-    var cursorX = originX;
-    var cursorY = originY;
-    var rowH = 0;
+    var occupiedRects = canvasOccupiedRects();
+    var placedRects = [];
     var changed = false;
     var buckets = bucketNames().sort(function(a, b){
       var ar = bucketVisualRect(a), br = bucketVisualRect(b);
@@ -1934,21 +2059,16 @@
       });
       var rect = bucketVisualRect(bucket);
       if (!rect) return;
-      if (cursorX > originX && cursorX + rect.w > originX + layoutW){
-        cursorX = originX;
-        cursorY += rowH + rowGap;
-        rowH = 0;
-      }
-      var dx = cursorX - rect.x;
-      var dy = cursorY - rect.y;
+      var slot = compactSlotForRect(rect, occupiedRects, placedRects, originX, originY, layoutW, Math.max(bucketGap, rowGap));
+      var dx = slot.x - rect.x;
+      var dy = slot.y - rect.y;
       moveBucketNotes(bucket, dx, dy);
       var layout = bucketLayout(bucket);
       layout.dx = 0;
       layout.dy = 0;
       changed = true;
       rect = bucketVisualRect(bucket) || rect;
-      cursorX += rect.w + bucketGap;
-      rowH = Math.max(rowH, rect.h);
+      placedRects.push(rect);
     });
     renderAll();
     saveBucketLayoutState();
@@ -2269,9 +2389,12 @@
     selectNote: selectNote,
     selectedNotes: function(){ return selectedIds(); },
     notes: function(){ return notes.slice(); },
+    noteSpaceRects: noteSpaceRects,
+    outline: noteOutline,
     links: function(){ return links.slice(); },
     noteLabels: function(){ return syncNoteLabels(); },
     searchNotes: function(query){ return searchNotes(query).map(function(n){ return n.id; }); },
+    makeSpaceForRects: makeSpaceForRects,
     focusSearchResult: focusSearchResult,
     linkNoteToTask: linkNoteToTask,
     unlinkNoteTask: unlinkNoteTask,

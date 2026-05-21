@@ -765,9 +765,6 @@
   }
   body.inspector-collapsed:not(.viewer-mode) .inspectorHandle{display:block}
   .viewerEmpty{
-    position:absolute;
-    left:40px;
-    top:40px;
     padding:16px 18px;
     border:1px solid var(--line);
     border-radius:18px;
@@ -775,10 +772,54 @@
     color:var(--muted);
     box-shadow:var(--shadow-1);
   }
-  .viewerColumn{
+  .viewerSection{
     position:absolute;
-    top:40px;
+    left:40px;
+    right:40px;
+  }
+  .viewerSectionHead{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+    margin-bottom:14px;
+  }
+  .viewerSectionTitle{
+    font:700 18px/1.2 var(--font-display);
+  }
+  .viewerSectionCount{
+    color:var(--muted);
+    font-size:12px;
+  }
+  .viewerSectionActions{
+    display:flex;
+    gap:6px;
+    align-items:center;
+    margin:0 0 12px 0;
+  }
+  .viewerSectionHead .viewerSectionActions{margin:0 0 0 8px}
+  .viewerSortBtn{
+    border:1px solid rgba(164,185,214,.18);
+    border-radius:6px;
+    background:rgba(255,255,255,.035);
+    color:var(--muted);
+    padding:7px 11px;
+    font:700 12px/1 var(--font-ui);
+    cursor:pointer;
+  }
+  .viewerSortBtn.active{
+    color:var(--fg);
+    border-color:rgba(122,162,247,.55);
+    background:rgba(122,162,247,.16);
+  }
+  .viewerColumns{
+    display:flex;
+    align-items:flex-start;
+    gap:18px;
+    flex-wrap:wrap;
+  }
+  .viewerColumn{
     min-width:280px;
+    max-width:360px;
     padding:14px;
     border:1px solid var(--line);
     border-radius:20px;
@@ -796,6 +837,42 @@
     background:rgba(255,255,255,.03);
   }
   .viewerItem + .viewerItem{margin-top:8px}
+  .viewerOutline{
+    max-width:900px;
+    padding:14px;
+    border:1px solid var(--line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(17,28,45,.9), rgba(10,17,28,.94));
+    box-shadow:var(--shadow-1);
+  }
+  .viewerNote{
+    display:grid;
+    grid-template-columns:auto minmax(0, 1fr) auto;
+    gap:10px;
+    align-items:start;
+    padding:9px 10px;
+    border:1px solid rgba(164,185,214,.12);
+    border-radius:12px;
+    background:rgba(255,255,255,.025);
+  }
+  .viewerNote + .viewerNote{margin-top:7px}
+  .viewerNoteCode{
+    color:var(--accent);
+    font:700 12px/1.3 var(--font-display);
+    white-space:nowrap;
+  }
+  .viewerNoteText{
+    min-width:0;
+    color:var(--fg);
+    font-size:13px;
+    line-height:1.35;
+    word-break:break-word;
+  }
+  .viewerNoteBucket{
+    color:var(--muted);
+    font-size:11px;
+    white-space:nowrap;
+  }
   .zoomwrap{
     display:flex;
     gap:10px;
@@ -1865,10 +1942,37 @@ function noteRects(){
 }
 
 function projectObstacleRects(excludeProject){
-  var rects = noteRects();
+  var rects = [];
   projectAreas.forEach(function(pa, name){
     if (name === excludeProject) return;
     rects.push({x: pa.x, y: pa.y, w: pa.w, h: pa.h});
+  });
+  return rects;
+}
+function projectObstacleRectsWithNotes(excludeProject){
+  var notes = noteRects();
+  try{
+    if (window.TaskCanvasNotes && typeof window.TaskCanvasNotes.noteSpaceRects === "function"){
+      notes = window.TaskCanvasNotes.noteSpaceRects();
+    }
+  }catch(_){}
+  return notes.concat(projectObstacleRects(excludeProject));
+}
+function projectAndTaskRects(){
+  var rects = [];
+  projectAreas.forEach(function(pa){
+    rects.push({x: pa.x, y: pa.y, w: pa.w, h: pa.h});
+  });
+  tagAreas.forEach(function(ta){
+    rects.push({x: ta.x, y: ta.y, w: ta.w, h: ta.h});
+  });
+  Array.from(builderStage.querySelectorAll('.node')).forEach(function(n){
+    rects.push({
+      x: parseInt(n.style.left || "0", 10) || 0,
+      y: parseInt(n.style.top || "0", 10) || 0,
+      w: n.offsetWidth || 220,
+      h: n.offsetHeight || 92
+    });
   });
   return rects;
 }
@@ -1927,8 +2031,19 @@ function findNearestProjectMove(rect, obstacles){
 }
 
 function resolveProjectNoteOverlaps(){
-  var notes = noteRects();
-  if (!notes.length) return false;
+  if (!window.TaskCanvasNotes || typeof window.TaskCanvasNotes.makeSpaceForRects !== "function") return false;
+  if (!noteRects().length) return false;
+  return !!window.TaskCanvasNotes.makeSpaceForRects(projectAndTaskRects());
+}
+
+function settleProjectsAgainstNotes(){
+  var noteSpace = noteRects();
+  try{
+    if (window.TaskCanvasNotes && typeof window.TaskCanvasNotes.noteSpaceRects === "function"){
+      noteSpace = window.TaskCanvasNotes.noteSpaceRects();
+    }
+  }catch(_){}
+  if (!noteSpace.length) return false;
   var changed = false;
   var safety = 0;
   while (safety < 30){
@@ -1936,20 +2051,29 @@ function resolveProjectNoteOverlaps(){
     var projs = [];
     projectAreas.forEach(function(pa, name){ projs.push({name:name, pa:pa}); });
     projs.sort(function(a,b){ return (a.pa.y - b.pa.y) || (a.pa.x - b.pa.x); });
-
     for (var i = 0; i < projs.length; i++){
       var item = projs[i];
       var pa = item.pa;
-      var nudge = findNearestProjectMove({x:pa.x, y:pa.y, w:pa.w, h:pa.h}, projectObstacleRects(item.name));
-      if (nudge){
-        moveWholeProject(item.name, nudge.dx, nudge.dy);
-        moved = true;
-        changed = true;
-        notes = noteRects();
+      var rect = {x:pa.x, y:pa.y, w:pa.w, h:pa.h};
+      var obstacles = projectObstacleRectsWithNotes(item.name);
+      var blocked = false;
+      for (var j = 0; j < obstacles.length; j++){
+        if (rectsOverlap(rect, obstacles[j])){ blocked = true; break; }
       }
+      if (!blocked) continue;
+      var nudge = findNearestProjectMove(rect, obstacles);
+      if (!nudge) continue;
+      moveWholeProject(item.name, nudge.dx, nudge.dy);
+      moved = true;
+      changed = true;
     }
     if (!moved) break;
     safety++;
+  }
+  if (changed){
+    resolveProjectOverlaps();
+    recomputeAreasAndTags();
+    drawLinks();
   }
   return changed;
 }
@@ -2852,25 +2976,70 @@ document.addEventListener('mouseup', function(e){
   marquee.remove(); marquee=null; mStart=null;
 });
 
-/* ===== Viewer (dependent tasks only) ===== */
+/* ===== Viewer ===== */
 function isDependentShort(shortId){
   if (!shortId) return false;
   if (PARENT_DEPS0 && PARENT_DEPS0[shortId] && PARENT_DEPS0[shortId].length) return true;
   if (CHILD_TO_PARENTS && CHILD_TO_PARENTS[shortId] && CHILD_TO_PARENTS[shortId].length) return true;
   return false;
 }
-function renderViewer(){
-  viewerStage.innerHTML="";
-  var depTasks = [];
-  for (var i=0;i<TASKS.length;i++){
-    var t=TASKS[i];
-    if (isDependentShort(t.short)) depTasks.push(t);
-  }
+function viewerNotesSortMode(){
+  try{
+    var v = localStorage.getItem('taskcanvas:viewer:notes-sort') || 'id';
+    return v === 'bucket' ? 'bucket' : 'id';
+  }catch(_){ return 'id'; }
+}
+function setViewerNotesSortMode(mode){
+  mode = mode === 'bucket' ? 'bucket' : 'id';
+  try{ localStorage.setItem('taskcanvas:viewer:notes-sort', mode); }catch(_){}
+  renderViewer();
+}
+function viewerSection(titleText, countText, top){
+  var section=document.createElement('div');
+  section.className="viewerSection";
+  section.style.top=(top|0)+"px";
+  var head=document.createElement('div');
+  head.className="viewerSectionHead";
+  var title=document.createElement('div');
+  title.className="viewerSectionTitle";
+  title.textContent=titleText;
+  var count=document.createElement('div');
+  count.className="viewerSectionCount";
+  count.textContent=countText;
+  head.appendChild(title);
+  head.appendChild(count);
+  section.appendChild(head);
+  viewerStage.appendChild(section);
+  return section;
+}
+function viewerSectionBottom(section){
+  if (!section) return 40;
+  return (parseInt(section.style.top || '0', 10) || 0) + (section.offsetHeight || 0);
+}
+function addViewerNoteSortControls(section, mode){
+  if (!section) return;
+  var actions=document.createElement('div');
+  actions.className='viewerSectionActions';
+  actions.setAttribute('aria-label', 'Sort notes');
+  [['id', 'ID'], ['bucket', 'Bucket']].forEach(function(pair){
+    var btn=document.createElement('button');
+    btn.type='button';
+    btn.className='viewerSortBtn' + (mode === pair[0] ? ' active' : '');
+    btn.textContent=pair[1];
+    btn.setAttribute('data-viewer-note-sort', pair[0]);
+    btn.addEventListener('click', function(){ setViewerNotesSortMode(pair[0]); });
+    actions.appendChild(btn);
+  });
+  var head = section.querySelector('.viewerSectionHead');
+  if (head && head.nextSibling) section.insertBefore(actions, head.nextSibling);
+  else section.appendChild(actions);
+}
+function renderViewerTasks(section, depTasks){
   if (!depTasks.length){
     var empty=document.createElement('div');
     empty.className = "viewerEmpty";
     empty.textContent="No dependent tasks.";
-    viewerStage.appendChild(empty);
+    section.appendChild(empty);
     return;
   }
   var byProj={}, i;
@@ -2879,12 +3048,13 @@ function renderViewer(){
     if(!byProj[p]) byProj[p]=[];
     byProj[p].push(depTasks[i]);
   }
+  var cols=document.createElement('div');
+  cols.className="viewerColumns";
+  section.appendChild(cols);
   var keys=Object.keys(byProj).sort();
-  var x=40;
   for(i=0;i<keys.length;i++){
     var col=document.createElement('div');
     col.className = "viewerColumn";
-    col.style.left=(x|0)+"px"; col.style.top="40px";
     var title=document.createElement('div');
     title.className = "viewerTitle";
     title.textContent=keys[i]+" ("+byProj[keys[i]].length+")";
@@ -2899,9 +3069,68 @@ function renderViewer(){
         '<div class="meta">'+escapeHtml((arr[k].project||"(no project)")+' • '+firstTag(arr[k]))+'</div>';
       col.appendChild(it);
     }
-    viewerStage.appendChild(col);
-    x+=320;
+    cols.appendChild(col);
   }
+}
+function appendViewerNote(outlineEl, item){
+  var row=document.createElement('div');
+  row.className="viewerNote";
+  row.style.marginLeft=Math.min(180, (item.depth || 0) * 24) + "px";
+  row.setAttribute('data-note-id', item.id || '');
+  row.innerHTML =
+    '<div class="viewerNoteCode"></div>' +
+    '<div class="viewerNoteText"></div>' +
+    '<div class="viewerNoteBucket"></div>';
+  row.querySelector('.viewerNoteCode').textContent=item.label || '';
+  row.querySelector('.viewerNoteText').textContent=item.content || 'New note';
+  row.querySelector('.viewerNoteBucket').textContent=item.bucket || '(no bucket)';
+  outlineEl.appendChild(row);
+  if (item.collapsed) return;
+  (item.children || []).forEach(function(child){ appendViewerNote(outlineEl, child); });
+}
+function renderViewerNotes(section, outline){
+  if (!outline.length){
+    var empty=document.createElement('div');
+    empty.className = "viewerEmpty";
+    empty.textContent="No planning notes.";
+    section.appendChild(empty);
+    return;
+  }
+  var box=document.createElement('div');
+  box.className="viewerOutline";
+  outline.forEach(function(item){ appendViewerNote(box, item); });
+  section.appendChild(box);
+}
+function sortedViewerOutline(outline, mode){
+  outline = Array.isArray(outline) ? outline.slice() : [];
+  if (mode === 'bucket'){
+    outline.sort(function(a, b){
+      var ab = String(a.bucket || '').localeCompare(String(b.bucket || ''));
+      if (ab !== 0) return ab;
+      return String(a.label || '').localeCompare(String(b.label || ''));
+    });
+  }
+  return outline;
+}
+function renderViewer(){
+  viewerStage.innerHTML="";
+  var depTasks = [];
+  for (var i=0;i<TASKS.length;i++){
+    var t=TASKS[i];
+    if (isDependentShort(t.short)) depTasks.push(t);
+  }
+  var outline = [];
+  if (window.TaskCanvasNotes && typeof window.TaskCanvasNotes.outline === "function"){
+    outline = window.TaskCanvasNotes.outline();
+  }
+  var sortMode = viewerNotesSortMode();
+  outline = sortedViewerOutline(outline, sortMode);
+  var tasksSection=viewerSection("Tasks", depTasks.length + " dependent", 40);
+  renderViewerTasks(tasksSection, depTasks);
+  var notesTop = viewerSectionBottom(tasksSection) + 44;
+  var notesSection=viewerSection("Notes", outline.length + " root" + (outline.length === 1 ? "" : "s"), notesTop);
+  addViewerNoteSortControls(notesSection, sortMode);
+  renderViewerNotes(notesSection, outline);
 }
 
 /* ===== Zoom ===== */
