@@ -54,6 +54,7 @@ def build_runtime_html(
     """
     if 'id="COMMANDS_CORE_V1"' not in html:
         html = inject_body(html, load_runtime_asset("commands_core_v1.js.html") + "\n")
+    html = inject_runtime_diagnostics(html)
     pre_payload_body_snippets = [
         ("FEATURE_DEDUPE_FOCUS_V1", "dedupe_focus_v1.js.html"),
         ("FEATURE_PROJECT_ADD_TAG_V4", "project_add_tag_v4.js.html"),
@@ -70,6 +71,8 @@ def build_runtime_html(
         ("feature-dedupe-focus-v1-css", "dedupe_focus_v1.css.html"),
         ("feature-project-addtag-v4-css", "project_add_tag_v4.css.html"),
         ("FEATURE_REVIEW_CHANGES_V1_CSS", "review_changes_v1.css.html"),
+        ("FEATURE_CANVAS_NAVIGATOR_V1_CSS", "canvas_navigator_v1.css.html"),
+        ("FEATURE_CANVAS_WORKBENCHES_V1_CSS", "canvas_workbenches_v1.css.html"),
         ("FEATURE_CANVAS_NOTES_V1_CSS", "canvas_notes_v1.css.html"),
         ("FEATURE_CONSOLE_EDITOR_V1_CSS", "console_editor_v1.css.html"),
     ]
@@ -86,7 +89,9 @@ def build_runtime_html(
         ("FEATURE_COPY_FULL_OVERRIDE_V1", "copy_full_override_v1.js.html"),
         ("FEATURE_SINGLE_CONSOLE_AUGMENT_V1", "single_console_augment_v1.js.html"),
         ("__FEATURE_REVIEW_CHANGES_V1__", "review_changes_v1.js.html"),
+        ("__FEATURE_CANVAS_NAVIGATOR_V1__", "canvas_navigator_v1.js.html"),
         ("__FEATURE_CANVAS_NOTES_V1__", "canvas_notes_v1.js.html"),
+        ("__CANVAS_WORKBENCHES_V1__", "canvas_workbenches_v1.js.html"),
         ("__FEATURE_CONSOLE_EDITOR_V1__", "console_editor_v1.js.html"),
     ]
 
@@ -120,6 +125,5 @@ def build_runtime_html(
     html = inject_actionable_beacon(html)
     html = inject_layout_persistence(html)
     html = inject_command_preflight(html)
-    html = inject_runtime_diagnostics(html)
     html = inject_undo_redo(html)
     return html

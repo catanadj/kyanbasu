@@ -1746,6 +1746,7 @@
     qsa('.tcNoteNode').forEach(function(el){
       el.classList.toggle('selected', !!selectedNoteIds[el.getAttribute('data-note-id')]);
     });
+    renderLinkInspector();
   }
   function focusNoteText(id){
     var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(id)+'"] .tcNoteText');
@@ -1773,6 +1774,22 @@
     linkFrom = null;
     linkMode = false;
     syncButtons();
+  }
+  function linkSelectedNotes(){
+    var ids = selectedIds();
+    if (ids.length !== 2) return false;
+    var to = selectedNoteId && selectedNoteIds[selectedNoteId] ? selectedNoteId : ids[1];
+    var from = ids[0] === to ? ids[1] : ids[0];
+    if (!from || !to || from === to || linkExists(from, to)) return false;
+    links.push({from: from, to: to, type: 'manual'});
+    selectedLinkKey = noteLinkKey({from: from, to: to, type: 'manual'});
+    selectedNoteId = null;
+    selectedNoteIds = {};
+    syncSelection();
+    syncNoteLabels();
+    renderLinks();
+    saveSoon();
+    return true;
   }
   function deleteNote(id){
     deleteNotes([id]);
@@ -2062,6 +2079,129 @@
     saveSoon();
     return true;
   }
+  function noteLinkRowsFor(id){
+    return links.filter(function(l){
+      return l && (l.from === id || l.to === id) && noteById(l.from) && noteById(l.to);
+    });
+  }
+  function shortNoteText(id){
+    var n = noteById(id);
+    var label = syncNoteLabels()[id] || '';
+    var text = n ? (n.content || 'New note').replace(/\s+/g, ' ').trim() : 'Missing note';
+    if (text.length > 54) text = text.slice(0, 51) + '...';
+    return label ? label + ' ' + text : text;
+  }
+  function selectedLink(){
+    if (!selectedLinkKey) return null;
+    for (var i=0;i<links.length;i++){
+      if (noteLinkKey(links[i]) === selectedLinkKey) return links[i];
+    }
+    return null;
+  }
+  function ensureLinkInspector(){
+    var panel = document.getElementById('tcNoteLinkInspector');
+    if (panel) return panel;
+    if (!document.body) return null;
+    panel = document.createElement('div');
+    panel.id = 'tcNoteLinkInspector';
+    panel.className = 'tcNoteLinkInspector';
+    panel.hidden = true;
+    document.body.appendChild(panel);
+    return panel;
+  }
+  function renderLinkInspector(){
+    var panel = ensureLinkInspector();
+    if (!panel) return;
+    var ids = selectedIds();
+    var link = selectedLink();
+    panel.innerHTML = '';
+    panel.hidden = true;
+    if (link){
+      panel.hidden = false;
+      panel.appendChild(linkInspectorHeader('Selected link'));
+      panel.appendChild(linkInspectorRow(link, link.from, 'From'));
+      panel.appendChild(linkInspectorRow(link, link.to, 'To'));
+      return;
+    }
+    if (ids.length === 2){
+      panel.hidden = false;
+      panel.appendChild(linkInspectorHeader('2 notes selected'));
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tcNoteLinkPrimary';
+      btn.textContent = 'Link selected notes';
+      btn.title = 'Create a note link from the first selected note to the last selected note';
+      btn.disabled = linkExists(ids[0] === selectedNoteId ? ids[1] : ids[0], selectedNoteId || ids[1]);
+      btn.addEventListener('click', function(ev){
+        ev.preventDefault();
+        linkSelectedNotes();
+      });
+      panel.appendChild(btn);
+      ids.forEach(function(id){
+        var item = document.createElement('div');
+        item.className = 'tcNoteLinkPicked';
+        item.textContent = shortNoteText(id);
+        panel.appendChild(item);
+      });
+      return;
+    }
+    if (ids.length !== 1) return;
+    var id = ids[0];
+    var rows = noteLinkRowsFor(id);
+    if (!rows.length) return;
+    panel.hidden = false;
+    panel.appendChild(linkInspectorHeader('Note links'));
+    rows.forEach(function(l){
+      var otherId = l.from === id ? l.to : l.from;
+      var role = l.from === id ? 'To' : 'From';
+      panel.appendChild(linkInspectorRow(l, otherId, role));
+    });
+  }
+  function linkInspectorHeader(text){
+    var head = document.createElement('div');
+    head.className = 'tcNoteLinkInspectorHead';
+    head.textContent = text;
+    return head;
+  }
+  function linkInspectorRow(link, noteId, role){
+    var key = noteLinkKey(link);
+    var row = document.createElement('div');
+    row.className = 'tcNoteLinkInspectorRow';
+    var info = document.createElement('button');
+    info.type = 'button';
+    info.className = 'tcNoteLinkInfo';
+    info.title = 'Go to note';
+    info.innerHTML = '<span class="tcNoteLinkRole"></span><span class="tcNoteLinkLabel"></span>';
+    qs('.tcNoteLinkRole', info).textContent = role;
+    qs('.tcNoteLinkLabel', info).textContent = shortNoteText(noteId);
+    info.addEventListener('click', function(ev){
+      ev.preventDefault();
+      focusSearchResult(noteId);
+    });
+    var relink = document.createElement('button');
+    relink.type = 'button';
+    relink.className = 'tcNoteLinkMini';
+    relink.textContent = 'Relink';
+    relink.title = 'Select this link and show drag handles';
+    relink.addEventListener('click', function(ev){
+      ev.preventDefault();
+      selectLink(key);
+    });
+    var remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'tcNoteLinkMini danger';
+    remove.textContent = 'Remove';
+    remove.title = 'Remove this note link';
+    remove.addEventListener('click', function(ev){
+      ev.preventDefault();
+      selectedLinkKey = key;
+      deleteSelectedLink();
+    });
+    row.appendChild(info);
+    row.appendChild(relink);
+    row.appendChild(remove);
+    return row;
+  }
   function renderLinkToolbar(link, p1, p2){
     removeLinkToolbar();
     if (!link || !p1 || !p2) return;
@@ -2135,6 +2275,7 @@
       }
     });
     if (selectedLinkKey && !hasSelected) selectedLinkKey = null;
+    renderLinkInspector();
   }
   function createChildNote(parentId, title, body){
     var anchorId = arguments.length > 3 ? arguments[3] : null;
@@ -2507,6 +2648,7 @@
     }
     selectedNoteId = null;
     selectedNoteIds = {};
+    selectedLinkKey = null;
     renderAll();
     saveNow();
     return {notes:notes.length, links:links.length};
@@ -2597,6 +2739,7 @@
     stageSelectedNotesAsTasks: stageSelectedNotesAsTasks,
     createLinkedTasksFromSelectedNotes: createLinkedTasksFromSelectedNotes,
     linkNotes: function(from, to, type){ if (from && to && from !== to && !linkExists(from, to)){ links.push({from:from, to:to, type:type || 'manual'}); syncNoteLabels(); renderLinks(); saveSoon(); } },
+    linkSelectedNotes: linkSelectedNotes,
     selectLink: selectLink,
     deleteSelectedLink: deleteSelectedLink,
     reflowMindMap: reflowMindMap,

@@ -19,6 +19,15 @@
     var lines = s.split('\n').map(function(t){return t.trim();}).filter(Boolean);
     return lines.join('\n');
   }
+  function effectiveConsoleText(){
+    try{
+      if (window.TaskCanvasConsoleEditor && typeof window.TaskCanvasConsoleEditor.hasOverrides === 'function' && window.TaskCanvasConsoleEditor.hasOverrides()){
+        return window.TaskCanvasConsoleEditor.currentText();
+      }
+    }catch(_){}
+    var ct = pickCT();
+    return ct && ct.value || '';
+  }
   function countLines(s){
     if (!s) return 0;
     return String(s).split(/\r?\n/).filter(function(t){return t.trim().length>0;}).length;
@@ -33,8 +42,7 @@
     el.__copyFullOverride = true;
     var handler = function(ev){
       try{ ev.preventDefault(); ev.stopImmediatePropagation(); ev.stopPropagation(); }catch(_){}
-      var ct = pickCT();
-      var txt = normalize(ct && ct.value || '');
+      var txt = normalize(effectiveConsoleText());
       if (!txt){
         toast('No changes to copy.');
         return;

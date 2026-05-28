@@ -68,6 +68,7 @@
 
   // ---------- wrap stageAdd / stageToggle if present ----------
   function wrapStageAdd(){
+    if (window.stageAdd && window.stageAdd.__lineEnforcerWrapped) return;
     var orig = window.stageAdd;
     window.stageAdd = function(cmd, human){
       try{
@@ -82,10 +83,12 @@
         try{ scheduleBurst(1200); }catch(_){}
       }
     };
+    window.stageAdd.__lineEnforcerWrapped = true;
   }
   function wrapStageToggle(){
     var orig = window.stageToggle;
     if (typeof orig !== 'function') return;
+    if (orig.__lineEnforcerWrapped) return;
     window.stageToggle = function(uuid, action, human){
       try{
         return orig.apply(this, arguments);
@@ -93,6 +96,7 @@
         try{ scheduleBurst(1200); }catch(_){}
       }
     };
+    window.stageToggle.__lineEnforcerWrapped = true;
   }
 
   // ---------- intercept copy buttons to normalize before copy ----------
@@ -113,9 +117,11 @@
     wrapStageAdd(); wrapStageToggle(); wireCopy();
     scheduleBurst(1500);
     // watch for console replacements
+    if (window.__LINE_ENFORCER_OBSERVER__) return;
     var root = document.body;
     var mo = new MutationObserver(function(){ var ct=pickCT(); if (ct) proxyValue(ct); wireCopy(); });
     mo.observe(root, {childList:true, subtree:true});
+    window.__LINE_ENFORCER_OBSERVER__ = mo;
   }
 
   window.addEventListener('load', function(){ setTimeout(boot, 60); });

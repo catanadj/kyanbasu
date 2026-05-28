@@ -171,6 +171,18 @@
     }
   }
 
+  function replaceState(state){
+    try{ if (typeof clearCanvasDomState === "function") clearCanvasDomState(); }catch(_){}
+    try{ window.projectAreas = new Map(); window.tagAreas = new Map(); }catch(_){}
+    var touched = applyState(state || {version: 1, nodes: {}, projects: [], tags: []});
+    try{ if (typeof recomputeAreasAndTags === "function") recomputeAreasAndTags(); }catch(_){}
+    try{ if (typeof drawLinks === "function") drawLinks(); }catch(_){}
+    try{ if (typeof refreshDepHandleLetters === "function") refreshDepHandleLetters(); }catch(_){}
+    try{ if (typeof updateConsole === "function") updateConsole(); }catch(_){}
+    scheduleSave(180);
+    return touched;
+  }
+
   function taskByPersistId(id){
     var sid = String(id || "");
     if (!sid) return null;
@@ -381,14 +393,22 @@
       });
     }catch(_){}
 
-    setInterval(function(){
-      if (!document.hidden) writeState(false);
-    }, 3200);
+    window.addEventListener("pagehide", function(){ writeState(false); });
+    document.addEventListener("visibilitychange", function(){
+      if (document.hidden) writeState(false);
+    });
 
     setTimeout(tryRestore, 120);
     setTimeout(tryRestore, 600);
   }
 
   install();
+  window.TaskCanvasLayoutPersist = {
+    captureState: captureState,
+    applyState: applyState,
+    replaceState: replaceState,
+    save: function(){ writeState(true); },
+    key: boardKey
+  };
 })();
 </script>

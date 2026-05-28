@@ -22,6 +22,65 @@
     var g = 40;
     return "M " + a.x + " " + a.y + " C " + (a.x + g) + " " + a.y + ", " + b.x + " " + Math.max(b.y - g, 0) + ", " + b.x + " " + b.y;
   }
+  function ensureArrowMarker(){
+    var svg = linksSvg(); if (!svg) return;
+    var defs = svg.querySelector('defs');
+    if (!defs){
+      defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+      svg.insertBefore(defs, svg.firstChild);
+    }
+    if (!svg.querySelector('#depArrow')){
+      var m = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+      m.setAttribute('id', 'depArrow');
+      m.setAttribute('viewBox', '0 0 10 10');
+      m.setAttribute('refX', '8');
+      m.setAttribute('refY', '5');
+      m.setAttribute('markerWidth', '6');
+      m.setAttribute('markerHeight', '6');
+      m.setAttribute('orient', 'auto-start-reverse');
+      var p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      p.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z');
+      p.setAttribute('fill', '#9ecbff');
+      m.appendChild(p);
+      defs.appendChild(m);
+    }
+  }
+  function ensureEdgeGradient(svg, id, a, b){
+    if (!svg || !a || !b) return null;
+    var defs = svg.querySelector('defs');
+    if (!defs){
+      defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+      svg.insertBefore(defs, svg.firstChild);
+    }
+    var grad = svg.querySelector('#' + id);
+    if (!grad){
+      grad = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+      grad.setAttribute('id', id);
+      defs.appendChild(grad);
+    }
+    grad.setAttribute('gradientUnits', 'userSpaceOnUse');
+    grad.setAttribute('x1', String(a.x));
+    grad.setAttribute('y1', String(a.y));
+    grad.setAttribute('x2', String(b.x));
+    grad.setAttribute('y2', String(b.y));
+    while (grad.firstChild) grad.removeChild(grad.firstChild);
+    var s1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    s1.setAttribute('offset', '0%');
+    s1.setAttribute('stop-color', '#5d7fca');
+    s1.setAttribute('stop-opacity', '.42');
+    var s2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    s2.setAttribute('offset', '72%');
+    s2.setAttribute('stop-color', '#9ecbff');
+    s2.setAttribute('stop-opacity', '.82');
+    var s3 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    s3.setAttribute('offset', '100%');
+    s3.setAttribute('stop-color', '#d0ecff');
+    s3.setAttribute('stop-opacity', '1');
+    grad.appendChild(s1);
+    grad.appendChild(s2);
+    grad.appendChild(s3);
+    return grad;
+  }
 
   function ensureStagedAdd(){
     return (window.stagedAdd = Array.isArray(window.stagedAdd) ? window.stagedAdd : []);
@@ -138,6 +197,7 @@
   function renderStagedOverlay(){
     var svg = linksSvg();
     if (!svg) return;
+    ensureArrowMarker();
     var g = svg.querySelector('#depStagedOverlay');
     if (!g){
       g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -145,17 +205,19 @@
       svg.appendChild(g);
     }
     while (g.firstChild) g.removeChild(g.firstChild);
-    ensureStagedAdd().forEach(function(edge){
+    ensureStagedAdd().forEach(function(edge, index){
       if (!edge || !edge.from || !edge.to) return;
       var a = aRight(edge.from), b = aTop(edge.to);
       if (!a || !b) return;
       var p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       p.setAttribute('class', 'dep-edge staged');
       p.setAttribute('d', cubic(a, b));
-      p.setAttribute('stroke', '#9ecbff');
+      ensureEdgeGradient(svg, 'depGradStaged' + index, a, b);
+      p.style.stroke = 'url(#depGradStaged' + index + ')';
       p.setAttribute('stroke-width', '2');
       p.setAttribute('fill', 'none');
       p.setAttribute('stroke-dasharray', '6 6');
+      p.setAttribute('marker-end', 'url(#depArrow)');
       p.setAttribute('data-from', String(edge.from));
       p.setAttribute('data-to', String(edge.to));
       g.appendChild(p);
@@ -184,18 +246,27 @@
       requestAnimationFrame(function(){
         raf = false;
         try{ renderStagedOverlay(); }catch(_){}
-        try{ if (typeof window.refreshDepHandleLetters === 'function') window.refreshDepHandleLetters(); }catch(_){}
       });
+    }
+    function touchesTaskNode(n){
+      return !!(n && n.nodeType === 1 && (
+        (n.matches && n.matches('.node[data-short], [data-short].node')) ||
+        (n.querySelector && n.querySelector('.node[data-short], [data-short].node'))
+      ));
     }
     var obs = new MutationObserver(function(records){
       for (var i=0;i<records.length;i++){
-        var name = records[i].attributeName;
-        if (records[i].type === 'childList'){
+        var rec = records[i], name = rec.attributeName;
+        if (rec.type === 'childList'){
+          var changed = false;
+          for (var a=0;a<rec.addedNodes.length;a++){ if (touchesTaskNode(rec.addedNodes[a])){ changed = true; break; } }
+          for (var r=0;!changed && r<rec.removedNodes.length;r++){ if (touchesTaskNode(rec.removedNodes[r])){ changed = true; break; } }
+          if (!changed) continue;
           wireExistingHandles();
           rerender();
           break;
         }
-        if (records[i].type === 'attributes' && (name === 'style' || name === 'transform')){
+        if (rec.type === 'attributes' && (name === 'style' || name === 'transform') && rec.target && rec.target.classList && rec.target.classList.contains('node')){
           rerender();
           break;
         }

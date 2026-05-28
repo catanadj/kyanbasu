@@ -1,0 +1,78 @@
+<style id="FEATURE_CANVAS_WORKBENCHES_V1_CSS">
+  .toolbarGroupWorkbenches{
+    min-width:220px;
+    max-width:min(460px, 42vw);
+  }
+  .tcWorkbenchStrip{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    min-width:0;
+    max-width:100%;
+  }
+  .tcWorkbenchTabs{
+    display:flex;
+    align-items:center;
+    gap:4px;
+    min-width:0;
+    overflow-x:auto;
+    scrollbar-width:thin;
+  }
+  .tcWorkbenchTab{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    min-width:0;
+    max-width:170px;
+    border:1px solid rgba(164,185,214,.16);
+    background:rgba(9,16,27,.56);
+    color:var(--muted);
+    border-radius:8px;
+    padding:6px 9px;
+    font-size:12px;
+    line-height:1;
+    white-space:nowrap;
+    cursor:pointer;
+  }
+  .tcWorkbenchTabName{
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .tcWorkbenchTabAction{
+    width:18px;
+    height:18px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    border:0;
+    border-radius:6px;
+    padding:0;
+    background:transparent;
+    color:var(--muted);
+    cursor:pointer;
+    opacity:0;
+  }
+  .tcWorkbenchTab:hover .tcWorkbenchTabAction,
+  .tcWorkbenchTab:focus-within .tcWorkbenchTabAction{
+    opacity:1;
+  }
+  .tcWorkbenchTabAction:hover{
+    color:var(--fg);
+    background:rgba(164,185,214,.12);
+  }
+  .tcWorkbenchTab.active{
+    color:var(--fg);
+    background:linear-gradient(180deg, rgba(96,165,250,.18), rgba(96,165,250,.08));
+    border-color:rgba(96,165,250,.42);
+  }
+  .tcWorkbenchAdd{
+    width:28px;
+    height:28px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:0;
+    border-radius:8px;
+  }
+</style>

@@ -225,6 +225,8 @@ class TestMainFlow(unittest.TestCase):
                 'id="FEATURE_PROJECT_ADD_TAG_V4"',
                 'id="FEATURE_REVIEW_CHANGES_V1_CSS"',
                 'id="FEATURE_REVIEW_CHANGES_V1"',
+                'id="FEATURE_CANVAS_NAVIGATOR_V1_CSS"',
+                'id="FEATURE_CANVAS_NAVIGATOR_V1"',
                 'id="FEATURE_CANVAS_NOTES_V1_CSS"',
                 'id="FEATURE_CANVAS_NOTES_V1"',
                 'id="FEATURE_CONSOLE_EDITOR_V1_CSS"',

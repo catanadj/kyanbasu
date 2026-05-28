@@ -47,8 +47,7 @@
         el.setAttribute('d', cubicPath(p1,p2));
         el.setAttribute('fill','none');
       }
-      // No arrows on staged/animated dashes
-      el.removeAttribute('marker-end');
+      if (!el.getAttribute('marker-end')) el.setAttribute('marker-end', 'url(#depArrow)');
     }catch(_){}
   }
 
@@ -82,7 +81,7 @@
     }
   });
 
-  // Observe node pos/cls changes
+  // Observe node position changes only; class churn should not redraw edges.
   try{
     var mo = new MutationObserver(function(list){
       for (var m of list){
@@ -91,7 +90,7 @@
         }
       }
     });
-    mo.observe(stageRoot(), {subtree:true, attributes:true, attributeFilter:['style','transform','class']});
+    mo.observe(stageRoot(), {subtree:true, attributes:true, attributeFilter:['style','transform']});
   }catch(_){}
 
   // Drag feedback

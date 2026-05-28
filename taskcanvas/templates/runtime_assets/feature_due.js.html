@@ -183,18 +183,18 @@ __rekeyTimer = setTimeout(function(){
   setInterval(function(){
 if (document.hidden) return;
 scheduleRekey(120);
-  }, 3000);
+  }, 30000);
   try{
 var __rekeyRoot = document.getElementById('builderStage') || document.body;
 var __rekeyObs = new MutationObserver(function(muts){
   for (var i=0;i<muts.length;i++){
     var m = muts[i];
-    if (m.type === 'childList' || m.type === 'attributes'){
+    if (m.type === 'childList' || (m.type === 'attributes' && m.target && m.target.classList && m.target.classList.contains('node'))){
       scheduleRekey(40); break;
     }
   }
 });
-__rekeyObs.observe(__rekeyRoot, {subtree:true, childList:true, attributes:true, attributeFilter:['class','style','data-uuid','data-short']});
+__rekeyObs.observe(__rekeyRoot, {subtree:true, childList:true, attributes:true, attributeFilter:['data-uuid','data-short']});
   }catch(_){}
   document.addEventListener('visibilitychange', function(){
 if (!document.hidden) scheduleRekey(30);
@@ -352,18 +352,18 @@ __tickTimer = setTimeout(function(){
   setInterval(function(){
 if (document.hidden) return;
 scheduleTick(100);
-  }, 2500);
+  }, 30000);
   try{
 var __tickRoot = document.getElementById('builderStage') || document.body;
 var __tickObs = new MutationObserver(function(muts){
   for (var i=0;i<muts.length;i++){
     var m = muts[i];
-    if (m.type === 'childList' || m.type === 'attributes'){
+    if (m.type === 'childList' || (m.type === 'attributes' && m.target && m.target.classList && m.target.classList.contains('node'))){
       scheduleTick(40); break;
     }
   }
 });
-__tickObs.observe(__tickRoot, {subtree:true, childList:true, attributes:true, attributeFilter:['class','style','data-proj','data-tag']});
+__tickObs.observe(__tickRoot, {subtree:true, childList:true, attributes:true, attributeFilter:['class','data-proj','data-tag']});
   }catch(_){}
   document.addEventListener('visibilitychange', function(){
 if (!document.hidden) scheduleTick(30);

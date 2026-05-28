@@ -1,11 +1,5 @@
 <style id="PATCH_STAGED_LINE_ANIM_V1">
-/* Animate staged dependency lines in red and remove arrows */
-@keyframes energyFlow {
-  from { stroke-dashoffset: 48; }
-  to   { stroke-dashoffset: 0; }
-}
-
-/* EXISTING/STAGED edges (completed dependencies) - RED */
+/* Static dependency lines. Direction is shown by SVG markers. */
 #builderLinks path.dep-edge.existing,
 #builderLinks line.dep-edge.existing,
 #builderLinks path.link-existing,
@@ -23,8 +17,6 @@ line.existing[class*="dep"] {
   stroke-linecap: round !important;
   stroke-linejoin: round !important;
   stroke-dasharray: 6 6 !important;
-  animation: energyFlow 900ms linear infinite !important;
-  marker-end: none !important;
   filter: drop-shadow(0 0 3px rgba(239,68,68,.70)) !important;
 }
 
@@ -37,8 +29,6 @@ line.existing[class*="dep"] {
   stroke-linecap: round !important;
   stroke-linejoin: round !important;
   stroke-dasharray: 6 6 !important;
-  animation: energyFlow 900ms linear infinite !important;
-  marker-end: none !important;
   filter: drop-shadow(0 0 3px rgba(96,165,250,.70)) !important;
 }
 

@@ -1,0 +1,72 @@
+<style id="FEATURE_CANVAS_NAVIGATOR_V1_CSS">
+  .tcNavigator {
+    position: fixed;
+    left: 18px;
+    bottom: 18px;
+    z-index: 165;
+    width: 252px;
+    padding: 9px;
+    border: 1px solid rgba(97,208,255,.22);
+    border-radius: 10px;
+    background: rgba(9,16,27,.94);
+    color: var(--fg, #f4ead7);
+    box-shadow: 0 18px 42px rgba(0,0,0,.34);
+  }
+  .tcNavigatorHead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 7px;
+    cursor: move;
+    user-select: none;
+  }
+  .tcNavigatorTitle {
+    color: rgba(244,234,215,.76);
+    font: 700 11px/1 var(--font-ui, system-ui);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .tcNavigatorMeta {
+    color: rgba(244,234,215,.56);
+    font-size: 11px;
+    line-height: 1;
+  }
+  .tcNavigatorCanvas {
+    display: block;
+    width: 234px;
+    height: 150px;
+    border: 1px solid rgba(255,255,255,.10);
+    border-radius: 8px;
+    background:
+      linear-gradient(rgba(151,167,193,.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(151,167,193,.06) 1px, transparent 1px),
+      rgba(5,10,18,.86);
+    background-size: 18px 18px;
+    cursor: crosshair;
+  }
+  .tcNavigatorActions {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .tcNavigatorActions button {
+    min-width: 0;
+    padding: 7px 5px;
+    border: 1px solid rgba(97,208,255,.24);
+    border-radius: 7px;
+    background: rgba(97,208,255,.10);
+    color: #d7f4ff;
+    cursor: pointer;
+    font: 700 10px/1 var(--font-ui, system-ui);
+    white-space: nowrap;
+  }
+  .tcNavigatorActions button:disabled {
+    opacity: .42;
+    cursor: default;
+  }
+  body.viewer-mode .tcNavigator {
+    display: none;
+  }
+</style>

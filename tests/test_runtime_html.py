@@ -34,6 +34,8 @@ class TestRuntimeHtml(unittest.TestCase):
             'id="FEATURE_PROJECT_ADD_TAG_V4"',
             'id="FEATURE_REVIEW_CHANGES_V1_CSS"',
             'id="FEATURE_REVIEW_CHANGES_V1"',
+            'id="FEATURE_CANVAS_NAVIGATOR_V1_CSS"',
+            'id="FEATURE_CANVAS_NAVIGATOR_V1"',
             'id="FEATURE_CANVAS_NOTES_V1_CSS"',
             'id="FEATURE_CANVAS_NOTES_V1"',
             'id="FEATURE_CONSOLE_EDITOR_V1_CSS"',
@@ -50,9 +52,13 @@ class TestRuntimeHtml(unittest.TestCase):
         ]
         for marker in required_markers:
             self.assertIn(marker, out)
+        self.assertLess(out.index('id="FEATURE_RUNTIME_DIAGNOSTICS_V1"'), out.index('id="FEATURE_HOVERSTAGE"'))
         self.assertIn("rawRuntimeText: rawRuntimeText", out)
         self.assertIn("rawTaskLines", out)
         self.assertNotIn("var lines=[]", out)
+        self.assertNotIn("infinite", out)
+        self.assertNotIn("energyFlow", out)
+        self.assertIn("var anim = { enabled:false", out)
         self.assertEqual(out.count('id="FEATURE_CONSOLE_MERGE_V3"'), 1)
         self.assertNotIn("<!-- INLINE_PAYLOAD_HERE -->", out)
         self.assertTrue(any("Embedded tasks: 0" in line for line in logs))

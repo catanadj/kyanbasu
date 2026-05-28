@@ -1,11 +1,5 @@
 <style id="__ENERGY_ARROW_CSS__">
-  /* Flow animation down the staged edge */
-  @keyframes energyFlow {
-    from { stroke-dashoffset: 48; }
-    to   { stroke-dashoffset: 0;  }
-  }
-
-  /* Generic staged edge look (we'll add this class via JS) */
+  /* Static staged edge look. Direction is shown by SVG markers, not animation. */
   .staged-energy-edge {
     stroke: #60a5fa;
     stroke-width: 2.25px;
@@ -13,7 +7,6 @@
     stroke-linecap: round;
     stroke-linejoin: round;
     stroke-dasharray: 6 6;
-    animation: energyFlow 900ms linear infinite;
     filter: drop-shadow(0 0 3px rgba(96,165,250,.7));
   }
 

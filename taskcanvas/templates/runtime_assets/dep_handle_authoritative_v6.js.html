@@ -116,6 +116,14 @@ for (var i=0;i<cards.length;i++){
   else{ h.classList.remove('dep-hasdeps'); }
 }
   }
+  var writeTimer = 0;
+  function scheduleWrite(delay){
+if (writeTimer) return;
+writeTimer = setTimeout(function(){
+  writeTimer = 0;
+  try{ writeHandles(); }catch(_){}
+}, Math.max(0, delay || 0));
+  }
 
   // Keep staged overlay paths tagged so pulses & tools can follow
   function tagStagedPaths(){
@@ -135,7 +143,7 @@ for (var i=0;i<paths.length && i<st.length; i++){
 var _refresh = window.refreshDepHandleLetters;
 window.refreshDepHandleLetters = function(){
   if (typeof _refresh === 'function') try{ _refresh.apply(this, arguments); }catch(_){}
-  setTimeout(function(){ try{ writeHandles(); }catch(_){ } }, 0);
+  scheduleWrite(0);
 };
   })();
 
@@ -145,7 +153,7 @@ window.drawLinks = function(){
   if (typeof _draw === 'function') try{ _draw.apply(this, arguments); }catch(_){}
   try{ tagStagedPaths(); }catch(_){}
   // write after overlay settles
-  setTimeout(function(){ try{ writeHandles(); }catch(_){ } }, 0);
+  scheduleWrite(0);
 };
   })();
 
@@ -156,31 +164,43 @@ try{
   var a = window.stagedAdd;
   if (!a.__authorV6){
     var _p=a.push, _s=a.splice;
-    a.push = function(e){ var r=_p.apply(this, arguments); setTimeout(function(){ try{ writeHandles(); }catch(_){ } }, 0); return r; };
-    a.splice = function(){ var r=_s.apply(this, arguments); setTimeout(function(){ try{ writeHandles(); }catch(_){ } }, 0); return r; };
+    a.push = function(e){ var r=_p.apply(this, arguments); scheduleWrite(0); return r; };
+    a.splice = function(){ var r=_s.apply(this, arguments); scheduleWrite(0); return r; };
     a.__authorV6 = true;
   }
 }catch(_){}
   })();
 
-  // mutations (style/class/childList) on stage
+  // Watch only for new/removed task cards. Watching class/style/text creates a feedback loop
+  // because this writer updates dep handle text/classes itself.
   (function(){
 var stage = $('#builderStage'); if (!stage) return;
-var t=null;
-var obs = new MutationObserver(function(){
-  if (t) return;
-  t = setTimeout(function(){ t=null; try{ writeHandles(); }catch(_){ } }, 40);
+var obs = new MutationObserver(function(records){
+  for (var i=0;i<records.length;i++){
+    var rec = records[i];
+    if (rec.type !== 'childList') continue;
+    var changed = false;
+    function touchesNode(n){
+      return !!(n && n.nodeType === 1 && (
+        (n.matches && n.matches('.node[data-short], [data-short].node')) ||
+        (n.querySelector && n.querySelector('.node[data-short], [data-short].node'))
+      ));
+    }
+    for (var a=0;a<rec.addedNodes.length;a++){ if (touchesNode(rec.addedNodes[a])){ changed = true; break; } }
+    for (var r=0;!changed && r<rec.removedNodes.length;r++){ if (touchesNode(rec.removedNodes[r])){ changed = true; break; } }
+    if (changed){ scheduleWrite(40); break; }
+  }
 });
-obs.observe(stage, {subtree:true, childList:true, attributes:true, attributeFilter:['style','class']});
+obs.observe(stage, {subtree:true, childList:true});
 window.__depHandleAuthorV6Observer = obs;
   })();
 
   // resize
-  window.addEventListener('resize', function(){ try{ writeHandles(); }catch(_){ } }, {passive:true});
+  window.addEventListener('resize', function(){ scheduleWrite(40); }, {passive:true});
 
   // initial paints
-  setTimeout(function(){ try{ writeHandles(); }catch(_){ } }, 0);
-  setTimeout(function(){ try{ writeHandles(); }catch(_){ } }, 120);
+  scheduleWrite(0);
+  setTimeout(function(){ scheduleWrite(0); }, 120);
 
   window.__depHandleAuthorV6 = true;
 })();

@@ -14,13 +14,16 @@
 .node .act-beacon {
   width: 100%; height: 100%;
   border-radius: 999px;
-  /* lively cyan/teal core with soft falloff */
   background: radial-gradient(closest-side,
               rgba(224, 255, 255, .95),
               rgba(34, 211, 238, .70) 55%,
               rgba(34, 211, 238, 0) 100%);
-  animation: beaconPulseV7B 2.2s ease-in-out infinite;
-  will-change: transform, opacity, filter;
+  opacity: .82;
+  filter: drop-shadow(0 0 4px rgba(34,211,238,.36));
+}
+.node:hover .act-beacon,
+.node.selected .act-beacon {
+  animation: beaconPulseV7B 2.2s ease-in-out 2;
 }
 /* ambient halo (very soft) */
 .node .act-beacon::after {

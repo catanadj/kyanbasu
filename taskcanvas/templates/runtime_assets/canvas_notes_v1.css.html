@@ -377,6 +377,111 @@
     border-radius: 999px;
     background: rgba(8,14,24,.9);
   }
+  .tcNoteLinkInspector {
+    position: fixed;
+    right: 92px;
+    bottom: 18px;
+    z-index: 170;
+    width: min(360px, calc(100vw - 36px));
+    max-height: min(420px, calc(100vh - 96px));
+    overflow: auto;
+    padding: 10px;
+    border: 1px solid rgba(97,208,255,.22);
+    border-radius: 10px;
+    background: rgba(9,16,27,.96);
+    color: var(--fg, #f4ead7);
+    box-shadow: 0 18px 42px rgba(0,0,0,.36);
+  }
+  .tcNoteLinkInspector[hidden] {
+    display: none;
+  }
+  .tcNoteLinkInspectorHead {
+    margin: 1px 2px 8px;
+    color: rgba(244,234,215,.72);
+    font: 700 11px/1 var(--font-ui, system-ui);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .tcNoteLinkInspectorRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 6px;
+    align-items: center;
+    padding: 6px;
+    border-radius: 8px;
+  }
+  .tcNoteLinkInspectorRow:hover {
+    background: rgba(97,208,255,.08);
+  }
+  .tcNoteLinkInfo {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+  }
+  .tcNoteLinkRole {
+    flex: 0 0 auto;
+    min-width: 34px;
+    padding: 4px 6px;
+    border: 1px solid rgba(97,208,255,.26);
+    border-radius: 6px;
+    background: rgba(97,208,255,.10);
+    color: #bdeeff;
+    font: 700 10px/1 var(--font-ui, system-ui);
+    text-align: center;
+  }
+  .tcNoteLinkLabel {
+    min-width: 0;
+    overflow: hidden;
+    color: rgba(244,234,215,.92);
+    font-size: 12px;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tcNoteLinkMini,
+  .tcNoteLinkPrimary {
+    border: 1px solid rgba(97,208,255,.28);
+    border-radius: 7px;
+    background: rgba(97,208,255,.11);
+    color: #d7f4ff;
+    cursor: pointer;
+    font: 700 11px/1 var(--font-ui, system-ui);
+  }
+  .tcNoteLinkMini {
+    padding: 6px 7px;
+  }
+  .tcNoteLinkMini.danger {
+    border-color: rgba(255,108,124,.42);
+    background: rgba(255,108,124,.13);
+    color: #ffd8dd;
+  }
+  .tcNoteLinkPrimary {
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 9px 10px;
+  }
+  .tcNoteLinkPrimary:disabled {
+    opacity: .45;
+    cursor: default;
+  }
+  .tcNoteLinkPicked {
+    margin-top: 5px;
+    padding: 7px 8px;
+    border-radius: 8px;
+    background: rgba(255,255,255,.045);
+    color: rgba(244,234,215,.82);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   #noteModeBtn.active,
   #noteLinkModeBtn.active,
   #noteTaskLinkBtn.active {

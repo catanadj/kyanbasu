@@ -148,6 +148,63 @@ window.addEventListener('load', function(){
         self.assertTrue(any("Dropped modify after terminal action for task abc" in w for w in warnings))
         self.assertTrue(any("Conflicting terminal actions for task def" in w for w in warnings))
 
+    def test_runtime_diagnostics_reports_perf_hot_paths(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_PERF_DIAG_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      if (typeof window.TaskCanvasPerfReset === 'function') window.TaskCanvasPerfReset();
+      if (typeof updateConsole === 'function') updateConsole();
+      if (typeof drawLinks === 'function') drawLinks();
+      requestAnimationFrame(function(){});
+      setTimeout(function(){}, 0);
+      var marker = document.createElement('div');
+      marker.id = 'perfMutationProbe';
+      document.body.appendChild(marker);
+      setTimeout(function(){
+        var snap = window.TaskCanvasPerfReport();
+        var out = {
+          hasDiagnostics: typeof window.TaskCanvasDiagnostics === 'function',
+          hasPerfReport: typeof window.TaskCanvasPerfReport === 'function',
+          functions: snap.perfSummary.topFunctions.map(function(x){ return x.name; }),
+          timerCalls: snap.perfSummary.topTimers.reduce(function(n, x){ return n + x.calls; }, 0),
+          hasRafMetrics: !!snap.perfSummary.raf && typeof snap.perfSummary.raf.fired === 'number',
+          rafFired: snap.perfSummary.raf.fired,
+          observersCreated: snap.perfSummary.observers.created,
+          observerCallbacks: snap.perfSummary.observers.callbacks
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 160);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["hasDiagnostics"], msg=json.dumps(result))
+        self.assertTrue(result["hasPerfReport"], msg=json.dumps(result))
+        self.assertIn("updateConsole", result["functions"], msg=json.dumps(result))
+        self.assertIn("drawLinks", result["functions"], msg=json.dumps(result))
+        self.assertGreaterEqual(result["timerCalls"], 1, msg=json.dumps(result))
+        self.assertTrue(result["hasRafMetrics"], msg=json.dumps(result))
+        self.assertGreaterEqual(result["observersCreated"], 1, msg=json.dumps(result))
+
     def test_console_utility_runtimes_wire_toast_normalize_and_copy(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
@@ -437,6 +494,71 @@ window.addEventListener('load', function(){
         self.assertEqual(len(final_lines), 1)
         self.assertRegex(final_lines[0], r"^task '?[0-9a-f-]+'? done$")
 
+    def test_task_hover_buttons_do_not_start_card_drag_and_can_be_clicked(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps(
+            {
+                "tasks": [
+                    {
+                        "uuid": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                        "short": "bbbbbbbb",
+                        "desc": "Bravo",
+                        "project": "Work",
+                        "tags": [],
+                        "has_depends": False,
+                    }
+                ],
+                "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
+                "init_projects": ["Work"],
+            }
+        )
+        html = build_runtime_html(base_html, payload, 1, lambda *_: None)
+
+        harness = """
+<script id="E2E_HOVER_BUTTON_DRAG_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var node = document.querySelector('#builderStage .node[data-short="bbbbbbbb"]');
+      if (!node) throw new Error('task node missing');
+      var btn = node.querySelector('.btnDone');
+      if (!btn) throw new Error('done button missing');
+      var before = {left: node.style.left, top: node.style.top};
+      btn.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, cancelable:true, button:0, clientX:10, clientY:10}));
+      document.dispatchEvent(new MouseEvent('mousemove', {bubbles:true, cancelable:true, clientX:260, clientY:220}));
+      document.dispatchEvent(new MouseEvent('mouseup', {bubbles:true, cancelable:true, clientX:260, clientY:220}));
+      var afterDrag = {left: node.style.left, top: node.style.top};
+      btn.click();
+      setTimeout(function(){
+        var text = (document.getElementById('consoleText') || {}).value || "";
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify({
+          before: before,
+          afterDrag: afterDrag,
+          stagedDone: node.classList.contains('stagedDone'),
+          text: text
+        });
+        document.body.appendChild(pre);
+      }, 120);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 900);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["afterDrag"], result["before"])
+        self.assertTrue(result["stagedDone"])
+        self.assertRegex(result["text"], r"task '?[0-9a-f-]+'? done")
+
     def test_canvas_notes_runtime_creates_links_and_stays_out_of_commands(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
@@ -712,6 +834,150 @@ window.addEventListener('load', function(){
         self.assertEqual(result["selectedPath"], 1, msg=json.dumps(result))
         self.assertEqual(result["endpoints"], 2, msg=json.dumps(result))
         self.assertEqual(result["previewPaths"], 0, msg=json.dumps(result))
+        self.assertEqual(result["console"], "", msg=json.dumps(result))
+
+    def test_canvas_notes_link_inspector_manages_selected_note_links(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_LINK_INSPECTOR_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var a = window.TaskCanvasNotes.createNote(260, 220, "Plan", "");
+      var b = window.TaskCanvasNotes.createNote(620, 250, "Step 1", "");
+      window.TaskCanvasNotes.linkNotes(a.id, b.id);
+      window.TaskCanvasNotes.selectNote(a.id);
+      setTimeout(function(){
+        var panel = document.getElementById('tcNoteLinkInspector');
+        var relink = panel && panel.querySelector('.tcNoteLinkMini:not(.danger)');
+        var remove = panel && panel.querySelector('.tcNoteLinkMini.danger');
+        var before = {
+          visible: !!panel && !panel.hidden,
+          rows: panel ? panel.querySelectorAll('.tcNoteLinkInspectorRow').length : 0,
+          labels: panel ? panel.textContent : "",
+          selectedPaths: document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink.selected').length
+        };
+        relink.click();
+        setTimeout(function(){
+          var selectedAfterRelink = document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink.selected').length;
+          var endpointsAfterRelink = document.querySelectorAll('.tcNoteLinkEndpoint').length;
+          remove.click();
+          setTimeout(function(){
+            var out = {
+              visible: before.visible,
+              rows: before.rows,
+              labels: before.labels,
+              selectedBefore: before.selectedPaths,
+              selectedAfterRelink: selectedAfterRelink,
+              endpointsAfterRelink: endpointsAfterRelink,
+              linksAfterRemove: window.TaskCanvasNotes.links().length,
+              panelAfterRemove: !!panel && !panel.hidden,
+              console: (document.getElementById('consoleText') || {}).value || ""
+            };
+            var pre = document.createElement('pre');
+            pre.id = 'e2e-out';
+            pre.textContent = JSON.stringify(out);
+            document.body.appendChild(pre);
+          }, 80);
+        }, 80);
+      }, 160);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["visible"], msg=json.dumps(result))
+        self.assertEqual(result["rows"], 1, msg=json.dumps(result))
+        self.assertIn("Step 1", result["labels"], msg=json.dumps(result))
+        self.assertEqual(result["selectedBefore"], 0, msg=json.dumps(result))
+        self.assertEqual(result["selectedAfterRelink"], 1, msg=json.dumps(result))
+        self.assertEqual(result["endpointsAfterRelink"], 2, msg=json.dumps(result))
+        self.assertEqual(result["linksAfterRemove"], 0, msg=json.dumps(result))
+        self.assertFalse(result["panelAfterRemove"], msg=json.dumps(result))
+        self.assertEqual(result["console"], "", msg=json.dumps(result))
+
+    def test_canvas_notes_link_inspector_links_two_selected_notes(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_LINK_SELECTED_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var a = window.TaskCanvasNotes.createNote(260, 220, "Plan", "");
+      var b = window.TaskCanvasNotes.createNote(620, 250, "Step 1", "");
+      window.TaskCanvasNotes.selectNote(a.id);
+      window.TaskCanvasNotes.selectNote(b.id, true);
+      setTimeout(function(){
+        var panel = document.getElementById('tcNoteLinkInspector');
+        var button = panel && panel.querySelector('.tcNoteLinkPrimary');
+        var before = {
+          visible: !!panel && !panel.hidden,
+          selected: window.TaskCanvasNotes.selectedNotes().length,
+          picked: panel ? panel.querySelectorAll('.tcNoteLinkPicked').length : 0,
+          text: panel ? panel.textContent : "",
+          disabled: button ? button.disabled : true
+        };
+        button.click();
+        setTimeout(function(){
+          var links = window.TaskCanvasNotes.links();
+          var out = {
+            visible: before.visible,
+            selected: before.selected,
+            picked: before.picked,
+            text: before.text,
+            disabled: before.disabled,
+            links: links.length,
+            fromA: links[0] && links[0].from === a.id,
+            toB: links[0] && links[0].to === b.id,
+            selectedAfter: window.TaskCanvasNotes.selectedNotes().length,
+            selectedPath: document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink.selected').length,
+            console: (document.getElementById('consoleText') || {}).value || ""
+          };
+          var pre = document.createElement('pre');
+          pre.id = 'e2e-out';
+          pre.textContent = JSON.stringify(out);
+          document.body.appendChild(pre);
+        }, 100);
+      }, 160);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["visible"], msg=json.dumps(result))
+        self.assertEqual(result["selected"], 2, msg=json.dumps(result))
+        self.assertEqual(result["picked"], 2, msg=json.dumps(result))
+        self.assertIn("Link selected notes", result["text"], msg=json.dumps(result))
+        self.assertFalse(result["disabled"], msg=json.dumps(result))
+        self.assertEqual(result["links"], 1, msg=json.dumps(result))
+        self.assertTrue(result["fromA"], msg=json.dumps(result))
+        self.assertTrue(result["toB"], msg=json.dumps(result))
+        self.assertEqual(result["selectedAfter"], 0, msg=json.dumps(result))
+        self.assertEqual(result["selectedPath"], 1, msg=json.dumps(result))
         self.assertEqual(result["console"], "", msg=json.dumps(result))
 
     def test_canvas_note_mode_click_places_note_at_clicked_position(self):
@@ -2067,6 +2333,350 @@ window.addEventListener('load', function(){
         self.assertIn("toolbarGroupCommands", result["consoleParentClass"], msg=json.dumps(result))
         self.assertIn("toolbarGroupCanvas", result["resetParentClass"], msg=json.dumps(result))
 
+    def test_canvas_workbenches_switch_layouts_and_notes_without_clearing_commands(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps(
+            {
+                "tasks": [
+                    {
+                        "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        "short": "aaaaaaaa",
+                        "desc": "Alpha",
+                        "project": "Work",
+                        "tags": ["next"],
+                    }
+                ],
+                "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
+            }
+        )
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_WORKBENCHES_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      window.STAGED_CMDS = ['task aaaaaaaa modify +focus'];
+      var task = (window.TASKS || [])[0];
+      if (task && typeof addNodeForTask === 'function') addNodeForTask(task, 420, 280, {deferLayout:true});
+      window.TaskCanvasNotes.createNote(520, 360, 'Main note', '', 'Planning', {skipAutoLayout:true});
+      window.TaskCanvasWorkbenches.capture();
+      var createdId = window.TaskCanvasWorkbenches.create();
+      window.TaskCanvasWorkbenches.rename(createdId, 'Planning');
+      setTimeout(function(){
+        var afterCreate = {
+          active: window.TaskCanvasWorkbenches.active(),
+          tabs: document.querySelectorAll('.tcWorkbenchTab').length,
+          tabLabels: Array.prototype.slice.call(document.querySelectorAll('.tcWorkbenchTabName')).map(function(el){ return el.textContent; }),
+          tabActions: document.querySelectorAll('.tcWorkbenchTabAction').length,
+          nodes: document.querySelectorAll('#builderStage .node').length,
+          notes: window.TaskCanvasNotes.notes().length,
+          commands: (window.STAGED_CMDS || []).slice()
+        };
+        window.TaskCanvasWorkbenches.switchTo('main');
+        setTimeout(function(){
+          var duplicateId = window.TaskCanvasWorkbenches.duplicate('main');
+          var duplicated = window.TaskCanvasWorkbenches.active();
+          window.TaskCanvasWorkbenches.delete(duplicateId);
+          window.TaskCanvasWorkbenches.switchTo(createdId);
+          var deleted = window.TaskCanvasWorkbenches.delete(createdId);
+          setTimeout(function(){
+          var out = {
+            group: !!document.getElementById('workbenchGroup'),
+            api: !!window.TaskCanvasWorkbenches,
+            afterCreate: afterCreate,
+            duplicated: duplicated,
+            deleted: deleted,
+            active: window.TaskCanvasWorkbenches.active(),
+            tabs: document.querySelectorAll('.tcWorkbenchTab').length,
+            tabLabels: Array.prototype.slice.call(document.querySelectorAll('.tcWorkbenchTabName')).map(function(el){ return el.textContent; }),
+            tabActions: document.querySelectorAll('.tcWorkbenchTabAction').length,
+            nodes: document.querySelectorAll('#builderStage .node').length,
+            notes: window.TaskCanvasNotes.notes().length,
+            noteContent: (window.TaskCanvasNotes.notes()[0] || {}).content || '',
+            commands: (window.STAGED_CMDS || []).slice()
+          };
+          var pre = document.createElement('pre');
+          pre.id = 'e2e-out';
+          pre.textContent = JSON.stringify(out);
+          document.body.appendChild(pre);
+          }, 260);
+        }, 260);
+      }, 260);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 900);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["group"], msg=json.dumps(result))
+        self.assertTrue(result["api"], msg=json.dumps(result))
+        self.assertEqual(result["afterCreate"]["active"]["name"], "Planning", msg=json.dumps(result))
+        self.assertEqual(result["afterCreate"]["tabs"], 2, msg=json.dumps(result))
+        self.assertIn("Planning", result["afterCreate"]["tabLabels"], msg=json.dumps(result))
+        self.assertGreaterEqual(result["afterCreate"]["tabActions"], 3, msg=json.dumps(result))
+        self.assertEqual(result["afterCreate"]["nodes"], 0, msg=json.dumps(result))
+        self.assertEqual(result["afterCreate"]["notes"], 0, msg=json.dumps(result))
+        self.assertEqual(result["afterCreate"]["commands"], ["task aaaaaaaa modify +focus"], msg=json.dumps(result))
+        self.assertEqual(result["duplicated"]["name"], "Main copy", msg=json.dumps(result))
+        self.assertTrue(result["deleted"], msg=json.dumps(result))
+        self.assertEqual(result["active"]["id"], "main", msg=json.dumps(result))
+        self.assertEqual(result["tabs"], 1, msg=json.dumps(result))
+        self.assertEqual(result["tabLabels"], ["Main"], msg=json.dumps(result))
+        self.assertEqual(result["tabActions"], 1, msg=json.dumps(result))
+        self.assertEqual(result["nodes"], 1, msg=json.dumps(result))
+        self.assertEqual(result["notes"], 1, msg=json.dumps(result))
+        self.assertEqual(result["noteContent"], "Main note", msg=json.dumps(result))
+        self.assertEqual(result["commands"], ["task aaaaaaaa modify +focus"], msg=json.dumps(result))
+
+    def test_canvas_navigator_renders_and_jumps_viewport(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NAVIGATOR_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var note = window.TaskCanvasNotes.createNote(3200, 2100, "Remote note", "", "Planning", {skipAutoLayout:true});
+      var task = document.createElement('div');
+      task.className = 'node selected';
+      task.setAttribute('data-short', 'T1');
+      task.style.left = '1800px';
+      task.style.top = '900px';
+      task.style.width = '220px';
+      task.style.height = '110px';
+      task.textContent = 'Remote task';
+      document.getElementById('builderStage').appendChild(task);
+      window.TaskCanvasNotes.selectNote(note.id);
+      window.TaskCanvasNavigator.render();
+      setTimeout(function(){
+        var panel = document.getElementById('tcNavigator');
+        var cnv = panel && panel.querySelector('canvas');
+        var cv = document.querySelector('#builderWrap .canvas');
+        var selBtn = panel && panel.querySelector('[data-fit="selection"]');
+        var before = {
+          visible: !!panel && getComputedStyle(panel).display !== 'none',
+          meta: panel ? panel.querySelector('.tcNavigatorMeta').textContent : '',
+          selectionDisabled: selBtn ? selBtn.disabled : true,
+          left: cv.scrollLeft,
+          top: cv.scrollTop
+        };
+        var ms = window.TaskCanvasNavigator.mapState('all');
+        var x = ms.ox + ((note.x + 110) - ms.bounds.x) * ms.m;
+        var y = ms.oy + ((note.y + 46) - ms.bounds.y) * ms.m;
+        var cr = cnv.getBoundingClientRect();
+        cnv.dispatchEvent(new MouseEvent('mousedown', {
+          bubbles:true,
+          cancelable:true,
+          button:0,
+          clientX:cr.left + x * (cr.width / 234),
+          clientY:cr.top + y * (cr.height / 150)
+        }));
+        document.dispatchEvent(new MouseEvent('mouseup', {bubbles:true, cancelable:true, button:0}));
+        setTimeout(function(){
+          var jumped = {left: cv.scrollLeft, top: cv.scrollTop};
+          window.TaskCanvasNavigator.fitTo('selection');
+          setTimeout(function(){
+            var out = {
+              visible: before.visible,
+              meta: before.meta,
+              selectionDisabled: before.selectionDisabled,
+              jumpedRight: jumped.left > before.left + 100,
+              jumpedDown: jumped.top > before.top + 100,
+              zoomAfterFit: document.getElementById('zoom').value,
+              console: (document.getElementById('consoleText') || {}).value || ''
+            };
+            var pre = document.createElement('pre');
+            pre.id = 'e2e-out';
+            pre.textContent = JSON.stringify(out);
+            document.body.appendChild(pre);
+          }, 120);
+        }, 80);
+      }, 220);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["visible"], msg=json.dumps(result))
+        self.assertIn("1 tasks", result["meta"], msg=json.dumps(result))
+        self.assertIn("1 notes", result["meta"], msg=json.dumps(result))
+        self.assertFalse(result["selectionDisabled"], msg=json.dumps(result))
+        self.assertTrue(result["jumpedRight"], msg=json.dumps(result))
+        self.assertTrue(result["jumpedDown"], msg=json.dumps(result))
+        self.assertGreaterEqual(int(result["zoomAfterFit"]), 50, msg=json.dumps(result))
+        self.assertEqual(result["console"], "", msg=json.dumps(result))
+
+    def test_canvas_navigator_can_be_dragged_and_restores_position(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NAVIGATOR_DRAG_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      window.TaskCanvasNavigator.render();
+      setTimeout(function(){
+        var panel = document.getElementById('tcNavigator');
+        var head = panel.querySelector('.tcNavigatorHead');
+        var r = panel.getBoundingClientRect();
+        var hr = head.getBoundingClientRect();
+        head.dispatchEvent(new MouseEvent('mousedown', {
+          bubbles:true,
+          cancelable:true,
+          button:0,
+          clientX:hr.left + 20,
+          clientY:hr.top + 8
+        }));
+        document.dispatchEvent(new MouseEvent('mousemove', {
+          bubbles:true,
+          cancelable:true,
+          clientX:hr.left + 100,
+          clientY:hr.top - 58
+        }));
+        document.dispatchEvent(new MouseEvent('mouseup', {bubbles:true, cancelable:true, button:0}));
+        setTimeout(function(){
+          var moved = panel.getBoundingClientRect();
+          var saved = JSON.parse(localStorage.getItem('taskcanvas:navigator:v1') || '{}');
+          panel.remove();
+          window.TaskCanvasNavigator.render();
+          setTimeout(function(){
+            var restored = document.getElementById('tcNavigator').getBoundingClientRect();
+            var out = {
+              movedRight: moved.left > r.left + 50,
+              movedUp: moved.top < r.top - 30,
+              savedLeft: saved.left,
+              savedTop: saved.top,
+              restoredNearSaved: Math.abs(restored.left - saved.left) <= 2 && Math.abs(restored.top - saved.top) <= 2,
+              rightAuto: document.getElementById('tcNavigator').style.right === 'auto',
+              bottomAuto: document.getElementById('tcNavigator').style.bottom === 'auto',
+              console: (document.getElementById('consoleText') || {}).value || ''
+            };
+            var pre = document.createElement('pre');
+            pre.id = 'e2e-out';
+            pre.textContent = JSON.stringify(out);
+            document.body.appendChild(pre);
+          }, 80);
+        }, 80);
+      }, 220);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["movedRight"], msg=json.dumps(result))
+        self.assertTrue(result["movedUp"], msg=json.dumps(result))
+        self.assertIsInstance(result["savedLeft"], int, msg=json.dumps(result))
+        self.assertIsInstance(result["savedTop"], int, msg=json.dumps(result))
+        self.assertTrue(result["restoredNearSaved"], msg=json.dumps(result))
+        self.assertTrue(result["rightAuto"], msg=json.dumps(result))
+        self.assertTrue(result["bottomAuto"], msg=json.dumps(result))
+        self.assertEqual(result["console"], "", msg=json.dumps(result))
+
+    def test_canvas_task_cards_render_polished_metadata(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_TASK_CARD_VISUALS_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var ready = {uuid:"vis-ready", short:"VR", desc:"Ready task", project:"Design", tags:["UI"], has_depends:false, due:"20260601T000000Z"};
+      var blocked = {uuid:"vis-blocked", short:"VB", desc:"Blocked task", project:"Delivery", tags:["Build"], has_depends:true};
+      PARENT_DEPS0["VB"] = ["VR"];
+      CHILD_TO_PARENTS["VR"] = ["VB"];
+      addNodeForTask(ready, 180, 180, {deferLayout:true});
+      addNodeForTask(blocked, 520, 180, {deferLayout:true});
+      recomputeAreasAndTags();
+      setTimeout(function(){
+        var readyNode = document.querySelector('.node[data-short="VR"]');
+        var blockedNode = document.querySelector('.node[data-short="VB"]');
+        var proj = document.querySelector('.projArea[data-proj="Design"]');
+        var tag = document.querySelector('.tagArea[data-tag="UI"]');
+        var out = {
+          readyClass: readyNode.className,
+          blockedClass: blockedNode.className,
+          readyStatus: readyNode.querySelector('.nodeStatePill').textContent,
+          blockedStatus: blockedNode.querySelector('.nodeStatePill').textContent,
+          chips: Array.prototype.slice.call(readyNode.querySelectorAll('.nodeChip')).map(function(el){ return el.textContent; }),
+          blockedChips: Array.prototype.slice.call(blockedNode.querySelectorAll('.nodeChip')).map(function(el){ return el.textContent; }),
+          shortBadges: document.querySelectorAll('#builderStage .node .nodeShortBadge').length,
+          projectCount: proj ? proj.querySelector('.projAreaLabel') : null,
+          projectLabelCount: (document.querySelector('.projAreaLabel[data-proj-label="Design"]') || {}).getAttribute && document.querySelector('.projAreaLabel[data-proj-label="Design"]').getAttribute('data-count'),
+          tagLabelCount: (document.querySelector('.tagAreaLabel[data-tag-label="UI"]') || {}).getAttribute && document.querySelector('.tagAreaLabel[data-tag-label="UI"]').getAttribute('data-count'),
+          nodeRadius: getComputedStyle(readyNode).borderRadius,
+          projectRadius: proj ? getComputedStyle(proj).borderRadius : "",
+          tagRadius: tag ? getComputedStyle(tag).borderRadius : "",
+          console: (document.getElementById('consoleText') || {}).value || ""
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 160);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertIn("ready", result["readyClass"], msg=json.dumps(result))
+        self.assertIn("hasDeps", result["blockedClass"], msg=json.dumps(result))
+        self.assertEqual(result["readyStatus"], "Ready", msg=json.dumps(result))
+        self.assertEqual(result["blockedStatus"], "Blocked", msg=json.dumps(result))
+        self.assertIn("Design", result["chips"], msg=json.dumps(result))
+        self.assertIn("UI", result["chips"], msg=json.dumps(result))
+        self.assertIn("2026-06-01", result["chips"], msg=json.dumps(result))
+        self.assertNotIn("1 block", result["chips"], msg=json.dumps(result))
+        self.assertNotIn("1 dep", result["blockedChips"], msg=json.dumps(result))
+        self.assertEqual(result["shortBadges"], 0, msg=json.dumps(result))
+        self.assertEqual(result["projectLabelCount"], "1", msg=json.dumps(result))
+        self.assertEqual(result["tagLabelCount"], "1", msg=json.dumps(result))
+        self.assertEqual(result["nodeRadius"], "12px", msg=json.dumps(result))
+        self.assertEqual(result["projectRadius"], "20px", msg=json.dumps(result))
+        self.assertEqual(result["tagRadius"], "16px", msg=json.dumps(result))
+        self.assertEqual(result["console"], "", msg=json.dumps(result))
+
     def test_canvas_notes_create_linked_tasks_stages_and_links_generated_refs(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
@@ -2149,6 +2759,12 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
+      try{
+        Object.defineProperty(navigator, 'clipboard', {
+          configurable: true,
+          value: { writeText: function(txt){ window.__copiedText = txt; return Promise.resolve(); } }
+        });
+      }catch(_){}
       var a = window.TaskCanvasNotes.createNote(180, 240, "First task", "");
       var b = window.TaskCanvasNotes.createNote(440, 240, "Second task", "");
       window.TaskCanvasNotes.selectNote(a.id);
@@ -2167,12 +2783,15 @@ window.addEventListener('load', function(){
           setTimeout(function(){
             var text = (document.getElementById('consoleText') || {}).value || "";
             var review = window.TaskCanvasReview.current();
+            document.getElementById('copyBtn').click();
+            setTimeout(function(){
             var out = {
               rowCount: document.querySelectorAll('#consoleRows .consoleCommandRow').length,
               rowsInOverlay: !!(document.getElementById('consoleRows') && document.getElementById('depCmdPre') && document.getElementById('consoleRows').nextSibling === document.getElementById('depCmdPre')),
               textareaBacking: document.getElementById('consoleText').classList.contains('consoleEditorBacking'),
               overlayBacking: document.getElementById('depCmdPre').classList.contains('consoleEditorBacking'),
               text: text,
+              copied: window.__copiedText || "",
               reviewText: review.text,
               reviewNewTasks: review.groups.newTasks.length,
               stateEdits: Object.keys(window.TaskCanvasConsoleEditor.state().edits).length,
@@ -2182,6 +2801,7 @@ window.addEventListener('load', function(){
             pre.id = 'e2e-out';
             pre.textContent = JSON.stringify(out);
             document.body.appendChild(pre);
+            }, 60);
           }, 220);
         }, 120);
       }, 180);
@@ -2204,10 +2824,72 @@ window.addEventListener('load', function(){
         self.assertTrue(result["textareaBacking"])
         self.assertTrue(result["overlayBacking"])
         self.assertEqual(result["text"], "task add Edited first +next")
+        self.assertEqual(result["copied"], "task add Edited first +next")
         self.assertEqual(result["reviewText"], "task add Edited first +next")
         self.assertEqual(result["reviewNewTasks"], 1)
         self.assertEqual(result["stateEdits"], 1)
         self.assertEqual(result["stateRemoved"], 1)
+
+    def test_console_update_immediately_displays_short_ids_without_uuid_flicker(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps(
+            {
+                "tasks": [
+                    {
+                        "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        "short": "aaaaaaaa",
+                        "desc": "Alpha",
+                        "project": "Work",
+                        "tags": ["next"],
+                        "has_depends": False,
+                    }
+                ],
+                "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
+            }
+        )
+        html = build_runtime_html(base_html, payload, 1, lambda *_: None)
+
+        harness = """
+<script id="E2E_CONSOLE_SHORT_ID_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      window.EX_OPS = window.EX_OPS || {};
+      window.EX_OPS["aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"] = {done:true};
+      updateConsole();
+      var immediate = (document.getElementById('consoleText') || {}).value || "";
+      setTimeout(function(){
+        var later = (document.getElementById('consoleText') || {}).value || "";
+        var out = {
+          immediate: immediate,
+          later: later,
+          immediateHasUuid: immediate.indexOf("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") !== -1,
+          immediateHasShort: immediate.indexOf("'aaaaaaaa'") !== -1,
+          stable: immediate === later
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 180);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 800);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertFalse(result["immediateHasUuid"], msg=json.dumps(result))
+        self.assertTrue(result["immediateHasShort"], msg=json.dumps(result))
+        self.assertEqual(result["immediate"], "task 'aaaaaaaa' done", msg=json.dumps(result))
+        self.assertTrue(result["stable"], msg=json.dumps(result))
 
     def test_console_editor_mounts_empty_state_without_commands(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
@@ -3605,6 +4287,7 @@ window.addEventListener('load', function(){
           parentHandles: document.querySelectorAll('#builderStage [data-short="aaaaaaaa"] > .depHandle').length,
           childHandles: document.querySelectorAll('#builderStage [data-short="bbbbbbbb"] > .depHandle').length,
           stagedPaths: document.querySelectorAll('#depStagedOverlay path[data-from="aaaaaaaa"][data-to="bbbbbbbb"]').length,
+          stagedMarker: (document.querySelector('#depStagedOverlay path[data-from="aaaaaaaa"][data-to="bbbbbbbb"]') || {}).getAttribute && document.querySelector('#depStagedOverlay path[data-from="aaaaaaaa"][data-to="bbbbbbbb"]').getAttribute('marker-end'),
           commandText: window.TaskCanvasCommands.runtimeCommandText(window, {short:true})
         };
         var pre = document.createElement('pre');
@@ -3631,9 +4314,10 @@ window.addEventListener('load', function(){
         self.assertEqual(result["parentHandles"], 1)
         self.assertEqual(result["childHandles"], 1)
         self.assertEqual(result["stagedPaths"], 1)
+        self.assertEqual(result["stagedMarker"], "url(#depArrow)")
         self.assertIn("task 'aaaaaaaa' modify 'depends:bbbbbbbb'", result["commandText"])
 
-    def test_dependency_edges_runtime_renders_existing_edges_and_pulses_once(self):
+    def test_dependency_edges_runtime_renders_existing_edges_and_keeps_pulses_opt_in(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps(
             {
@@ -3698,16 +4382,39 @@ window.addEventListener('load', function(){
       makeNode("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "aaaaaaaa", 120, 120);
       makeNode("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", "bbbbbbbb", 340, 230);
       makeNode("cccccccc-cccc-cccc-cccc-cccccccccccc", "cccccccc", 560, 330);
+      if (typeof window.TaskCanvasPerfReset === 'function') window.TaskCanvasPerfReset();
       window.EXIST_EDGES = [{from:"aaaaaaaa", to:"bbbbbbbb"}];
       window.stagedAdd = [{from:"bbbbbbbb", to:"cccccccc"}];
       if (typeof drawLinks === 'function') drawLinks();
       if (typeof drawLinks === 'function') drawLinks();
       setTimeout(function(){
+        var idlePulseGroups = document.querySelectorAll('#depPulseOverlay').length;
+        var idlePulses = document.querySelectorAll('#depPulseOverlay .pulse-dot').length;
+        var idlePerf = window.TaskCanvasDiagnostics ? window.TaskCanvasDiagnostics().perfSummary : null;
+        document.dispatchEvent(new KeyboardEvent('keydown', {key:'p', bubbles:true}));
+        setTimeout(function(){
         var out = {
           existingGroups: document.querySelectorAll('#depExistingEdges').length,
           existingPaths: document.querySelectorAll('#depExistingEdges path[data-from="aaaaaaaa"][data-to="bbbbbbbb"]').length,
+          existingMarker: (document.querySelector('#depExistingEdges path[data-from="aaaaaaaa"][data-to="bbbbbbbb"]') || {}).getAttribute && document.querySelector('#depExistingEdges path[data-from="aaaaaaaa"][data-to="bbbbbbbb"]').getAttribute('marker-end'),
+          existingStroke: (document.querySelector('#depExistingEdges path[data-from="aaaaaaaa"][data-to="bbbbbbbb"]') || {}).style ? document.querySelector('#depExistingEdges path[data-from="aaaaaaaa"][data-to="bbbbbbbb"]').style.stroke : "",
+          existingGradient: document.querySelectorAll('#builderLinks defs linearGradient[id^="depGradExisting"] stop').length,
           stagedGroups: document.querySelectorAll('#depStagedOverlay').length,
           stagedPaths: document.querySelectorAll('#depStagedOverlay path[data-from="bbbbbbbb"][data-to="cccccccc"]').length,
+          stagedMarker: (document.querySelector('#depStagedOverlay path[data-from="bbbbbbbb"][data-to="cccccccc"]') || {}).getAttribute && document.querySelector('#depStagedOverlay path[data-from="bbbbbbbb"][data-to="cccccccc"]').getAttribute('marker-end'),
+          stagedStroke: (document.querySelector('#depStagedOverlay path[data-from="bbbbbbbb"][data-to="cccccccc"]') || {}).style ? document.querySelector('#depStagedOverlay path[data-from="bbbbbbbb"][data-to="cccccccc"]').style.stroke : "",
+          stagedGradient: document.querySelectorAll('#builderLinks defs linearGradient[id^="depGradStaged"] stop').length,
+          directionGroup: document.querySelectorAll('#depDirectionHints').length,
+          arrowMarkerWidth: (document.querySelector('#depArrow') || {}).getAttribute && document.querySelector('#depArrow').getAttribute('markerWidth'),
+          arrowMarkerHeight: (document.querySelector('#depArrow') || {}).getAttribute && document.querySelector('#depArrow').getAttribute('markerHeight'),
+          directionHints: document.querySelectorAll('#depDirectionHints .depDirectionHint').length,
+          textHints: document.querySelectorAll('#depDirectionHints .depDirectionText').length,
+          textTrails: document.querySelectorAll('#depDirectionHints .depDirectionTrail').length,
+          idlePulseGroups: idlePulseGroups,
+          idlePulses: idlePulses,
+          idleObserverCallbacks: idlePerf ? idlePerf.observers.callbacks : -1,
+          idleObserverRecords: idlePerf ? idlePerf.observers.records : -1,
+          idleRefreshCalls: idlePerf ? idlePerf.topFunctions.filter(function(x){ return x.name === 'refreshDepHandleLetters'; }).reduce(function(n, x){ return n + x.calls; }, 0) : -1,
           pulseGroups: document.querySelectorAll('#depPulseOverlay').length,
           pulses: document.querySelectorAll('#depPulseOverlay .pulse-dot').length,
           api: !!window.TaskCanvasDependencyEdges
@@ -3716,6 +4423,7 @@ window.addEventListener('load', function(){
         pre.id = 'e2e-out';
         pre.textContent = JSON.stringify(out);
         document.body.appendChild(pre);
+        }, 120);
       }, 450);
     }, 500);
   }catch(e){
@@ -3734,8 +4442,25 @@ window.addEventListener('load', function(){
         self.assertTrue(result["api"])
         self.assertEqual(result["existingGroups"], 1)
         self.assertEqual(result["existingPaths"], 1)
+        self.assertEqual(result["existingMarker"], "url(#depArrow)")
+        self.assertIn("depGradExisting", result["existingStroke"])
+        self.assertGreaterEqual(result["existingGradient"], 3, msg=json.dumps(result))
         self.assertEqual(result["stagedGroups"], 1)
         self.assertEqual(result["stagedPaths"], 1)
+        self.assertEqual(result["stagedMarker"], "url(#depArrow)")
+        self.assertIn("depGradStaged", result["stagedStroke"])
+        self.assertGreaterEqual(result["stagedGradient"], 3, msg=json.dumps(result))
+        self.assertEqual(result["directionGroup"], 0, msg=json.dumps(result))
+        self.assertEqual(result["arrowMarkerWidth"], "8")
+        self.assertEqual(result["arrowMarkerHeight"], "8")
+        self.assertEqual(result["directionHints"], 0, msg=json.dumps(result))
+        self.assertEqual(result["textHints"], 0, msg=json.dumps(result))
+        self.assertEqual(result["textTrails"], 0, msg=json.dumps(result))
+        self.assertEqual(result["idlePulseGroups"], 0)
+        self.assertEqual(result["idlePulses"], 0)
+        self.assertLess(result["idleObserverCallbacks"], 100, msg=json.dumps(result))
+        self.assertLess(result["idleObserverRecords"], 1200, msg=json.dumps(result))
+        self.assertLess(result["idleRefreshCalls"], 20, msg=json.dumps(result))
         self.assertEqual(result["pulseGroups"], 1)
         self.assertGreaterEqual(result["pulses"], 2)
 

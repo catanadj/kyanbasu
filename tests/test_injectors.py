@@ -42,13 +42,17 @@ class TestInjectors(unittest.TestCase):
         self.assertEqual(twice.count("__ENERGY_ARROW_CSS__"), 1)
         self.assertEqual(twice.count("__ENERGY_ARROW_JS__"), 1)
         self.assertIn("document.hidden", twice)
+        self.assertNotIn("linear infinite", twice)
+        self.assertNotIn("energyFlow", twice)
 
     def test_staged_deps_color_split_has_coalesced_scheduler(self):
         html = "<html><head></head><body></body></html>"
         out = inject_staged_deps_color_split(html)
         self.assertIn("scheduleRestyle", out)
         self.assertIn("document.hidden", out)
-        self.assertIn("2800", out)
+        self.assertNotIn("linear infinite", out)
+        self.assertNotIn("energyFlow", out)
+        self.assertNotIn("setInterval(function(){\n    if (document.hidden) return;\n    scheduleRestyle", out)
 
     def test_staged_deps_color_split_idempotent(self):
         html = "<html><head></head><body></body></html>"
@@ -114,6 +118,9 @@ class TestInjectors(unittest.TestCase):
         self.assertEqual(twice.count("FEATURE_RUNTIME_DIAGNOSTICS_V1"), 1)
         self.assertIn("window.addEventListener('error'", twice)
         self.assertIn("window.addEventListener('unhandledrejection'", twice)
+        self.assertIn("window.TaskCanvasPerfReport", twice)
+        self.assertIn("MutationObserver", twice)
+        self.assertIn("requestAnimationFrame", twice)
 
     def test_find_bg_file_prefers_base_dir_candidates(self):
         with tempfile.TemporaryDirectory() as tmp:

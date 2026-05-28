@@ -24,20 +24,19 @@
     });
   }
 
-  // Slow fallback sweep; primary updates are event-driven via observers/hooks below.
-  var t = setInterval(function(){
-    if (document.hidden) return;
-    restyleStaging();
-  }, 2800);
-
-  // Also react to DOM changes inside the staging layer
+  // Also react to added/removed edge elements inside the staging layer.
   try{
     var root = document.getElementById('builderStage') || document.body;
-    var mo = new MutationObserver(function(){
+    var mo = new MutationObserver(function(records){
       if (document.hidden) return;
-      restyleStaging();
+      for (var i=0;i<records.length;i++){
+        if (records[i].type === 'childList' && records[i].addedNodes && records[i].addedNodes.length){
+          restyleStaging();
+          return;
+        }
+      }
     });
-    mo.observe(root, {subtree:true, childList:true, attributes:true});
+    mo.observe(root, {subtree:true, childList:true});
   }catch(_){}
 
   // First paints

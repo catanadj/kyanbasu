@@ -22,15 +22,15 @@
         // Skip if this is in the staging area (preview)
         if (el.closest('#builderStage')) return;
         
-        // Remove arrow marker
-        if (el.getAttribute('marker-end')) el.removeAttribute('marker-end');
+        // Keep direction visible with a static arrow marker.
+        if (!el.getAttribute('marker-end')) el.setAttribute('marker-end', 'url(#depArrow)');
         
         // Ensure fill is none for proper stroke rendering
         if (el.getAttribute('fill') !== 'none') el.setAttribute('fill','none');
         
-        // Force RED stroke-dasharray
+        // Force RED stroke-dasharray without an always-on paint loop.
         el.style.strokeDasharray = '6 6';
-        el.style.animation = 'energyFlow 900ms linear infinite';
+        if (el.style.animation) el.style.animation = '';
         
         // Mark as processed
         el.setAttribute('data-existing-animated', 'true');
@@ -38,19 +38,17 @@
     });
   }
 
-  // DON'T touch staging edges - let the existing __ENERGY_ARROW_JS__ handle them
-  // Just ensure their marker-end is removed if present
-  function ensureStagingNoArrows(root){
+  function ensureStagingArrows(root){
     var r = root || document;
-    r.querySelectorAll('#builderStage path, #builderStage line').forEach(function(el){
-      if (el.getAttribute('marker-end')) el.removeAttribute('marker-end');
+    r.querySelectorAll('#depStagedOverlay path, #depStagedOverlay line, #builderStage path.staged-energy-edge, #builderStage line.staged-energy-edge').forEach(function(el){
+      if (!el.getAttribute('marker-end')) el.setAttribute('marker-end', 'url(#depArrow)');
     });
   }
 
   function restyleAll(){
     try{ 
       restyleExistingEdges(document);
-      ensureStagingNoArrows(document);
+      ensureStagingArrows(document);
     }catch(_){}
   }
 
@@ -78,28 +76,6 @@
       window[name].__stagedAnimWrap = true;
     }
   });
-
-  // Slow fallback sweep; primary updates are hook/observer driven.
-  setInterval(function(){
-    if (document.hidden) return;
-    scheduleRestyle(40);
-  }, 2800);
-
-  // Watch for DOM changes
-  try {
-    var observer = new MutationObserver(function(mutations){
-      var shouldRestyle = false;
-      mutations.forEach(function(mut){
-        if (mut.type === 'childList' && mut.addedNodes.length > 0) {
-          shouldRestyle = true;
-        }
-      });
-      if (shouldRestyle) {
-        scheduleRestyle(10);
-      }
-    });
-    observer.observe(document.body, {childList: true, subtree: true});
-  } catch(_){}
 
   // Initial passes
   scheduleRestyle(10);

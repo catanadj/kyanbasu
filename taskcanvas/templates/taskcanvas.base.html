@@ -383,51 +383,132 @@
   .node{
     position:absolute;
     width:280px;
-    min-height:96px;
-    padding:44px 14px 14px;
+    min-height:112px;
+    padding:48px 14px 14px;
     cursor:move;
     word-wrap:break-word;
     z-index:20;
-    border-radius:18px;
-    border:1px solid rgba(164,185,214,.2);
-    background:linear-gradient(180deg, rgba(19,31,49,.98), rgba(10,18,30,.98));
-    box-shadow:0 16px 34px rgba(0,0,0,.26), inset 0 1px 0 rgba(255,255,255,.04);
+    border-radius:12px;
+    border:1px solid rgba(164,185,214,.24);
+    background:
+      linear-gradient(135deg, rgba(97,208,255,.12), transparent 38%),
+      linear-gradient(180deg, rgba(20,32,50,.98), rgba(9,16,27,.98));
+    box-shadow:0 16px 34px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.06);
+    transition:box-shadow .16s ease, border-color .16s ease, transform .16s ease;
   }
   .node::before{
     content:"";
     position:absolute;
-    inset:0 0 auto;
-    height:52px;
-    border-radius:18px 18px 0 0;
-    background:linear-gradient(180deg, rgba(97,208,255,.14), rgba(97,208,255,0));
+    left:0;
+    top:0;
+    bottom:0;
+    width:5px;
+    border-radius:12px 0 0 12px;
+    background:linear-gradient(180deg, rgba(97,208,255,.95), rgba(125,151,255,.72));
     pointer-events:none;
+  }
+  .node::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    border-radius:12px;
+    background:linear-gradient(180deg, rgba(255,255,255,.055), transparent 42%);
+    pointer-events:none;
+  }
+  .node:hover{
+    border-color:rgba(97,208,255,.38);
+    box-shadow:0 18px 38px rgba(0,0,0,.32), 0 0 0 1px rgba(97,208,255,.10), inset 0 1px 0 rgba(255,255,255,.08);
   }
   .nodeTop{
     position:absolute;
     left:14px;
     top:12px;
-    right:48px;
+    right:44px;
     display:flex;
     align-items:center;
+    justify-content:space-between;
     gap:10px;
+  }
+  .nodeStatePill{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    color:rgba(244,234,215,.70);
+    font-size:10px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+  }
+  .nodeStatePill::before{
+    content:"";
+    width:7px;
+    height:7px;
+    border-radius:999px;
+    background:#69e6a3;
+    box-shadow:0 0 0 3px rgba(105,230,163,.12);
+  }
+  .node.hasDeps .nodeStatePill::before{
+    background:#f2b84b;
+    box-shadow:0 0 0 3px rgba(242,184,75,.14);
   }
   .node .title{
     position:relative;
     font:700 15px/1.38 var(--font-display);
     color:var(--fg);
-    letter-spacing:.01em;
+    letter-spacing:0;
+    z-index:1;
+  }
+  .nodeMeta{
+    position:relative;
+    z-index:1;
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    margin-top:12px;
+  }
+  .nodeChip{
+    max-width:128px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    padding:4px 7px;
+    border:1px solid rgba(164,185,214,.16);
+    border-radius:7px;
+    background:rgba(255,255,255,.045);
+    color:rgba(244,234,215,.72);
+    font-size:10px;
+    font-weight:700;
+    line-height:1;
+  }
+  .nodeChip.tag{
+    border-color:rgba(105,230,163,.20);
+    color:#bff4d3;
+  }
+  .nodeChip.due{
+    border-color:rgba(242,184,75,.24);
+    color:#ffe0a3;
   }
   .node.selected{
     outline:2px solid rgba(97,208,255,.72);
     outline-offset:2px;
     box-shadow:0 0 0 4px rgba(97,208,255,.12), 0 20px 40px rgba(0,0,0,.32);
   }
+  .node.stagedDone{
+    border-color:rgba(105,230,163,.46);
+    background:linear-gradient(135deg, rgba(105,230,163,.14), transparent 38%), linear-gradient(180deg, rgba(18,39,34,.98), rgba(9,20,20,.98));
+  }
+  .node.stagedDel{
+    border-color:rgba(255,108,124,.46);
+    background:linear-gradient(135deg, rgba(255,108,124,.16), transparent 38%), linear-gradient(180deg, rgba(45,21,30,.98), rgba(22,12,20,.98));
+  }
   .projArea{
     position:absolute;
     border:1px solid var(--proj-border);
-    border-radius:28px;
-    background:linear-gradient(180deg, rgba(97,208,255,.08), rgba(97,208,255,.03));
-    box-shadow:inset 0 0 0 1px rgba(97,208,255,.08), 0 18px 34px rgba(0,0,0,.18);
+    border-radius:20px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015)),
+      linear-gradient(180deg, rgba(97,208,255,.08), rgba(97,208,255,.03));
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.035), 0 18px 34px rgba(0,0,0,.18);
     backdrop-filter:blur(8px);
   }
   .projArea.selectedProject{
@@ -440,15 +521,32 @@
     left:14px;
     top:14px;
     padding:7px 14px;
-    border-radius:999px;
+    border-radius:9px;
     user-select:none;
-    letter-spacing:.08em;
+    letter-spacing:.06em;
     text-transform:uppercase;
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.07), 0 8px 18px rgba(0,0,0,.18);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.10), 0 8px 18px rgba(0,0,0,.18);
     backdrop-filter:blur(12px);
     pointer-events:auto;
     cursor:move;
     z-index:12;
+  }
+  .projAreaLabel::after,
+  .tagAreaLabel::after{
+    content:attr(data-count);
+    position:absolute;
+    top:50%;
+    right:8px;
+    transform:translateY(-50%);
+    min-width:18px;
+    padding:3px 5px;
+    border-radius:999px;
+    background:rgba(5,10,18,.42);
+    color:rgba(244,234,215,.76);
+    font-size:10px;
+    font-weight:900;
+    line-height:1;
+    text-align:center;
   }
   .projAreaLabel{
     background:var(--proj-label-bg);
@@ -456,6 +554,7 @@
     font-size:12px;
     font-weight:900;
     color:var(--proj-label-fg);
+    padding-right:42px;
   }
   .projAreaLabel.selectedProjectLabel{
     border-color:rgba(97,208,255,.76);
@@ -474,10 +573,10 @@
   .projAreaLabel.none{background:var(--none-label-bg);color:var(--none-label-fg);border-color:rgba(255,108,124,.32)}
   .tagArea{
     position:absolute;
-    border:1px dashed var(--tag-border);
-    border-radius:22px;
-    background:linear-gradient(180deg, rgba(143,212,91,.08), rgba(143,212,91,.03));
-    box-shadow:inset 0 0 0 1px rgba(143,212,91,.08);
+    border:1px solid var(--tag-border);
+    border-radius:16px;
+    background:linear-gradient(180deg, rgba(143,212,91,.07), rgba(143,212,91,.025));
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.025);
     pointer-events:auto;
   }
   .tagAreaLabel{
@@ -487,6 +586,9 @@
     font-size:11px;
     font-weight:800;
     color:var(--tag-label-fg);
+  }
+  .tagAreaLabel::after{
+    right:30px;
   }
   .tagAreaLabel.none{background:var(--none-label-bg);color:var(--none-label-fg);border-color:rgba(255,108,124,.32)}
   .marquee{
@@ -1000,8 +1102,8 @@
     filter:drop-shadow(0 0 3px rgba(147,197,253,.9));
   }
   #builderLinks path.dep-edge{stroke-linecap:round}
-  #builderLinks path.dep-edge.existing{stroke:#9ecbff;stroke-width:2;stroke-dasharray:none}
-  #builderLinks path.dep-edge.staged{stroke:#7aa2f7;stroke-width:2.5;stroke-dasharray:6 6}
+  #builderLinks path.dep-edge.existing{stroke:#9ecbff;stroke-width:2.4;stroke-dasharray:none}
+  #builderLinks path.dep-edge.staged{stroke:#7aa2f7;stroke-width:2.6;stroke-dasharray:8 7}
   .tcModalOverlay{
     position:fixed;
     inset:0;
@@ -1352,6 +1454,16 @@ function tagPalette(tag){
     border: "hsla("+h+",55%,46%,.85)",
     labelBg: "hsla("+h+",50%,20%,.85)"
   };
+}
+function taskDueLabel(task){
+  var due = task && task.due;
+  if (!due) return "";
+  var s = String(due);
+  var m = s.match(/^(\d{4})(\d{2})(\d{2})/);
+  return m ? (m[1] + "-" + m[2] + "-" + m[3]) : s;
+}
+function taskStatusLabel(task){
+  return task && task.has_depends ? "Blocked" : "Ready";
 }
 
 
@@ -1771,6 +1883,10 @@ function nodesForTag(project, tag){
   return Array.from(builderStage.querySelectorAll('.node'))
     .filter(function(n){ return n.getAttribute('data-proj') === (project||"(no project)") && n.getAttribute('data-tag') === (tag||"(no tag)"); });
 }
+function nodesForProject(project){
+  return Array.from(builderStage.querySelectorAll('.node'))
+    .filter(function(n){ return n.getAttribute('data-proj') === (project||"(no project)"); });
+}
 function moveNodesForTag(project, tag, dx, dy){
   nodesForTag(project, tag).forEach(function(n){
     var x = parseInt(n.style.left||"0",10), y = parseInt(n.style.top||"0",10);
@@ -2137,6 +2253,7 @@ function recomputeAreasAndTags(){
     var pl = document.createElement('div');
     pl.className="projAreaLabel"; if (proj==="(no project)") pl.classList.add('none');
     pl.textContent = proj;
+    pl.setAttribute('data-count', String(nodesForProject(proj).length));
     pl.setAttribute('data-proj-label', proj);
     pl.style.left = ((pa.x + 14)|0)+"px";
     pl.style.top = ((pa.y + 14)|0)+"px";
@@ -2186,6 +2303,8 @@ function recomputeAreasAndTags(){
     var tl = document.createElement('div');
     tl.className="tagAreaLabel"; if (ta.tag==="(no tag)") tl.classList.add('none');
     tl.textContent = ta.tag;
+    tl.setAttribute('data-tag-label', ta.tag);
+    tl.setAttribute('data-count', String(nodesForTag(ta.project, ta.tag).length));
     tl.style.left = ((ta.x + 14)|0)+"px";
     tl.style.top = ((ta.y + 14)|0)+"px";
     // Apply per-tag palette
@@ -2193,8 +2312,8 @@ function recomputeAreasAndTags(){
     td.style.background = pal.bg;
     td.style.borderColor = pal.border;
     tl.style.background = pal.labelBg;
-    tl.style.borderRadius = "999px";
-    tl.style.paddingRight = "28px"; // room for the + button
+    tl.style.borderRadius = "9px";
+    tl.style.paddingRight = "56px"; // room for the count and + button
 
     // Add a per-tag '+' button
     var addBtn = document.createElement('button');
@@ -2714,6 +2833,7 @@ function makeDraggable(node){
   var dragging=false, group=false, sx=0, sy=0, start=[];
   node.addEventListener('mousedown', function(e){
     if (e.button!==0) return;
+    if (e.target && e.target.closest && e.target.closest('.nodeActions, .depHandle, button, input, textarea, select, [contenteditable="true"]')) return;
     if (removeMode && removeMode.checked) return;
     if (!node.classList.contains('selected')){ clearSelection(); selectNode(node); }
     dragging = true; group = (selected.size>1);
@@ -2897,10 +3017,17 @@ function addNodeForTask(task, cx, cy, opts){
   recomputeAreasAndTags();
 
   var node = document.createElement('div');
-  node.className="node";
+  node.className="node" + (task.has_depends ? " hasDeps" : " ready");
+  var dueLabel = taskDueLabel(task);
+  var meta = '<div class="nodeMeta">' +
+    '<span class="nodeChip project">'+escapeHtml(proj)+'</span>' +
+    '<span class="nodeChip tag">'+escapeHtml(tag)+'</span>' +
+    (dueLabel ? '<span class="nodeChip due">'+escapeHtml(dueLabel)+'</span>' : '') +
+    '</div>';
   node.innerHTML =
-    '<div class="nodeTop"><span class="nodeShortBadge">'+escapeHtml(task.short)+'</span></div>' +
-    '<div class="title">'+escapeHtml(task.desc)+'</div>';
+    '<div class="nodeTop"><span class="nodeStatePill">'+escapeHtml(taskStatusLabel(task))+'</span></div>' +
+    '<div class="title">'+escapeHtml(task.desc)+'</div>' +
+    meta;
   node.setAttribute('data-short', task.short);
   if (task.uuid) node.setAttribute('data-uuid', task.uuid);
   node.setAttribute('data-proj', proj);

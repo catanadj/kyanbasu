@@ -57,6 +57,14 @@ for (var j=0;j<hs.length;j++){
 var cards = qsa('#builderStage [data-short]');
 for (var i=0;i<cards.length;i++) dedupOneCard(cards[i]);
   }
+  var dedupTimer = 0;
+  function scheduleDedup(delay){
+if (dedupTimer) return;
+dedupTimer = setTimeout(function(){
+  dedupTimer = 0;
+  try{ runDedup(); }catch(_){}
+}, Math.max(0, delay || 0));
+  }
 
   // hook: if v6 writer exists, run dedup after it writes
   (function(){
@@ -64,28 +72,40 @@ for (var i=0;i<cards.length;i++) dedupOneCard(cards[i]);
 var _refresh = window.refreshDepHandleLetters;
 window.refreshDepHandleLetters = function(){
   if (typeof _refresh === 'function') try{ _refresh.apply(this, arguments); }catch(_){}
-  setTimeout(function(){ try{ runDedup(); }catch(_){ } }, 0);
+  scheduleDedup(0);
 };
   })();
 
-  // observe the stage for late insertions/mutations
+  // Watch only for task card insertions/removals. The deduper removes duplicate
+  // handles, so observing all subtree child/class mutations feeds itself.
   (function(){
 var stage = $('#builderStage'); if (!stage) return;
-var t=null;
-var obs = new MutationObserver(function(){
-  if (t) return;
-  t = setTimeout(function(){ t=null; try{ runDedup(); }catch(_){ } }, 30);
+var obs = new MutationObserver(function(records){
+  for (var i=0;i<records.length;i++){
+    var rec = records[i];
+    if (rec.type !== 'childList') continue;
+    var changed = false;
+    function touchesNode(n){
+      return !!(n && n.nodeType === 1 && (
+        (n.matches && n.matches('.node[data-short], [data-short].node')) ||
+        (n.querySelector && n.querySelector('.node[data-short], [data-short].node'))
+      ));
+    }
+    for (var a=0;a<rec.addedNodes.length;a++){ if (touchesNode(rec.addedNodes[a])){ changed = true; break; } }
+    for (var r=0;!changed && r<rec.removedNodes.length;r++){ if (touchesNode(rec.removedNodes[r])){ changed = true; break; } }
+    if (changed){ scheduleDedup(40); break; }
+  }
 });
-obs.observe(stage, {subtree:true, childList:true, attributes:true, attributeFilter:['class','style']});
+obs.observe(stage, {subtree:true, childList:true});
 window.__depHandleAuthorDedupV6bObserver = obs;
   })();
 
   // resize can cause reinserts
-  window.addEventListener('resize', function(){ try{ runDedup(); }catch(_){ } }, {passive:true});
+  window.addEventListener('resize', function(){ scheduleDedup(40); }, {passive:true});
 
   // first passes
-  setTimeout(function(){ try{ runDedup(); }catch(_){ } }, 0);
-  setTimeout(function(){ try{ runDedup(); }catch(_){ } }, 120);
+  scheduleDedup(0);
+  setTimeout(function(){ scheduleDedup(0); }, 120);
 
   // manual helper
   window.depFix = window.depFix || {};

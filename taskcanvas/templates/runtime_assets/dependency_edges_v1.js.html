@@ -72,7 +72,7 @@
     return level;
   }
 
-  var anim = { enabled:true, items:[], raf:null, lastTs:0 };
+  var anim = { enabled:false, items:[], raf:null, lastTs:0 };
   function ensurePulseGroup(){
     var svg = $('#builderLinks'); if (!svg) return null;
     var g = $('#depPulseOverlay');
@@ -86,6 +86,7 @@
 
   function rebuildPulses(){
     var svg = $('#builderLinks'); if (!svg) return;
+    if (!anim.enabled) return;
     var overlay = ensurePulseGroup(); if (!overlay) return;
     while(overlay.firstChild) overlay.removeChild(overlay.firstChild);
     anim.items.length = 0;
@@ -147,16 +148,59 @@
       defs=document.createElementNS('http://www.w3.org/2000/svg','defs');
       svg.insertBefore(defs, svg.firstChild);
     }
-    if (!svg.querySelector('#depArrow')){
-      var m = document.createElementNS('http://www.w3.org/2000/svg','marker');
-      m.setAttribute('id','depArrow'); m.setAttribute('viewBox','0 0 10 10');
-      m.setAttribute('refX','8'); m.setAttribute('refY','5');
-      m.setAttribute('markerWidth','6'); m.setAttribute('markerHeight','6');
-      m.setAttribute('orient','auto-start-reverse');
-      var p = document.createElementNS('http://www.w3.org/2000/svg','path');
-      p.setAttribute('d','M 0 0 L 10 5 L 0 10 z'); p.setAttribute('fill','#9ecbff');
-      m.appendChild(p); defs.appendChild(m);
+    var m = svg.querySelector('#depArrow');
+    if (!m){
+      m = document.createElementNS('http://www.w3.org/2000/svg','marker');
+      m.setAttribute('id','depArrow');
+      defs.appendChild(m);
     }
+    m.setAttribute('viewBox','0 0 12 12');
+    m.setAttribute('refX','10');
+    m.setAttribute('refY','6');
+    m.setAttribute('markerWidth','8');
+    m.setAttribute('markerHeight','8');
+    m.setAttribute('orient','auto-start-reverse');
+    while (m.firstChild) m.removeChild(m.firstChild);
+    var p = document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('d','M 1 1 L 11 6 L 1 11 z');
+    p.setAttribute('fill','#d7ecff');
+    m.appendChild(p);
+  }
+  function ensureEdgeGradient(svg, id, a, b, kind){
+    if (!svg || !a || !b) return null;
+    var defs = svg.querySelector('defs');
+    if(!defs){
+      defs=document.createElementNS('http://www.w3.org/2000/svg','defs');
+      svg.insertBefore(defs, svg.firstChild);
+    }
+    var grad = svg.querySelector('#' + id);
+    if (!grad){
+      grad = document.createElementNS('http://www.w3.org/2000/svg','linearGradient');
+      grad.setAttribute('id', id);
+      defs.appendChild(grad);
+    }
+    grad.setAttribute('gradientUnits', 'userSpaceOnUse');
+    grad.setAttribute('x1', String(a.x));
+    grad.setAttribute('y1', String(a.y));
+    grad.setAttribute('x2', String(b.x));
+    grad.setAttribute('y2', String(b.y));
+    while (grad.firstChild) grad.removeChild(grad.firstChild);
+    var s1 = document.createElementNS('http://www.w3.org/2000/svg','stop');
+    s1.setAttribute('offset', '0%');
+    s1.setAttribute('stop-color', kind === 'staged' ? '#5d7fca' : '#6f9fc7');
+    s1.setAttribute('stop-opacity', '.42');
+    var s2 = document.createElementNS('http://www.w3.org/2000/svg','stop');
+    s2.setAttribute('offset', '72%');
+    s2.setAttribute('stop-color', kind === 'staged' ? '#9ecbff' : '#b9ddff');
+    s2.setAttribute('stop-opacity', '.82');
+    var s3 = document.createElementNS('http://www.w3.org/2000/svg','stop');
+    s3.setAttribute('offset', '100%');
+    s3.setAttribute('stop-color', kind === 'staged' ? '#d0ecff' : '#f4ead7');
+    s3.setAttribute('stop-opacity', '1');
+    grad.appendChild(s1);
+    grad.appendChild(s2);
+    grad.appendChild(s3);
+    return grad;
   }
 
   function ensureExistingGroup(){
@@ -166,6 +210,16 @@
       g = document.createElementNS('http://www.w3.org/2000/svg','g');
       g.setAttribute('id','depExistingEdges');
       svg.insertBefore(g, svg.firstChild);
+    }
+    return g;
+  }
+  function ensureDirectionGroup(){
+    var svg = $('#builderLinks'); if (!svg) return null;
+    var g = $('#depDirectionHints');
+    if (!g){
+      g = document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.setAttribute('id','depDirectionHints');
+      svg.appendChild(g);
     }
     return g;
   }
@@ -214,11 +268,17 @@
       path.setAttribute('class','dep-edge existing link-existing');
       path.setAttribute('fill','none');
       path.setAttribute('d', makePath(a,b));
+      ensureEdgeGradient(svg, 'depGradExisting' + i, a, b, 'existing');
+      path.style.stroke = 'url(#depGradExisting' + i + ')';
       path.setAttribute('marker-end','url(#depArrow)');
       path.setAttribute('data-from', String(e.from));
       path.setAttribute('data-to', String(e.to));
       g.appendChild(path);
     }
+  }
+  function renderDirectionHints(){
+    var g = $('#depDirectionHints');
+    if (g && g.parentNode) g.parentNode.removeChild(g);
   }
 
   if (!window.__dependencyEdgesDrawHooked){
@@ -226,6 +286,7 @@
     window.drawLinks = function(){
       if (typeof originalDrawLinks === 'function'){ try{ originalDrawLinks.apply(this, arguments); }catch(_){} }
       try{ renderExistingEdges(); }catch(_){}
+      try{ renderDirectionHints(); }catch(_){}
       try{ if (typeof refreshDepHandleLetters === 'function') refreshDepHandleLetters(); }catch(_){}
       setTimeout(rebuildPulses, 0);
     };
@@ -237,7 +298,15 @@
       anim.enabled = !anim.enabled;
       var g = document.getElementById('depPulseOverlay');
       if (g) g.style.display = anim.enabled ? '' : 'none';
-      if (anim.enabled && !anim.raf){ anim.lastTs=0; anim.raf=requestAnimationFrame(step); }
+      if (anim.enabled){
+        rebuildPulses();
+        if (!anim.raf){ anim.lastTs=0; anim.raf=requestAnimationFrame(step); }
+      } else {
+        if (anim.raf) cancelAnimationFrame(anim.raf);
+        anim.raf = null;
+        anim.items.length = 0;
+        if (g) while(g.firstChild) g.removeChild(g.firstChild);
+      }
     }
   });
 
@@ -248,6 +317,7 @@
   window.TaskCanvasDependencyEdges = {
     gatherEdgesShorts: gatherEdgesShorts,
     renderExistingEdges: renderExistingEdges,
+    renderDirectionHints: renderDirectionHints,
     rebuildPulses: rebuildPulses
   };
 

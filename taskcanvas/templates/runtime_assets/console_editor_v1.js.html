@@ -31,6 +31,21 @@
   function applyOverridesText(text){
     return applyOverridesToLines(lines(text)).join('\n');
   }
+  function hasOverrides(){
+    return !!(Object.keys(edits).length || Object.keys(removed).length);
+  }
+  function canonicalText(){
+    try{
+      if (window.TaskCanvasCommands && typeof window.TaskCanvasCommands.runtimeCommandText === 'function'){
+        return window.TaskCanvasCommands.runtimeCommandText(window, {short:true});
+      }
+    }catch(_){}
+    try{
+      if (typeof window.buildCommands === 'function') return applyOverridesText(window.buildCommands());
+    }catch(_){}
+    var ta = document.getElementById('consoleText');
+    return applyOverridesText(ta ? ta.value : '');
+  }
   function applyOverridesBuilt(built){
     var out = cloneBuilt(built);
     var finalLines = applyOverridesToLines(lines(out.text));
@@ -149,11 +164,7 @@
   }
   function refresh(){
     try{
-      if (window.TaskCanvasCommands && typeof window.TaskCanvasCommands.runtimeCommandText === 'function'){
-        setTextarea(window.TaskCanvasCommands.runtimeCommandText(window, {short:true}));
-      } else if (typeof window.buildCommands === 'function') {
-        setTextarea(applyOverridesText(window.buildCommands()));
-      }
+      setTextarea(canonicalText());
     }catch(_){}
     renderRows();
     try{ if (window.TaskCanvasReview && typeof window.TaskCanvasReview.render === 'function') window.TaskCanvasReview.render(); }catch(_){}
@@ -161,10 +172,14 @@
   function scheduleRender(){
     clearTimeout(renderTimer);
     renderTimer = setTimeout(function(){
-      var ta = document.getElementById('consoleText');
-      if (ta) ta.value = applyOverridesText(ta.value);
-      renderRows();
+      refresh();
     }, 80);
+  }
+  function normalizeNow(){
+    try{
+      setTextarea(canonicalText());
+      renderRows();
+    }catch(_){}
   }
   function wrapCommandCore(){
     var api = window.TaskCanvasCommands;
@@ -189,6 +204,7 @@
     var orig = window.updateConsole;
     window.updateConsole = function(){
       var rv = orig.apply(this, arguments);
+      normalizeNow();
       scheduleRender();
       return rv;
     };
@@ -227,6 +243,8 @@
     remove: function(original){ removed[original] = true; delete edits[original]; refresh(); },
     reset: function(){ edits = Object.create(null); removed = Object.create(null); refresh(); },
     applyText: applyOverridesText,
+    currentText: function(){ return hasOverrides() ? canonicalText() : applyOverridesText((document.getElementById('consoleText') || {}).value || ''); },
+    hasOverrides: hasOverrides,
     render: renderRows,
     state: function(){ return {edits:Object.assign({}, edits), removed:Object.assign({}, removed)}; }
   };
