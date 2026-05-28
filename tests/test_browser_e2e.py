@@ -499,6 +499,221 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "")
         self.assertGreaterEqual(result["savedKeys"], 1)
 
+    def test_canvas_notes_selects_and_unlinks_canvas_link(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_UNLINK_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var a = window.TaskCanvasNotes.createNote(260, 220, "Plan", "");
+      var b = window.TaskCanvasNotes.createNote(560, 250, "Step 1", "");
+      window.TaskCanvasNotes.linkNotes(a.id, b.id);
+      setTimeout(function(){
+        var path = document.querySelector('#tcNoteLinksLayer path.tcNoteLink');
+        path.dispatchEvent(new MouseEvent('click', {bubbles:true, cancelable:true}));
+        setTimeout(function(){
+          var selectedBefore = document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink.selected').length;
+          var toolbarBefore = !!document.getElementById('tcNoteLinkToolbar');
+          var selectedNotesBefore = document.querySelectorAll('.tcNoteNode.selected').length;
+          document.querySelector('#tcNoteLinkToolbar button').click();
+          setTimeout(function(){
+            var out = {
+              selectedBefore: selectedBefore,
+              toolbarBefore: toolbarBefore,
+              selectedNotesBefore: selectedNotesBefore,
+              linksAfter: window.TaskCanvasNotes.links().length,
+              pathsAfter: document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink').length,
+              toolbarAfter: !!document.getElementById('tcNoteLinkToolbar'),
+              console: (document.getElementById('consoleText') || {}).value || ""
+            };
+            var pre = document.createElement('pre');
+            pre.id = 'e2e-out';
+            pre.textContent = JSON.stringify(out);
+            document.body.appendChild(pre);
+          }, 80);
+        }, 80);
+      }, 100);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["selectedBefore"], 1, msg=json.dumps(result))
+        self.assertTrue(result["toolbarBefore"], msg=json.dumps(result))
+        self.assertEqual(result["selectedNotesBefore"], 0, msg=json.dumps(result))
+        self.assertEqual(result["linksAfter"], 0, msg=json.dumps(result))
+        self.assertEqual(result["pathsAfter"], 0, msg=json.dumps(result))
+        self.assertFalse(result["toolbarAfter"], msg=json.dumps(result))
+        self.assertEqual(result["console"], "", msg=json.dumps(result))
+
+    def test_canvas_notes_drag_handle_creates_link(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_DRAG_LINK_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var a = window.TaskCanvasNotes.createNote(260, 220, "Plan", "");
+      var b = window.TaskCanvasNotes.createNote(620, 250, "Step 1", "");
+      window.TaskCanvasNotes.selectNote(a.id);
+      setTimeout(function(){
+        var handle = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"] .tcNoteLinkHandle');
+        var target = document.querySelector('.tcNoteNode[data-note-id="'+b.id+'"]');
+        var hr = handle.getBoundingClientRect();
+        var tr = target.getBoundingClientRect();
+        handle.dispatchEvent(new MouseEvent('mousedown', {
+          bubbles:true, cancelable:true, button:0,
+          clientX:hr.left + hr.width / 2,
+          clientY:hr.top + hr.height / 2
+        }));
+        document.dispatchEvent(new MouseEvent('mousemove', {
+          bubbles:true, cancelable:true,
+          clientX:tr.left + tr.width / 2,
+          clientY:tr.top + tr.height / 2
+        }));
+        target.dispatchEvent(new MouseEvent('mouseup', {
+          bubbles:true, cancelable:true, button:0,
+          clientX:tr.left + tr.width / 2,
+          clientY:tr.top + tr.height / 2
+        }));
+        setTimeout(function(){
+          var links = window.TaskCanvasNotes.links();
+          var out = {
+            links: links.length,
+            from: links[0] && links[0].from,
+            to: links[0] && links[0].to,
+            type: links[0] && links[0].type,
+            selectedPath: document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink.selected').length,
+            previewPaths: document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLinkPreview').length,
+            toolbar: !!document.getElementById('tcNoteLinkToolbar'),
+            selectedNotes: document.querySelectorAll('.tcNoteNode.selected').length,
+            console: (document.getElementById('consoleText') || {}).value || ""
+          };
+          var pre = document.createElement('pre');
+          pre.id = 'e2e-out';
+          pre.textContent = JSON.stringify(out);
+          document.body.appendChild(pre);
+        }, 100);
+      }, 120);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["links"], 1, msg=json.dumps(result))
+        self.assertEqual(result["type"], "manual", msg=json.dumps(result))
+        self.assertTrue(result["from"], msg=json.dumps(result))
+        self.assertTrue(result["to"], msg=json.dumps(result))
+        self.assertEqual(result["selectedPath"], 1, msg=json.dumps(result))
+        self.assertEqual(result["previewPaths"], 0, msg=json.dumps(result))
+        self.assertTrue(result["toolbar"], msg=json.dumps(result))
+        self.assertEqual(result["selectedNotes"], 0, msg=json.dumps(result))
+        self.assertEqual(result["console"], "", msg=json.dumps(result))
+
+    def test_canvas_notes_relinks_selected_link_endpoint(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_RELINK_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var a = window.TaskCanvasNotes.createNote(260, 220, "Plan", "");
+      var b = window.TaskCanvasNotes.createNote(620, 250, "Step 1", "");
+      var c = window.TaskCanvasNotes.createNote(620, 430, "Step 2", "");
+      window.TaskCanvasNotes.linkNotes(a.id, b.id);
+      setTimeout(function(){
+        var path = document.querySelector('#tcNoteLinksLayer path.tcNoteLink');
+        path.dispatchEvent(new MouseEvent('click', {bubbles:true, cancelable:true}));
+        setTimeout(function(){
+          var endpoint = document.querySelector('.tcNoteLinkEndpoint.to');
+          var target = document.querySelector('.tcNoteNode[data-note-id="'+c.id+'"]');
+          var er = endpoint.getBoundingClientRect();
+          var tr = target.getBoundingClientRect();
+          endpoint.dispatchEvent(new MouseEvent('mousedown', {
+            bubbles:true, cancelable:true, button:0,
+            clientX:er.left + er.width / 2,
+            clientY:er.top + er.height / 2
+          }));
+          document.dispatchEvent(new MouseEvent('mousemove', {
+            bubbles:true, cancelable:true,
+            clientX:tr.left + tr.width / 2,
+            clientY:tr.top + tr.height / 2
+          }));
+          target.dispatchEvent(new MouseEvent('mouseup', {
+            bubbles:true, cancelable:true, button:0,
+            clientX:tr.left + tr.width / 2,
+            clientY:tr.top + tr.height / 2
+          }));
+          setTimeout(function(){
+            var links = window.TaskCanvasNotes.links();
+            var out = {
+              links: links.length,
+              fromUnchanged: links[0] && links[0].from === a.id,
+              toChanged: links[0] && links[0].to === c.id,
+              oldTargetRemoved: !links.some(function(l){ return l.to === b.id; }),
+              selectedPath: document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink.selected').length,
+              endpoints: document.querySelectorAll('.tcNoteLinkEndpoint').length,
+              previewPaths: document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLinkPreview').length,
+              console: (document.getElementById('consoleText') || {}).value || ""
+            };
+            var pre = document.createElement('pre');
+            pre.id = 'e2e-out';
+            pre.textContent = JSON.stringify(out);
+            document.body.appendChild(pre);
+          }, 100);
+        }, 80);
+      }, 120);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["links"], 1, msg=json.dumps(result))
+        self.assertTrue(result["fromUnchanged"], msg=json.dumps(result))
+        self.assertTrue(result["toChanged"], msg=json.dumps(result))
+        self.assertTrue(result["oldTargetRemoved"], msg=json.dumps(result))
+        self.assertEqual(result["selectedPath"], 1, msg=json.dumps(result))
+        self.assertEqual(result["endpoints"], 2, msg=json.dumps(result))
+        self.assertEqual(result["previewPaths"], 0, msg=json.dumps(result))
+        self.assertEqual(result["console"], "", msg=json.dumps(result))
+
     def test_canvas_note_mode_click_places_note_at_clicked_position(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

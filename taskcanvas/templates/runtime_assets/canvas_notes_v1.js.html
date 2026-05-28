@@ -7,10 +7,12 @@
   var linkMode = false;
   var taskLinkMode = false;
   var linkFrom = null;
+  var selectedLinkKey = null;
   var selectedNoteId = null;
   var selectedNoteIds = {};
   var saveTimer = 0;
   var lasso = null;
+  var linkDrag = null;
   var bucketDrag = null;
   var noteDragActive = false;
   var bucketUiState = Object.create(null);
@@ -116,6 +118,12 @@
   }
   function linkExists(from, to){
     return links.some(function(l){ return l && l.from === from && l.to === to; });
+  }
+  function linkExistsExcept(from, to, exceptKey){
+    return links.some(function(l){ return l && noteLinkKey(l) !== exceptKey && l.from === from && l.to === to; });
+  }
+  function noteLinkKey(link){
+    return link ? [link.from || '', link.to || '', link.type || 'manual'].join('::') : '';
   }
   function childLinksFrom(id){
     return links.filter(function(l){ return l && l.type === 'child' && l.from === id && noteById(l.to); });
@@ -1617,6 +1625,15 @@
       ev.preventDefault(); ev.stopPropagation();
       toggleCollapse(id);
     });
+    var handle = document.createElement('button');
+    handle.type = 'button';
+    handle.className = 'tcNoteLinkHandle';
+    handle.title = 'Drag to link notes';
+    handle.setAttribute('aria-label', 'Drag to link notes');
+    handle.addEventListener('mousedown', function(ev){
+      startLinkDrag(ev, id);
+    });
+    el.appendChild(handle);
     makeNoteDraggable(el);
   }
   function makeNoteDraggable(el){
@@ -1693,6 +1710,7 @@
     return Object.keys(selectedNoteIds).filter(function(id){ return !!selectedNoteIds[id] && !!noteById(id); });
   }
   function selectNote(id, additive){
+    selectedLinkKey = null;
     if (!noteById(id)){
       selectedNoteId = null;
       selectedNoteIds = {};
@@ -1707,8 +1725,10 @@
       selectedNoteIds[id] = true;
     }
     syncSelection();
+    renderLinks();
   }
   function selectNotes(ids, additive){
+    selectedLinkKey = null;
     if (!additive){
       selectedNoteIds = {};
       selectedNoteId = null;
@@ -1720,6 +1740,7 @@
       }
     });
     syncSelection();
+    renderLinks();
   }
   function syncSelection(){
     qsa('.tcNoteNode').forEach(function(el){
@@ -1766,6 +1787,7 @@
     if (!doomedIds.length) return;
     notes = notes.filter(function(n){ return !doomed[n.id]; });
     links = links.filter(function(l){ return !doomed[l.from] && !doomed[l.to]; });
+    if (selectedLinkKey && !links.some(function(l){ return noteLinkKey(l) === selectedLinkKey; })) selectedLinkKey = null;
     doomedIds.forEach(function(id){ delete selectedNoteIds[id]; });
     if (doomed[selectedNoteId]) selectedNoteId = selectedIds()[0] || null;
     doomedIds.forEach(function(id){
@@ -1907,26 +1929,212 @@
     }
     return layer;
   }
+  function stagePointFromClient(clientX, clientY){
+    var st = stage();
+    if (!st) return {x:0, y:0};
+    var r = st.getBoundingClientRect();
+    var scale = window.ZSCALE || 1;
+    return {x:(clientX - r.left) / scale, y:(clientY - r.top) / scale};
+  }
+  function linkPathData(p1, p2){
+    var dx = Math.max(80, Math.abs(p2.x - p1.x) * .45);
+    return 'M '+p1.x+' '+p1.y+' C '+(p1.x+dx)+' '+p1.y+', '+(p2.x-dx)+' '+p2.y+', '+p2.x+' '+p2.y;
+  }
+  function previewPathData(fromId, point){
+    var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(fromId)+'"]');
+    if (!el || !point) return '';
+    return linkPathData(centerPoint(el), point);
+  }
+  function relinkPreviewPathData(drag, point){
+    if (!drag || !point) return '';
+    var other = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(drag.endpoint === 'from' ? drag.to : drag.from)+'"]');
+    if (!other) return '';
+    var fixed = centerPoint(other);
+    return drag.endpoint === 'from' ? linkPathData(point, fixed) : linkPathData(fixed, point);
+  }
+  function startLinkDrag(ev, fromId){
+    if (ev.button !== 0 || !noteById(fromId)) return;
+    var layer = ensureLinkLayer();
+    if (!layer) return;
+    selectedLinkKey = null;
+    selectNote(fromId);
+    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('class', 'tcNoteLinkPreview');
+    path.setAttribute('d', previewPathData(fromId, stagePointFromClient(ev.clientX, ev.clientY)));
+    layer.appendChild(path);
+    linkDrag = {mode: 'create', from: fromId, path: path};
+    ev.preventDefault();
+    ev.stopPropagation();
+  }
+  function updateLinkDrag(ev){
+    if (!linkDrag || !linkDrag.path) return;
+    var point = stagePointFromClient(ev.clientX, ev.clientY);
+    linkDrag.path.setAttribute('d', linkDrag.mode === 'relink' ? relinkPreviewPathData(linkDrag, point) : previewPathData(linkDrag.from, point));
+  }
+  function finishLinkDrag(ev){
+    if (!linkDrag) return;
+    var drag = linkDrag;
+    if (linkDrag.path) linkDrag.path.remove();
+    linkDrag = null;
+    var target = ev.target && ev.target.closest ? ev.target.closest('.tcNoteNode[data-note-id]') : null;
+    var to = target ? target.getAttribute('data-note-id') : null;
+    if (drag.mode === 'relink'){
+      finishRelinkDrag(drag, to);
+      return;
+    }
+    var from = drag.from;
+    if (to && from !== to && !linkExists(from, to)){
+      links.push({from: from, to: to, type: 'manual'});
+      selectedLinkKey = noteLinkKey({from: from, to: to, type: 'manual'});
+      selectedNoteIds = {};
+      selectedNoteId = null;
+      syncSelection();
+      renderLinks();
+      saveSoon();
+    } else {
+      renderLinks();
+    }
+  }
+  function startRelinkDrag(ev, key, endpoint){
+    if (ev.button !== 0) return;
+    var link = links.filter(function(l){ return noteLinkKey(l) === key; })[0];
+    if (!link) return;
+    var layer = ensureLinkLayer();
+    if (!layer) return;
+    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('class', 'tcNoteLinkPreview');
+    path.setAttribute('d', relinkPreviewPathData({
+      mode: 'relink',
+      from: link.from,
+      to: link.to,
+      type: link.type || 'manual',
+      key: key,
+      endpoint: endpoint
+    }, stagePointFromClient(ev.clientX, ev.clientY)));
+    layer.appendChild(path);
+    linkDrag = {mode:'relink', key:key, endpoint:endpoint, from:link.from, to:link.to, type:link.type || 'manual', path:path};
+    ev.preventDefault();
+    ev.stopPropagation();
+  }
+  function finishRelinkDrag(drag, targetId){
+    if (!drag || !targetId) { renderLinks(); return; }
+    var nextFrom = drag.endpoint === 'from' ? targetId : drag.from;
+    var nextTo = drag.endpoint === 'to' ? targetId : drag.to;
+    if (!nextFrom || !nextTo || nextFrom === nextTo || linkExistsExcept(nextFrom, nextTo, drag.key)){
+      renderLinks();
+      return;
+    }
+    for (var i=0;i<links.length;i++){
+      if (noteLinkKey(links[i]) !== drag.key) continue;
+      links[i].from = nextFrom;
+      links[i].to = nextTo;
+      links[i].type = drag.type || links[i].type || 'manual';
+      selectedLinkKey = noteLinkKey(links[i]);
+      syncNoteLabels();
+      renderLinks();
+      saveSoon();
+      return;
+    }
+    renderLinks();
+  }
+  function removeLinkToolbar(){
+    var el = document.getElementById('tcNoteLinkToolbar');
+    if (el) el.remove();
+  }
+  function removeLinkEndpoints(){
+    qsa('.tcNoteLinkEndpoint').forEach(function(el){ el.remove(); });
+  }
+  function selectLink(key){
+    selectedLinkKey = key || null;
+    selectedNoteId = null;
+    selectedNoteIds = {};
+    syncSelection();
+    renderLinks();
+  }
+  function deleteSelectedLink(){
+    if (!selectedLinkKey) return false;
+    var before = links.length;
+    links = links.filter(function(l){ return noteLinkKey(l) !== selectedLinkKey; });
+    if (links.length === before) return false;
+    selectedLinkKey = null;
+    syncNoteLabels();
+    renderLinks();
+    saveSoon();
+    return true;
+  }
+  function renderLinkToolbar(link, p1, p2){
+    removeLinkToolbar();
+    if (!link || !p1 || !p2) return;
+    var st = stage();
+    if (!st) return;
+    var bar = document.createElement('div');
+    bar.id = 'tcNoteLinkToolbar';
+    bar.className = 'tcNoteLinkToolbar';
+    bar.style.left = Math.round((p1.x + p2.x) / 2) + 'px';
+    bar.style.top = Math.round((p1.y + p2.y) / 2) + 'px';
+    bar.innerHTML = '<button type="button" title="Unlink selected notes">Unlink</button>';
+    qs('button', bar).addEventListener('click', function(ev){
+      ev.preventDefault();
+      ev.stopPropagation();
+      deleteSelectedLink();
+    });
+    st.appendChild(bar);
+  }
+  function renderLinkEndpoints(link, p1, p2){
+    removeLinkEndpoints();
+    var st = stage();
+    if (!st || !link || !p1 || !p2) return;
+    var key = noteLinkKey(link);
+    [['from', p1], ['to', p2]].forEach(function(pair){
+      var endpoint = pair[0];
+      var point = pair[1];
+      var handle = document.createElement('button');
+      handle.type = 'button';
+      handle.className = 'tcNoteLinkEndpoint ' + endpoint;
+      handle.title = endpoint === 'from' ? 'Drag to change source note' : 'Drag to change target note';
+      handle.setAttribute('aria-label', handle.title);
+      handle.style.left = Math.round(point.x) + 'px';
+      handle.style.top = Math.round(point.y) + 'px';
+      handle.setAttribute('data-link-endpoint', endpoint);
+      handle.addEventListener('mousedown', function(ev){ startRelinkDrag(ev, key, endpoint); });
+      st.appendChild(handle);
+    });
+  }
   function renderLinks(){
     var layer = ensureLinkLayer();
     if (!layer) return;
     layer.innerHTML = '';
+    removeLinkToolbar();
+    removeLinkEndpoints();
+    var hasSelected = false;
     links.forEach(function(l){
       var a = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(l.from)+'"]');
       var b = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(l.to)+'"]');
       if (!a || !b) return;
       if (!isNoteVisible(l.from) || !isNoteVisible(l.to)) return;
+      var key = noteLinkKey(l);
       var p1 = centerPoint(a), p2 = centerPoint(b);
-      var dx = Math.max(80, Math.abs(p2.x - p1.x) * .45);
-      var d = 'M '+p1.x+' '+p1.y+' C '+(p1.x+dx)+' '+p1.y+', '+(p2.x-dx)+' '+p2.y+', '+p2.x+' '+p2.y;
+      var d = linkPathData(p1, p2);
       var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('class', 'tcNoteLink');
+      path.setAttribute('class', 'tcNoteLink' + (selectedLinkKey === key ? ' selected' : ''));
       path.setAttribute('d', d);
       path.setAttribute('data-from', l.from);
       path.setAttribute('data-to', l.to);
       path.setAttribute('data-type', l.type || 'manual');
+      path.setAttribute('data-link-key', key);
+      path.addEventListener('click', function(ev){
+        ev.preventDefault();
+        ev.stopPropagation();
+        selectLink(key);
+      });
       layer.appendChild(path);
+      if (selectedLinkKey === key){
+        hasSelected = true;
+        renderLinkToolbar(l, p1, p2);
+        renderLinkEndpoints(l, p1, p2);
+      }
     });
+    if (selectedLinkKey && !hasSelected) selectedLinkKey = null;
   }
   function createChildNote(parentId, title, body){
     var anchorId = arguments.length > 3 ? arguments[3] : null;
@@ -2200,11 +2408,18 @@
   function installKeyboardShortcuts(){
     if (document.__notesKeyboard) return;
     document.__notesKeyboard = true;
+    document.addEventListener('mousemove', updateLinkDrag, true);
+    document.addEventListener('mouseup', finishLinkDrag, true);
     document.addEventListener('keydown', function(ev){
-      if (!selectedNoteId || !noteById(selectedNoteId)) return;
       if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
       if (ev.target && ev.target.closest && ev.target.closest('input, textarea, select')) return;
       if (ev.target && ev.target.closest && ev.target.closest('[contenteditable="true"]') && !ev.target.closest('.tcNoteText')) return;
+      if ((ev.key === 'Delete' || ev.key === 'Backspace') && selectedLinkKey){
+        ev.preventDefault();
+        deleteSelectedLink();
+        return;
+      }
+      if (!selectedNoteId || !noteById(selectedNoteId)) return;
       if (ev.key === 'Tab'){
         ev.preventDefault();
         createChildNote(selectedNoteId, null, null, selectedNoteId);
@@ -2382,6 +2597,8 @@
     stageSelectedNotesAsTasks: stageSelectedNotesAsTasks,
     createLinkedTasksFromSelectedNotes: createLinkedTasksFromSelectedNotes,
     linkNotes: function(from, to, type){ if (from && to && from !== to && !linkExists(from, to)){ links.push({from:from, to:to, type:type || 'manual'}); syncNoteLabels(); renderLinks(); saveSoon(); } },
+    selectLink: selectLink,
+    deleteSelectedLink: deleteSelectedLink,
     reflowMindMap: reflowMindMap,
     compactMindMap: compactMindMap,
     toggleCollapse: toggleCollapse,

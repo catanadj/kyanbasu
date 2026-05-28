@@ -100,6 +100,35 @@
     outline: 2px solid var(--note-accent, rgba(242,177,74,.72));
     box-shadow: 0 0 0 5px var(--note-accent-soft, rgba(242,177,74,.15)), 0 14px 34px rgba(0,0,0,.28);
   }
+  .tcNoteLinkHandle {
+    position: absolute;
+    right: -10px;
+    top: 50%;
+    width: 18px;
+    height: 18px;
+    transform: translateY(-50%);
+    display: none;
+    padding: 0;
+    border: 2px solid rgba(12,18,30,.96);
+    border-radius: 999px;
+    background: var(--note-accent, rgba(242,177,74,.95));
+    box-shadow: 0 0 0 3px var(--note-accent-soft, rgba(242,177,74,.18)), 0 8px 18px rgba(0,0,0,.28);
+    cursor: crosshair;
+    z-index: 5;
+  }
+  .tcNoteLinkHandle::after {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 5px;
+    width: 4px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(12,18,30,.9);
+  }
+  .tcNoteNode.selected .tcNoteLinkHandle {
+    display: block;
+  }
   .tcNoteNode.searchMatch {
     box-shadow: 0 0 0 4px rgba(97, 208, 255, .18), 0 14px 34px rgba(0,0,0,.28), 0 0 0 1px rgba(97, 208, 255, .34);
   }
@@ -278,9 +307,75 @@
     stroke-linejoin: round;
     stroke-dasharray: none;
     filter: drop-shadow(0 0 3px rgba(242,177,74,.35));
+    cursor: pointer;
+    pointer-events: stroke;
   }
   #builderLinks path.tcNoteLink[data-type="child"] {
     stroke-width: 2.8;
+  }
+  #builderLinks path.tcNoteLink.selected {
+    stroke: rgba(97,208,255,.95);
+    stroke-width: 4;
+    filter: drop-shadow(0 0 5px rgba(97,208,255,.45));
+  }
+  #builderLinks path.tcNoteLinkPreview {
+    stroke: rgba(97,208,255,.9);
+    stroke-width: 2.8;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 8 7;
+    pointer-events: none;
+    filter: drop-shadow(0 0 5px rgba(97,208,255,.42));
+  }
+  .tcNoteLinkToolbar {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    z-index: 45;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px;
+    border: 1px solid rgba(97,208,255,.34);
+    border-radius: 8px;
+    background: rgba(9,15,25,.94);
+    box-shadow: 0 10px 24px rgba(0,0,0,.28);
+  }
+  .tcNoteLinkToolbar button {
+    border: 1px solid rgba(255,108,124,.46);
+    border-radius: 6px;
+    background: rgba(255,108,124,.14);
+    color: #ffd8dd;
+    padding: 5px 8px;
+    font: 700 11px/1 var(--font-ui, system-ui);
+    cursor: pointer;
+  }
+  .tcNoteLinkEndpoint {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    transform: translate(-50%, -50%);
+    z-index: 46;
+    padding: 0;
+    border: 2px solid rgba(8,14,24,.96);
+    border-radius: 999px;
+    background: rgba(97,208,255,.96);
+    box-shadow: 0 0 0 4px rgba(97,208,255,.18), 0 8px 20px rgba(0,0,0,.3);
+    cursor: crosshair;
+  }
+  .tcNoteLinkEndpoint.from {
+    background: rgba(242,184,75,.96);
+    box-shadow: 0 0 0 4px rgba(242,184,75,.18), 0 8px 20px rgba(0,0,0,.3);
+  }
+  .tcNoteLinkEndpoint::after {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 5px;
+    width: 4px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(8,14,24,.9);
   }
   #noteModeBtn.active,
   #noteLinkModeBtn.active,
