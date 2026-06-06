@@ -83,17 +83,26 @@
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
   .shellIntro{
     display:flex;
-    align-items:center;
+    flex-direction:column;
+    align-items:flex-start;
     gap:14px;
     min-width:0;
-    flex:1 1 auto;
-    flex-wrap:wrap;
+    flex:1 1 820px;
+  }
+  .shellIntroTop{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    width:100%;
+    min-width:0;
+    flex-wrap:nowrap;
   }
   .shellBrand{
     display:flex;
     flex-direction:column;
     gap:2px;
     min-width:150px;
+    flex:0 0 auto;
   }
   .shellEyebrow{
     color:var(--accent);
@@ -111,11 +120,31 @@
     font-size:12px;
   }
   .toolbarMeta{display:flex;gap:8px;flex-wrap:wrap}
+  .shellModeControls{
+    display:flex;
+    align-items:stretch;
+    gap:8px;
+    min-width:0;
+    flex:1 1 auto;
+  }
+  .shellLeftControls{
+    display:flex;
+    align-items:stretch;
+    gap:8px;
+    flex-wrap:wrap;
+    max-width:100%;
+  }
+  .shellWorkbenchControls{
+    display:flex;
+    align-items:stretch;
+    min-width:0;
+    flex:0 1 auto;
+  }
   .shellActionStack{
     display:flex;
     flex-direction:column;
     align-items:flex-end;
-    flex:1 1 720px;
+    flex:1 1 520px;
     gap:8px;
     min-width:0;
   }
@@ -1195,6 +1224,8 @@
   }
   @media (max-width: 1100px){
     header{flex-direction:column;align-items:stretch}
+    .shellIntro{flex-basis:auto}
+    .shellIntroTop{flex-wrap:wrap}
     .shellActionStack{align-items:stretch}
     .shellActions{justify-content:flex-start}
     :root{--leftW:320px}
@@ -1302,23 +1333,26 @@
 <div class="app">
   <header>
     <div class="shellIntro">
-      <div class="shellBrand">
-        <div class="shellEyebrow">Taskwarrior Visual Planner</div>
-        <div class="shellTitle">TaskCanvas</div>
-        <div class="shellSubtitle">Stage dependencies and task changes without touching live data.</div>
-      </div>
-      <div class="tabbar">
-        <button id="tabBuilder" class="tab">Builder</button>
-        <button id="tabViewer" class="tab">Viewer</button>
-        <button id="toggleDrawer" class="btn ghost" title="Show/Hide drawer">Drawer</button>
+      <div class="shellIntroTop">
+        <div class="shellBrand">
+          <div class="shellEyebrow">Taskwarrior Visual Planner</div>
+          <div class="shellTitle">TaskCanvas</div>
+          <div class="shellSubtitle">Stage dependencies and task changes without touching live data.</div>
+        </div>
+        <div class="shellModeControls">
+          <div class="tabbar">
+            <button id="tabBuilder" class="tab">Builder</button>
+            <button id="tabViewer" class="tab">Viewer</button>
+            <button id="toggleDrawer" class="btn ghost" title="Show/Hide drawer">Drawer</button>
+          </div>
+          <div id="shellWorkbenchControls" class="shellWorkbenchControls"></div>
+        </div>
       </div>
       <div class="toolbarMeta">
         <span id="count" class="pill">Loaded: 0</span>
         <span id="parsedBadge" class="pill" title="Parsed in browser">Parsed: 0</span>
       </div>
-    </div>
-    <div class="shellActionStack">
-      <div class="row shellActions shellActionsPrimary">
+      <div id="shellLeftControls" class="shellLeftControls">
         <div class="toolbarGroup toolbarGroupCanvas" data-label="Canvas">
           <div class="zoomwrap">
             <span>Zoom</span>
@@ -1329,6 +1363,10 @@
           <button id="resetCanvas" class="btn ghost" title="Reset the current canvas projects to the embedded Taskwarrior snapshot">Reset</button>
           <button id="clearCanvas" class="btn ghost" title="Clear all projects and tasks from the canvas">Clear</button>
         </div>
+      </div>
+    </div>
+    <div class="shellActionStack">
+      <div class="row shellActions shellActionsPrimary">
         <div id="noteToolsGroup" class="toolbarGroup toolbarGroupNotes" data-label="Notes"></div>
         <div class="toolbarGroup toolbarGroupCommands" data-label="Commands">
           <button id="toggleConsole" class="btn ghost">Console</button>

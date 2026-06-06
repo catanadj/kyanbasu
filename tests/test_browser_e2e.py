@@ -2299,6 +2299,13 @@ window.addEventListener('load', function(){
         exportParent: parentId('noteExportBtn'),
         exportAllParent: parentId('noteExportAllBtn'),
         actionStack: !!document.querySelector('.shellActionStack'),
+        leftControls: !!document.getElementById('shellLeftControls'),
+        workbenchControls: !!document.getElementById('shellWorkbenchControls'),
+        modeControls: !!document.querySelector('.shellModeControls'),
+        tabbarSibling: document.querySelector('.tabbar') && document.querySelector('.tabbar').parentElement ? document.querySelector('.tabbar').parentElement.className : "",
+        workbenchSibling: document.getElementById('shellWorkbenchControls') && document.getElementById('shellWorkbenchControls').parentElement ? document.getElementById('shellWorkbenchControls').parentElement.className : "",
+        workbenchParent: parentId('workbenchGroup'),
+        canvasParent: document.querySelector('.toolbarGroupCanvas') && document.querySelector('.toolbarGroupCanvas').parentElement ? document.querySelector('.toolbarGroupCanvas').parentElement.id : "",
         secondaryGroups: Array.prototype.slice.call(document.querySelectorAll('.shellActionsSecondary .toolbarGroup')).map(function(el){ return el.id || el.getAttribute('data-label'); }),
         consoleParentClass: document.getElementById('toggleConsole').parentElement.className,
         resetParentClass: document.getElementById('resetCanvas').parentElement.className
@@ -2335,6 +2342,13 @@ window.addEventListener('load', function(){
         self.assertEqual(result["exportParent"], "noteDataGroup", msg=json.dumps(result))
         self.assertEqual(result["exportAllParent"], "noteDataGroup", msg=json.dumps(result))
         self.assertTrue(result["actionStack"], msg=json.dumps(result))
+        self.assertTrue(result["leftControls"], msg=json.dumps(result))
+        self.assertTrue(result["workbenchControls"], msg=json.dumps(result))
+        self.assertTrue(result["modeControls"], msg=json.dumps(result))
+        self.assertIn("shellModeControls", result["tabbarSibling"], msg=json.dumps(result))
+        self.assertIn("shellModeControls", result["workbenchSibling"], msg=json.dumps(result))
+        self.assertEqual(result["workbenchParent"], "shellWorkbenchControls", msg=json.dumps(result))
+        self.assertEqual(result["canvasParent"], "shellLeftControls", msg=json.dumps(result))
         self.assertEqual(result["secondaryGroups"], ["noteTaskGroup", "noteDataGroup"], msg=json.dumps(result))
         self.assertIn("toolbarGroupCommands", result["consoleParentClass"], msg=json.dumps(result))
         self.assertIn("toolbarGroupCanvas", result["resetParentClass"], msg=json.dumps(result))

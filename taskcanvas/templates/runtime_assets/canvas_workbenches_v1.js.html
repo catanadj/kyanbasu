@@ -304,9 +304,13 @@
       group.id = 'workbenchGroup';
       group.className = 'toolbarGroup toolbarGroupWorkbenches';
       group.setAttribute('data-label', 'Workbenches');
+      var workbenchControls = qs('#shellWorkbenchControls');
+      var leftControls = qs('.shellLeftControls');
+      var canvas = qs('.toolbarGroupCanvas', leftControls || document);
       var shell = qs('.shellActions');
-      var canvas = qs('.toolbarGroupCanvas');
-      if (shell) shell.insertBefore(group, canvas || shell.firstChild);
+      if (workbenchControls) workbenchControls.appendChild(group);
+      else if (leftControls) leftControls.insertBefore(group, canvas || leftControls.firstChild);
+      else if (shell) shell.insertBefore(group, shell.firstChild);
     }
     if (!qs('.tcWorkbenchStrip', group)){
       group.innerHTML = '<div class="tcWorkbenchStrip"><div class="tcWorkbenchTabs"></div><button type="button" class="btn ghost tcWorkbenchAdd" title="Add workbench">+</button></div>';
