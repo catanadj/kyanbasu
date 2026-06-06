@@ -2297,6 +2297,9 @@ window.addEventListener('load', function(){
         createParent: parentId('noteCreateTasksBtn'),
         importParent: parentId('noteImportBtn'),
         exportParent: parentId('noteExportBtn'),
+        exportAllParent: parentId('noteExportAllBtn'),
+        actionStack: !!document.querySelector('.shellActionStack'),
+        secondaryGroups: Array.prototype.slice.call(document.querySelectorAll('.shellActionsSecondary .toolbarGroup')).map(function(el){ return el.id || el.getAttribute('data-label'); }),
         consoleParentClass: document.getElementById('toggleConsole').parentElement.className,
         resetParentClass: document.getElementById('resetCanvas').parentElement.className
       };
@@ -2330,6 +2333,9 @@ window.addEventListener('load', function(){
         self.assertEqual(result["createParent"], "noteTaskGroup", msg=json.dumps(result))
         self.assertEqual(result["importParent"], "noteDataGroup", msg=json.dumps(result))
         self.assertEqual(result["exportParent"], "noteDataGroup", msg=json.dumps(result))
+        self.assertEqual(result["exportAllParent"], "noteDataGroup", msg=json.dumps(result))
+        self.assertTrue(result["actionStack"], msg=json.dumps(result))
+        self.assertEqual(result["secondaryGroups"], ["noteTaskGroup", "noteDataGroup"], msg=json.dumps(result))
         self.assertIn("toolbarGroupCommands", result["consoleParentClass"], msg=json.dumps(result))
         self.assertIn("toolbarGroupCanvas", result["resetParentClass"], msg=json.dumps(result))
 
@@ -2616,6 +2622,89 @@ window.addEventListener('load', function(){
         self.assertEqual(result["noteCounts"][1]["name"], "Delivery", msg=json.dumps(result))
         self.assertEqual(result["noteCounts"][1]["notes"], 1, msg=json.dumps(result))
         self.assertEqual(result["noteCounts"][1]["tasks"], 0, msg=json.dumps(result))
+
+    def test_canvas_workbench_import_all_restores_each_workbench_notes(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_WORKBENCH_IMPORT_ALL_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var backup = {
+        kind: 'taskcanvas.workbenches',
+        version: 1,
+        activeId: 'delivery',
+        nextIndex: 3,
+        workbenches: [
+          {
+            id: 'main',
+            name: 'Main',
+            layout: {version:1, zoom:100, drawer_collapsed:true, nodes:{}, projects:[], tags:[]},
+            notes: {
+              kind:'taskcanvas.notes',
+              version:1,
+              notes:[{id:'main-note', x:180, y:220, content:'Imported main', bucket:'Planning'}],
+              links:[],
+              buckets:{Planning:{dx:0, dy:0, collapsed:false, followNotes:true, color:'blue'}}
+            }
+          },
+          {
+            id: 'delivery',
+            name: 'Delivery',
+            layout: {version:1, zoom:100, drawer_collapsed:true, nodes:{}, projects:[], tags:[]},
+            notes: {
+              kind:'taskcanvas.notes',
+              version:1,
+              notes:[{id:'delivery-note', x:520, y:360, content:'Imported delivery', bucket:'Delivery'}],
+              links:[],
+              buckets:{Delivery:{dx:0, dy:0, collapsed:false, followNotes:true, color:'green'}}
+            }
+          }
+        ]
+      };
+      window.TaskCanvasNotes.createNote(200, 200, 'Local note', '', 'Local', {skipAutoLayout:true});
+      var imported = window.TaskCanvasWorkbenches.importData(backup);
+      setTimeout(function(){
+        var deliveryNotes = window.TaskCanvasNotes.notes().map(function(n){ return n.content; });
+        window.TaskCanvasWorkbenches.switchTo('main');
+        setTimeout(function(){
+          var mainNotes = window.TaskCanvasNotes.notes().map(function(n){ return n.content; });
+          var out = {
+            imported: imported,
+            active: window.TaskCanvasWorkbenches.active(),
+            list: window.TaskCanvasWorkbenches.list(),
+            deliveryNotes: deliveryNotes,
+            mainNotes: mainNotes
+          };
+          var pre = document.createElement('pre');
+          pre.id = 'e2e-out';
+          pre.textContent = JSON.stringify(out);
+          document.body.appendChild(pre);
+        }, 260);
+      }, 260);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 900);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["imported"]["workbenches"], 2, msg=json.dumps(result))
+        self.assertEqual(result["imported"]["activeId"], "delivery", msg=json.dumps(result))
+        self.assertEqual(result["deliveryNotes"], ["Imported delivery"], msg=json.dumps(result))
+        self.assertEqual(result["active"]["id"], "main", msg=json.dumps(result))
+        self.assertEqual(result["mainNotes"], ["Imported main"], msg=json.dumps(result))
+        self.assertEqual([w["name"] for w in result["list"]], ["Main", "Delivery"], msg=json.dumps(result))
 
     def test_canvas_navigator_renders_and_jumps_viewport(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")

@@ -156,6 +156,40 @@
     a.click();
     setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0);
   }
+  function importData(data){
+    if (typeof data === 'string') data = JSON.parse(data);
+    if (!data || data.kind !== 'taskcanvas.workbenches' || !Array.isArray(data.workbenches) || !data.workbenches.length){
+      throw new Error('Import file must contain a workbenches array');
+    }
+    var ids = {};
+    var imported = data.workbenches.map(function(w, i){
+      w = w && typeof w === 'object' ? w : {};
+      var id = String(w.id || '').trim() || (i === 0 ? 'main' : uid());
+      while (ids[id]) id = uid();
+      ids[id] = true;
+      return {
+        id: id,
+        name: cleanName(w.name) || (i === 0 ? 'Main' : ('Workbench ' + (i + 1))),
+        layout: cloneData(w.layout, emptyLayout()),
+        notes: cloneData(w.notes, emptyNotes()),
+        savedAt: w.savedAt || Date.now()
+      };
+    });
+    var activeId = ids[data.activeId] ? data.activeId : imported[0].id;
+    state = normalize({
+      version: 1,
+      activeId: activeId,
+      nextIndex: Math.max(imported.length + 1, parseInt(data.nextIndex || 0, 10) || 0),
+      workbenches: imported
+    });
+    saveNow();
+    applyWorkbench(activeWorkbench());
+    renderTabs();
+    return {workbenches:state.workbenches.length, activeId:state.activeId};
+  }
+  function importJSON(text){
+    return importData(text);
+  }
   function applyWorkbench(wb){
     switching = true;
     try{
@@ -400,7 +434,9 @@
     apply: function(){ applyWorkbench(activeWorkbench()); },
     exportData: exportData,
     exportJSON: exportJSON,
-    downloadExport: downloadExport
+    downloadExport: downloadExport,
+    importData: importData,
+    importJSON: importJSON
   };
 
   window.addEventListener('load', function(){ setTimeout(boot, 260); });

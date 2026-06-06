@@ -1514,8 +1514,18 @@
       var reader = new FileReader();
       reader.onload = function(){
         try{
+          var text = String(reader.result || '');
+          var data = JSON.parse(text);
+          if (data && data.kind === 'taskcanvas.workbenches'){
+            if (window.confirm && !window.confirm('Replace all workbenches with imported workbenches?')) return;
+            if (!window.TaskCanvasWorkbenches || typeof window.TaskCanvasWorkbenches.importData !== 'function'){
+              throw new Error('Workbench import is not available');
+            }
+            window.TaskCanvasWorkbenches.importData(data);
+            return;
+          }
           if (notes.length && window.confirm && !window.confirm('Replace current planning notes with imported notes?')) return;
-          importJSON(String(reader.result || ''));
+          importData(data);
         }catch(e){
           window.alert && window.alert('Could not import notes: ' + (e && e.message ? e.message : String(e)));
         }
