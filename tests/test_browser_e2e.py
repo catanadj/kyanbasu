@@ -2368,7 +2368,9 @@ window.addEventListener('load', function(){
           active: window.TaskCanvasWorkbenches.active(),
           tabs: document.querySelectorAll('.tcWorkbenchTab').length,
           tabLabels: Array.prototype.slice.call(document.querySelectorAll('.tcWorkbenchTabName')).map(function(el){ return el.textContent; }),
+          tabMeta: Array.prototype.slice.call(document.querySelectorAll('.tcWorkbenchTabMeta')).map(function(el){ return el.textContent; }),
           tabActions: document.querySelectorAll('.tcWorkbenchTabAction').length,
+          list: window.TaskCanvasWorkbenches.list(),
           nodes: document.querySelectorAll('#builderStage .node').length,
           notes: window.TaskCanvasNotes.notes().length,
           commands: (window.STAGED_CMDS || []).slice()
@@ -2377,6 +2379,10 @@ window.addEventListener('load', function(){
         setTimeout(function(){
           var duplicateId = window.TaskCanvasWorkbenches.duplicate('main');
           var duplicated = window.TaskCanvasWorkbenches.active();
+          window.TaskCanvasWorkbenches.switchTo('main');
+          var duplicateSwitch = document.querySelector('[data-workbench-switch="' + duplicateId + '"]');
+          if (duplicateSwitch) duplicateSwitch.click();
+          var duplicatedClickActive = window.TaskCanvasWorkbenches.active();
           window.TaskCanvasWorkbenches.delete(duplicateId);
           window.TaskCanvasWorkbenches.switchTo(createdId);
           var deleted = window.TaskCanvasWorkbenches.delete(createdId);
@@ -2386,10 +2392,13 @@ window.addEventListener('load', function(){
             api: !!window.TaskCanvasWorkbenches,
             afterCreate: afterCreate,
             duplicated: duplicated,
+            duplicatedClickActive: duplicatedClickActive,
             deleted: deleted,
             active: window.TaskCanvasWorkbenches.active(),
+            list: window.TaskCanvasWorkbenches.list(),
             tabs: document.querySelectorAll('.tcWorkbenchTab').length,
             tabLabels: Array.prototype.slice.call(document.querySelectorAll('.tcWorkbenchTabName')).map(function(el){ return el.textContent; }),
+            tabMeta: Array.prototype.slice.call(document.querySelectorAll('.tcWorkbenchTabMeta')).map(function(el){ return el.textContent; }),
             tabActions: document.querySelectorAll('.tcWorkbenchTabAction').length,
             nodes: document.querySelectorAll('#builderStage .node').length,
             notes: window.TaskCanvasNotes.notes().length,
@@ -2422,20 +2431,191 @@ window.addEventListener('load', function(){
         self.assertEqual(result["afterCreate"]["active"]["name"], "Planning", msg=json.dumps(result))
         self.assertEqual(result["afterCreate"]["tabs"], 2, msg=json.dumps(result))
         self.assertIn("Planning", result["afterCreate"]["tabLabels"], msg=json.dumps(result))
-        self.assertGreaterEqual(result["afterCreate"]["tabActions"], 3, msg=json.dumps(result))
+        self.assertIn("1T 1N", result["afterCreate"]["tabMeta"], msg=json.dumps(result))
+        self.assertIn("0T 0N", result["afterCreate"]["tabMeta"], msg=json.dumps(result))
+        self.assertGreaterEqual(result["afterCreate"]["tabActions"], 5, msg=json.dumps(result))
+        self.assertEqual(result["afterCreate"]["list"][0]["tasks"], 1, msg=json.dumps(result))
+        self.assertEqual(result["afterCreate"]["list"][0]["notes"], 1, msg=json.dumps(result))
+        self.assertEqual(result["afterCreate"]["list"][1]["tasks"], 0, msg=json.dumps(result))
+        self.assertEqual(result["afterCreate"]["list"][1]["notes"], 0, msg=json.dumps(result))
         self.assertEqual(result["afterCreate"]["nodes"], 0, msg=json.dumps(result))
         self.assertEqual(result["afterCreate"]["notes"], 0, msg=json.dumps(result))
         self.assertEqual(result["afterCreate"]["commands"], ["task aaaaaaaa modify +focus"], msg=json.dumps(result))
         self.assertEqual(result["duplicated"]["name"], "Main copy", msg=json.dumps(result))
+        self.assertEqual(result["duplicatedClickActive"]["id"], result["duplicated"]["id"], msg=json.dumps(result))
         self.assertTrue(result["deleted"], msg=json.dumps(result))
         self.assertEqual(result["active"]["id"], "main", msg=json.dumps(result))
         self.assertEqual(result["tabs"], 1, msg=json.dumps(result))
         self.assertEqual(result["tabLabels"], ["Main"], msg=json.dumps(result))
-        self.assertEqual(result["tabActions"], 1, msg=json.dumps(result))
+        self.assertEqual(result["tabMeta"], ["1T 1N"], msg=json.dumps(result))
+        self.assertEqual(result["tabActions"], 2, msg=json.dumps(result))
+        self.assertEqual(result["list"][0]["tasks"], 1, msg=json.dumps(result))
+        self.assertEqual(result["list"][0]["notes"], 1, msg=json.dumps(result))
         self.assertEqual(result["nodes"], 1, msg=json.dumps(result))
         self.assertEqual(result["notes"], 1, msg=json.dumps(result))
         self.assertEqual(result["noteContent"], "Main note", msg=json.dumps(result))
         self.assertEqual(result["commands"], ["task aaaaaaaa modify +focus"], msg=json.dumps(result))
+
+    def test_canvas_workbench_duplicate_reopens_after_canvas_changes(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps(
+            {
+                "tasks": [
+                    {
+                        "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        "short": "aaaaaaaa",
+                        "desc": "Alpha",
+                        "project": "Work",
+                        "tags": ["next"],
+                    }
+                ],
+                "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
+            }
+        )
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_WORKBENCH_DUPLICATE_REOPEN_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var task = (window.TASKS || [])[0];
+      if (task && typeof addNodeForTask === 'function') addNodeForTask(task, 100, 120, {deferLayout:true});
+      window.TaskCanvasNotes.createNote(180, 220, 'Base note', '', 'Planning', {skipAutoLayout:true});
+      window.TaskCanvasWorkbenches.capture();
+      var duplicateId = window.TaskCanvasWorkbenches.duplicate('main');
+      setTimeout(function(){
+        var copyNote = window.TaskCanvasNotes.createNote(520, 420, 'Copy-only note', '', 'Copy', {skipAutoLayout:true});
+        var node = document.querySelector('#builderStage .node[data-short="aaaaaaaa"]');
+        if (node){
+          node.style.left = '680px';
+          node.style.top = '520px';
+        }
+        window.TaskCanvasWorkbenches.capture();
+        window.TaskCanvasWorkbenches.switchTo('main');
+        setTimeout(function(){
+          var mainBeforeClick = {
+            active: window.TaskCanvasWorkbenches.active(),
+            notes: window.TaskCanvasNotes.notes().map(function(n){ return n.content; }),
+            nodeLeft: (document.querySelector('#builderStage .node[data-short="aaaaaaaa"]') || {}).style ? document.querySelector('#builderStage .node[data-short="aaaaaaaa"]').style.left : ''
+          };
+          var sw = document.querySelector('[data-workbench-switch="' + duplicateId + '"]');
+          if (sw){
+            sw.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, cancelable:true}));
+            sw.dispatchEvent(new MouseEvent('click', {bubbles:true, cancelable:true}));
+          }
+          setTimeout(function(){
+            var out = {
+              duplicateId: duplicateId,
+              clicked: !!sw,
+              mainBeforeClick: mainBeforeClick,
+              active: window.TaskCanvasWorkbenches.active(),
+              notes: window.TaskCanvasNotes.notes().map(function(n){ return n.content; }).sort(),
+              nodeLeft: (document.querySelector('#builderStage .node[data-short="aaaaaaaa"]') || {}).style ? document.querySelector('#builderStage .node[data-short="aaaaaaaa"]').style.left : '',
+              tabLabels: Array.prototype.slice.call(document.querySelectorAll('.tcWorkbenchTabName')).map(function(el){ return el.textContent; })
+            };
+            var pre = document.createElement('pre');
+            pre.id = 'e2e-out';
+            pre.textContent = JSON.stringify(out);
+            document.body.appendChild(pre);
+          }, 320);
+        }, 320);
+      }, 320);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 900);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["clicked"], msg=json.dumps(result))
+        self.assertEqual(result["mainBeforeClick"]["active"]["id"], "main", msg=json.dumps(result))
+        self.assertEqual(result["mainBeforeClick"]["notes"], ["Base note"], msg=json.dumps(result))
+        self.assertEqual(result["active"]["id"], result["duplicateId"], msg=json.dumps(result))
+        self.assertEqual(result["notes"], ["Base note", "Copy-only note"], msg=json.dumps(result))
+        self.assertEqual(result["nodeLeft"], "680px", msg=json.dumps(result))
+
+    def test_canvas_workbench_export_all_includes_each_workbench_notes(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps(
+            {
+                "tasks": [
+                    {
+                        "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        "short": "aaaaaaaa",
+                        "desc": "Alpha",
+                        "project": "Work",
+                        "tags": ["next"],
+                    }
+                ],
+                "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
+            }
+        )
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_WORKBENCH_EXPORT_ALL_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var task = (window.TASKS || [])[0];
+      if (task && typeof addNodeForTask === 'function') addNodeForTask(task, 100, 120, {deferLayout:true});
+      window.TaskCanvasNotes.createNote(180, 220, 'Main note', '', 'Planning', {skipAutoLayout:true});
+      window.TaskCanvasWorkbenches.capture();
+      var secondId = window.TaskCanvasWorkbenches.create();
+      window.TaskCanvasWorkbenches.rename(secondId, 'Delivery');
+      setTimeout(function(){
+        window.TaskCanvasNotes.createNote(520, 360, 'Delivery note', '', 'Delivery', {skipAutoLayout:true});
+        window.TaskCanvasWorkbenches.capture();
+        var current = JSON.parse(window.TaskCanvasNotes.exportJSON());
+        var all = window.TaskCanvasWorkbenches.exportData();
+        var noteCounts = all.workbenches.map(function(w){ return {name:w.name, notes:w.notes.notes.length, tasks:w.layout && w.layout.nodes ? Object.keys(w.layout.nodes).length : 0}; });
+        var out = {
+          currentKind: current.kind,
+          currentNotes: current.notes.map(function(n){ return n.content; }).sort(),
+          allKind: all.kind,
+          activeId: all.activeId,
+          workbenches: all.workbenches.length,
+          noteCounts: noteCounts,
+          button: !!document.getElementById('noteExportAllBtn')
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 320);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 900);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["button"], msg=json.dumps(result))
+        self.assertEqual(result["currentKind"], "taskcanvas.notes", msg=json.dumps(result))
+        self.assertEqual(result["currentNotes"], ["Delivery note"], msg=json.dumps(result))
+        self.assertEqual(result["allKind"], "taskcanvas.workbenches", msg=json.dumps(result))
+        self.assertEqual(result["workbenches"], 2, msg=json.dumps(result))
+        self.assertEqual(result["noteCounts"][0]["name"], "Main", msg=json.dumps(result))
+        self.assertEqual(result["noteCounts"][0]["notes"], 1, msg=json.dumps(result))
+        self.assertEqual(result["noteCounts"][0]["tasks"], 1, msg=json.dumps(result))
+        self.assertEqual(result["noteCounts"][1]["name"], "Delivery", msg=json.dumps(result))
+        self.assertEqual(result["noteCounts"][1]["notes"], 1, msg=json.dumps(result))
+        self.assertEqual(result["noteCounts"][1]["tasks"], 0, msg=json.dumps(result))
 
     def test_canvas_navigator_renders_and_jumps_viewport(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")

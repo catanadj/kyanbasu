@@ -1407,6 +1407,12 @@
     exportBtn.type = 'button';
     exportBtn.textContent = 'Export notes';
     exportBtn.title = 'Export planning notes as JSON';
+    var exportAllBtn = document.createElement('button');
+    exportAllBtn.id = 'noteExportAllBtn';
+    exportAllBtn.className = 'btn ghost';
+    exportAllBtn.type = 'button';
+    exportAllBtn.textContent = 'Export all';
+    exportAllBtn.title = 'Export all workbenches as JSON';
     var importBtn = document.createElement('button');
     importBtn.id = 'noteImportBtn';
     importBtn.className = 'btn ghost';
@@ -1443,6 +1449,7 @@
     taskGroup.appendChild(createTasksBtn);
     dataGroup.appendChild(importBtn);
     dataGroup.appendChild(exportBtn);
+    dataGroup.appendChild(exportAllBtn);
     dataGroup.appendChild(importInput);
     searchInput.addEventListener('input', updateNoteSearch);
     searchInput.addEventListener('keydown', function(ev){
@@ -1481,6 +1488,13 @@
     });
     exportBtn.addEventListener('click', function(){
       downloadExport();
+    });
+    exportAllBtn.addEventListener('click', function(){
+      if (window.TaskCanvasWorkbenches && typeof window.TaskCanvasWorkbenches.downloadExport === 'function'){
+        window.TaskCanvasWorkbenches.downloadExport();
+      } else {
+        downloadExport();
+      }
     });
     importBtn.addEventListener('click', function(){
       importInput.value = '';

@@ -28,16 +28,49 @@
     background:rgba(9,16,27,.56);
     color:var(--muted);
     border-radius:8px;
-    padding:6px 9px;
+    padding:0;
     font-size:12px;
     line-height:1;
     white-space:nowrap;
+  }
+  .tcWorkbenchTabSwitch{
+    display:flex;
+    align-items:center;
+    min-width:0;
+    flex:1 1 auto;
+    border:0;
+    background:transparent;
+    color:inherit;
+    text-align:left;
     cursor:pointer;
+    padding:6px 8px;
+    border-radius:8px;
+  }
+  .tcWorkbenchTabMain{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    min-width:0;
   }
   .tcWorkbenchTabName{
     min-width:0;
     overflow:hidden;
     text-overflow:ellipsis;
+  }
+  .tcWorkbenchTabMeta{
+    color:var(--muted);
+    font-size:10px;
+    line-height:1;
+    white-space:nowrap;
+  }
+  .tcWorkbenchTab.active .tcWorkbenchTabMeta{
+    color:rgba(215,227,244,.76);
+  }
+  .tcWorkbenchTabActions{
+    display:inline-flex;
+    align-items:center;
+    gap:1px;
+    padding-right:4px;
   }
   .tcWorkbenchTabAction{
     width:18px;
