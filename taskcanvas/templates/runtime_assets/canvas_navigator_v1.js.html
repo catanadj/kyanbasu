@@ -12,7 +12,7 @@
     var n = parseInt(v, 10);
     return isFinite(n) ? n : fallback;
   }
-  function stageRectFor(el){
+  function stageRectFor(el, fallbackW, fallbackH){
     if (!el) return null;
     var x = toInt(el.style.left, el.offsetLeft || 0);
     var y = toInt(el.style.top, el.offsetTop || 0);
@@ -24,6 +24,8 @@
       w = w || Math.round(r.width / z);
       h = h || Math.round(r.height / z);
     }
+    w = w || fallbackW || 0;
+    h = h || fallbackH || 0;
     if (!w || !h) return null;
     return {x:x, y:y, w:w, h:h};
   }
@@ -46,8 +48,10 @@
   function taskRects(){
     return qsa('#builderStage .node').map(stageRectFor);
   }
-  function noteRects(){
-    return qsa('#builderStage .tcNoteNode').map(stageRectFor);
+  function noteRects(includeHidden){
+    return qsa('#builderStage .tcNoteNode').filter(function(el){
+      return includeHidden || el.style.display !== 'none';
+    }).map(function(el){ return stageRectFor(el, 220, 92); });
   }
   function bucketRects(){
     return qsa('#builderStage .tcNoteBucket').map(stageRectFor);
@@ -57,9 +61,9 @@
   }
   function contentRects(kind){
     if (kind === 'tasks') return taskRects().concat(projectRects());
-    if (kind === 'notes') return noteRects().concat(bucketRects());
+    if (kind === 'notes') return noteRects(true).concat(bucketRects());
     if (kind === 'selection') return selectedRects();
-    return taskRects().concat(projectRects(), noteRects(), bucketRects());
+    return taskRects().concat(projectRects(), noteRects(true), bucketRects());
   }
   function selectedRects(){
     var selectors = [
@@ -295,7 +299,7 @@
       ctx.strokeRect(mv.x, mv.y, mv.w, mv.h);
     }
     var meta = qs('.tcNavigatorMeta', panel);
-    if (meta) meta.textContent = taskRects().filter(Boolean).length + ' tasks, ' + noteRects().filter(Boolean).length + ' notes';
+    if (meta) meta.textContent = taskRects().filter(Boolean).length + ' tasks, ' + noteRects(true).filter(Boolean).length + ' notes';
     var hasSelection = selectedRects().filter(Boolean).length > 0;
     var selBtn = qs('[data-fit="selection"]', panel);
     if (selBtn) selBtn.disabled = !hasSelection;

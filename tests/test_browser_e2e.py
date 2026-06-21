@@ -3031,6 +3031,61 @@ window.addEventListener('load', function(){
         self.assertTrue(result["bottomAuto"], msg=json.dumps(result))
         self.assertEqual(result["console"], "", msg=json.dumps(result))
 
+    def test_canvas_navigator_keeps_stable_bounds_when_branch_collapses(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NAVIGATOR_COLLAPSE_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var left = window.TaskCanvasNotes.createNote(200, 240, "Left root", "", "", {skipAutoLayout:true});
+      window.TaskCanvasNotes.createChildNote(left.id, "Left child 1", "");
+      window.TaskCanvasNotes.createChildNote(left.id, "Left child 2", "");
+      var right = window.TaskCanvasNotes.createNote(2600, 1600, "Right root", "", "", {skipAutoLayout:true});
+      window.TaskCanvasNotes.createChildNote(right.id, "Right child 1", "");
+      window.TaskCanvasNotes.createChildNote(right.id, "Right child 2", "");
+      window.TaskCanvasNavigator.render();
+      var before = window.TaskCanvasNavigator.mapState('all').bounds;
+      window.TaskCanvasNotes.toggleCollapse(left.id);
+      window.TaskCanvasNavigator.render();
+      var after = window.TaskCanvasNavigator.mapState('all').bounds;
+      var visible = Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){
+        return el.style.display !== 'none';
+      }).length;
+      var out = {
+        total: window.TaskCanvasNotes.notes().length,
+        visible: visible,
+        meta: document.querySelector('#tcNavigator .tcNavigatorMeta').textContent,
+        boundsStable: before.x === after.x && before.y === after.y && before.w === after.w && before.h === after.h,
+        console: (document.getElementById('consoleText') || {}).value || ''
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out';
+      pre.textContent = JSON.stringify(out);
+      document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 900);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["total"], 6, msg=json.dumps(result))
+        self.assertEqual(result["visible"], 4, msg=json.dumps(result))
+        self.assertIn("6 notes", result["meta"], msg=json.dumps(result))
+        self.assertTrue(result["boundsStable"], msg=json.dumps(result))
+        self.assertEqual(result["console"], "", msg=json.dumps(result))
+
     def test_canvas_task_cards_render_polished_metadata(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
