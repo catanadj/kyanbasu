@@ -488,6 +488,23 @@
     border-color: rgba(242,177,74,.65);
     background: rgba(242,177,74,.16);
   }
+  .tcNoteSaveStatus {
+    min-width: 46px;
+    color: rgba(174,196,224,.72);
+    font-size: 10px;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .tcNoteSaveStatus[data-state="saving"] {
+    color: #f2c56f;
+  }
+  .tcNoteSaveStatus[data-state="saved"] {
+    color: #8ed8ae;
+  }
+  .tcNoteSaveStatus[data-state="error"] {
+    color: #ff9aa7;
+  }
   .tcNoteTaskBadge {
     flex: 0 0 auto;
     padding: 3px 6px;

@@ -3285,6 +3285,231 @@ window.addEventListener('load', function(){
         self.assertTrue(result["prototypeRightOfDesign"])
         self.assertEqual(result["console"], "")
 
+    def test_canvas_notes_rejects_invalid_child_graph_mutations(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_BRANCH_GUARDS_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var root = window.TaskCanvasNotes.createNote(180, 240, 'Root', '');
+      var child = window.TaskCanvasNotes.createChildNote(root.id, 'Child', '');
+      var nested = window.TaskCanvasNotes.createChildNote(child.id, 'Nested', '');
+      var other = window.TaskCanvasNotes.createNote(900, 240, 'Other', '');
+      var cycle = window.TaskCanvasNotes.linkNotes(nested.id, root.id, 'child');
+      var cycleMessage = (document.getElementById('devConsoleToast') || {}).textContent || '';
+      var secondParent = window.TaskCanvasNotes.linkNotes(other.id, child.id, 'child');
+      var parentMessage = (document.getElementById('devConsoleToast') || {}).textContent || '';
+      var out = {
+        cycle: cycle,
+        cycleMessage: cycleMessage,
+        secondParent: secondParent,
+        parentMessage: parentMessage,
+        selfParent: window.TaskCanvasNotes.linkNotes(root.id, root.id, 'child'),
+        duplicate: window.TaskCanvasNotes.linkNotes(root.id, child.id, 'child'),
+        manualCycle: window.TaskCanvasNotes.linkNotes(nested.id, root.id, 'manual'),
+        childLinks: window.TaskCanvasNotes.links().filter(function(l){ return l.type === 'child'; }).length,
+        manualLinks: window.TaskCanvasNotes.links().filter(function(l){ return l.type === 'manual'; }).length
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out';
+      pre.textContent = JSON.stringify(out);
+      document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertFalse(result["cycle"], msg=json.dumps(result))
+        self.assertEqual(result["cycleMessage"], "This child link would create a cycle.", msg=json.dumps(result))
+        self.assertFalse(result["secondParent"], msg=json.dumps(result))
+        self.assertEqual(result["parentMessage"], "This note already has a parent.", msg=json.dumps(result))
+        self.assertFalse(result["selfParent"], msg=json.dumps(result))
+        self.assertFalse(result["duplicate"], msg=json.dumps(result))
+        self.assertTrue(result["manualCycle"], msg=json.dumps(result))
+        self.assertEqual(result["childLinks"], 2, msg=json.dumps(result))
+        self.assertEqual(result["manualLinks"], 1, msg=json.dumps(result))
+
+    def test_canvas_notes_import_repairs_invalid_child_graph(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_BRANCH_IMPORT_GUARDS_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var result = window.TaskCanvasNotes.importData({
+        kind:'taskcanvas.notes',
+        version:1,
+        notes:[
+          {id:'a', x:180, y:240, content:'A'},
+          {id:'b', x:480, y:240, content:'B'},
+          {id:'c', x:780, y:240, content:'C'},
+          {id:'d', x:180, y:520, content:'D'}
+        ],
+        links:[
+          {from:'a', to:'b', type:'child'},
+          {from:'b', to:'c', type:'child'},
+          {from:'c', to:'a', type:'child'},
+          {from:'d', to:'b', type:'child'},
+          {from:'a', to:'a', type:'child'},
+          {from:'missing', to:'d', type:'child'},
+          {from:'a', to:'d', type:'child'},
+          {from:'a', to:'d', type:'manual'},
+          {from:'d', to:'c', type:'manual'}
+        ]
+      });
+      var out = {
+        result: result,
+        links: window.TaskCanvasNotes.links().map(function(l){ return l.type + ':' + l.from + ':' + l.to; }).sort(),
+        outlineRoots: window.TaskCanvasNotes.outline().map(function(n){ return n.id; }).sort()
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out';
+      pre.textContent = JSON.stringify(out);
+      document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["result"]["notes"], 4, msg=json.dumps(result))
+        self.assertEqual(result["result"]["links"], 4, msg=json.dumps(result))
+        self.assertEqual(result["result"]["droppedLinks"], 5, msg=json.dumps(result))
+        self.assertEqual(result["result"]["droppedChildLinks"], 4, msg=json.dumps(result))
+        self.assertEqual(
+            result["links"],
+            ["child:a:b", "child:a:d", "child:b:c", "manual:d:c"],
+            msg=json.dumps(result),
+        )
+        self.assertEqual(result["outlineRoots"], ["a"], msg=json.dumps(result))
+
+    def test_canvas_notes_load_repairs_and_persists_invalid_child_graph(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_BRANCH_STORAGE_GUARDS_HARNESS">
+(function(){
+  var storageKey = 'taskcanvas:notes:v1:empty';
+  localStorage.setItem(storageKey, JSON.stringify({
+    notes:[
+      {id:'a', x:180, y:240, content:'A'},
+      {id:'b', x:480, y:240, content:'B'},
+      {id:'c', x:780, y:240, content:'C'}
+    ],
+    links:[
+      {from:'a', to:'b', type:'child'},
+      {from:'b', to:'a', type:'child'},
+      {from:'c', to:'b', type:'child'},
+      {from:'missing', to:'c', type:'child'}
+    ]
+  }));
+  window.addEventListener('load', function(){
+    setTimeout(function(){
+      try{
+        var persisted = JSON.parse(localStorage.getItem(storageKey) || '{}');
+        var out = {
+          runtimeLinks: window.TaskCanvasNotes.links().map(function(l){ return l.from + ':' + l.to; }),
+          persistedLinks: (persisted.links || []).map(function(l){ return l.from + ':' + l.to; }),
+          notes: window.TaskCanvasNotes.notes().length,
+          repairToast: (document.getElementById('devConsoleToast') || {}).textContent || ''
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }catch(e){
+        var pre2 = document.createElement('pre');
+        pre2.id = 'e2e-out';
+        pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+        document.body.appendChild(pre2);
+      }
+    }, 700);
+  });
+})();
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["notes"], 3, msg=json.dumps(result))
+        self.assertEqual(result["runtimeLinks"], ["a:b"], msg=json.dumps(result))
+        self.assertEqual(result["persistedLinks"], ["a:b"], msg=json.dumps(result))
+        self.assertEqual(result["repairToast"], "Repaired 3 invalid saved note links.", msg=json.dumps(result))
+
+    def test_canvas_notes_shows_saving_and_saved_status(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_SAVE_STATUS_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var status = document.getElementById('noteSaveStatus');
+      var initial = status ? status.textContent : '';
+      window.TaskCanvasNotes.createNote(180, 240, 'Save status', '');
+      var pending = status ? status.textContent : '';
+      setTimeout(function(){
+        var out = {
+          initial: initial,
+          pending: pending,
+          saved: status ? status.textContent : '',
+          state: status ? status.getAttribute('data-state') : '',
+          parent: status && status.parentElement ? status.parentElement.id : ''
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 260);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["initial"], "Saved", msg=json.dumps(result))
+        self.assertEqual(result["pending"], "Saving...", msg=json.dumps(result))
+        self.assertEqual(result["saved"], "Saved", msg=json.dumps(result))
+        self.assertEqual(result["state"], "saved", msg=json.dumps(result))
+        self.assertEqual(result["parent"], "noteDataGroup", msg=json.dumps(result))
+
     def test_canvas_notes_compact_map_packs_bucket_groups(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

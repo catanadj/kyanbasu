@@ -21,6 +21,7 @@
   var bucketColorState = Object.create(null);
   var noteSearchQuery = '';
   var noteSearchMatches = [];
+  var pendingRepairFeedback = null;
   var bucketPalette = [
     '#5b8def', '#2fbf71', '#f2b84b', '#ec7a72', '#9b7df2',
     '#42c5c7', '#f18ab2', '#93c85a', '#f08b3e', '#4d8bff'
@@ -119,8 +120,17 @@
   function linkExists(from, to){
     return links.some(function(l){ return l && l.from === from && l.to === to; });
   }
-  function linkExistsExcept(from, to, exceptKey){
-    return links.some(function(l){ return l && noteLinkKey(l) !== exceptKey && l.from === from && l.to === to; });
+  function noteFeedback(message){
+    if (!message) return;
+    try{
+      if (typeof window.showToast === 'function') window.showToast(message);
+    }catch(_){}
+  }
+  function setNoteSaveStatus(text, stateName){
+    var el = document.getElementById('noteSaveStatus');
+    if (!el) return;
+    el.textContent = text || '';
+    el.setAttribute('data-state', stateName || 'idle');
   }
   function noteLinkKey(link){
     return link ? [link.from || '', link.to || '', link.type || 'manual'].join('::') : '';
@@ -136,6 +146,60 @@
       if (links[i] && links[i].type === 'child' && links[i].to === id && noteById(links[i].from)) return links[i];
     }
     return null;
+  }
+  function childPathExists(startId, targetId, sourceLinks, exceptKey){
+    var stack = [startId];
+    var seen = {};
+    while (stack.length){
+      var id = stack.pop();
+      if (id === targetId) return true;
+      if (seen[id]) continue;
+      seen[id] = true;
+      sourceLinks.forEach(function(l){
+        if (!l || l.type !== 'child' || noteLinkKey(l) === exceptKey || l.from !== id) return;
+        stack.push(l.to);
+      });
+    }
+    return false;
+  }
+  function validateLink(from, to, type, sourceLinks, exceptKey, validIds){
+    type = type || 'manual';
+    sourceLinks = sourceLinks || links;
+    var exists = validIds ? function(id){ return !!validIds[id]; } : function(id){ return !!noteById(id); };
+    if (!from || !to || !exists(from) || !exists(to)) return {ok:false, reason:'Cannot link missing notes.'};
+    if (from === to) return {ok:false, reason:type === 'child' ? 'A note cannot be its own child.' : 'A note cannot link to itself.'};
+    if (sourceLinks.some(function(l){
+      return l && noteLinkKey(l) !== exceptKey && l.from === from && l.to === to;
+    })) return {ok:false, reason:'These notes are already linked.'};
+    if (type !== 'child') return {ok:true, reason:''};
+    if (sourceLinks.some(function(l){
+      return l && noteLinkKey(l) !== exceptKey && l.type === 'child' && l.to === to;
+    })) return {ok:false, reason:'This note already has a parent.'};
+    if (childPathExists(to, from, sourceLinks, exceptKey)) return {ok:false, reason:'This child link would create a cycle.'};
+    return {ok:true, reason:''};
+  }
+  function addNoteLink(from, to, type){
+    type = type || 'manual';
+    var validation = validateLink(from, to, type, links, null, null);
+    if (!validation.ok){ noteFeedback(validation.reason); return false; }
+    links.push({from:from, to:to, type:type});
+    return true;
+  }
+  function sanitizeLinks(rawLinks, validIds){
+    var accepted = [];
+    var dropped = 0;
+    var droppedChild = 0;
+    (Array.isArray(rawLinks) ? rawLinks : []).forEach(function(l){
+      if (!l || typeof l !== 'object') { dropped++; return; }
+      var candidate = {from:l.from, to:l.to, type:l.type || 'manual'};
+      if (!validateLink(candidate.from, candidate.to, candidate.type, accepted, null, validIds).ok){
+        dropped++;
+        if (candidate.type === 'child') droppedChild++;
+        return;
+      }
+      accepted.push(candidate);
+    });
+    return {links:accepted, dropped:dropped, droppedChild:droppedChild};
   }
   function noteCodePrefix(index){
     var n = Math.max(0, index);
@@ -636,14 +700,18 @@
   }
   function saveSoon(){
     clearTimeout(saveTimer);
+    setNoteSaveStatus('Saving...', 'saving');
     saveTimer = setTimeout(saveNow, 180);
   }
   function saveNow(){
-    try{ localStorage.setItem(key(), JSON.stringify({notes:notes, links:links})); }catch(_){}
+    var saved = true;
+    try{ localStorage.setItem(key(), JSON.stringify({notes:notes, links:links})); }catch(_){ saved = false; }
     saveBucketState();
     saveBucketLayoutState();
     saveBucketFollowState();
     saveBucketColorState();
+    setNoteSaveStatus(saved ? 'Saved' : 'Save failed', saved ? 'saved' : 'error');
+    if (!saved) noteFeedback('Could not save planning notes.');
   }
   function loadState(){
     try{
@@ -652,8 +720,14 @@
       var parsed = JSON.parse(raw);
       notes = Array.isArray(parsed.notes) ? parsed.notes : [];
       notes = notes.map(normalizeNote);
-      links = Array.isArray(parsed.links) ? parsed.links : [];
-      links.forEach(function(l){ if (l && !l.type) l.type = 'manual'; });
+      var ids = {};
+      notes.forEach(function(n){ ids[n.id] = true; });
+      var sanitized = sanitizeLinks(parsed.links, ids);
+      links = sanitized.links;
+      if (sanitized.dropped){
+        try{ localStorage.setItem(key(), JSON.stringify({notes:notes, links:links})); }catch(_){}
+        pendingRepairFeedback = 'Repaired ' + sanitized.dropped + ' invalid saved note link' + (sanitized.dropped === 1 ? '.' : 's.');
+      }
     }catch(_){ notes = []; links = []; }
   }
   function screenToStage(clientX, clientY){
@@ -1440,6 +1514,13 @@
     importInput.type = 'file';
     importInput.accept = 'application/json,.json';
     importInput.style.display = 'none';
+    var saveStatus = document.createElement('span');
+    saveStatus.id = 'noteSaveStatus';
+    saveStatus.className = 'tcNoteSaveStatus';
+    saveStatus.setAttribute('role', 'status');
+    saveStatus.setAttribute('aria-live', 'polite');
+    saveStatus.setAttribute('data-state', 'saved');
+    saveStatus.textContent = 'Saved';
     noteGroup.appendChild(noteBtn);
     noteGroup.appendChild(linkBtn);
     noteGroup.appendChild(taskLinkBtn);
@@ -1450,6 +1531,7 @@
     dataGroup.appendChild(importBtn);
     dataGroup.appendChild(exportBtn);
     dataGroup.appendChild(exportAllBtn);
+    dataGroup.appendChild(saveStatus);
     dataGroup.appendChild(importInput);
     searchInput.addEventListener('input', updateNoteSearch);
     searchInput.addEventListener('keydown', function(ev){
@@ -1521,11 +1603,15 @@
             if (!window.TaskCanvasWorkbenches || typeof window.TaskCanvasWorkbenches.importData !== 'function'){
               throw new Error('Workbench import is not available');
             }
-            window.TaskCanvasWorkbenches.importData(data);
+            var workbenchResult = window.TaskCanvasWorkbenches.importData(data);
+            noteFeedback('Imported ' + workbenchResult.workbenches + ' workbench' + (workbenchResult.workbenches === 1 ? '.' : 'es.'));
             return;
           }
           if (notes.length && window.confirm && !window.confirm('Replace current planning notes with imported notes?')) return;
-          importData(data);
+          var noteResult = importData(data);
+          var importMessage = 'Imported ' + noteResult.notes + ' note' + (noteResult.notes === 1 ? '' : 's') + ' and ' + noteResult.links + ' link' + (noteResult.links === 1 ? '' : 's') + '.';
+          if (noteResult.droppedLinks) importMessage += ' Removed ' + noteResult.droppedLinks + ' invalid link' + (noteResult.droppedLinks === 1 ? '.' : 's.');
+          noteFeedback(importMessage);
         }catch(e){
           window.alert && window.alert('Could not import notes: ' + (e && e.message ? e.message : String(e)));
         }
@@ -1790,8 +1876,7 @@
       selectNote(id);
       return;
     }
-    if (linkFrom !== id && !linkExists(linkFrom, id)){
-      links.push({from: linkFrom, to: id, type: 'manual'});
+    if (addNoteLink(linkFrom, id, 'manual')){
       saveSoon();
       renderLinks();
     }
@@ -1804,8 +1889,7 @@
     if (ids.length !== 2) return false;
     var to = selectedNoteId && selectedNoteIds[selectedNoteId] ? selectedNoteId : ids[1];
     var from = ids[0] === to ? ids[1] : ids[0];
-    if (!from || !to || from === to || linkExists(from, to)) return false;
-    links.push({from: from, to: to, type: 'manual'});
+    if (!addNoteLink(from, to, 'manual')) return false;
     selectedLinkKey = noteLinkKey({from: from, to: to, type: 'manual'});
     selectedNoteId = null;
     selectedNoteIds = {};
@@ -2024,8 +2108,7 @@
       return;
     }
     var from = drag.from;
-    if (to && from !== to && !linkExists(from, to)){
-      links.push({from: from, to: to, type: 'manual'});
+    if (addNoteLink(from, to, 'manual')){
       selectedLinkKey = noteLinkKey({from: from, to: to, type: 'manual'});
       selectedNoteIds = {};
       selectedNoteId = null;
@@ -2061,7 +2144,9 @@
     if (!drag || !targetId) { renderLinks(); return; }
     var nextFrom = drag.endpoint === 'from' ? targetId : drag.from;
     var nextTo = drag.endpoint === 'to' ? targetId : drag.to;
-    if (!nextFrom || !nextTo || nextFrom === nextTo || linkExistsExcept(nextFrom, nextTo, drag.key)){
+    var validation = validateLink(nextFrom, nextTo, drag.type || 'manual', links, drag.key, null);
+    if (!validation.ok){
+      noteFeedback(validation.reason);
       renderLinks();
       return;
     }
@@ -2311,7 +2396,7 @@
     var childX = parent.x + 300;
     var childY = anchor ? toInt(anchor.y, parent.y + existing * 124) : parent.y + existing * 124;
     var child = createNote(childX, childY, title || 'New branch', body || '', noteBucket(parent), anchor ? { skipAutoLayout: true } : null);
-    links.push({from: parent.id, to: child.id, type: 'child'});
+    addNoteLink(parent.id, child.id, 'child');
     syncNoteLabels();
     if (anchor){
       insertNoteRightOfReference(child, anchor);
@@ -2331,7 +2416,7 @@
       var siblingOf = noteById(parentLink.from);
       if (!siblingOf) return null;
       var sibling = createNote(n.x, n.y + 132, title || 'New branch', body || '', noteBucket(n), { skipAutoLayout: true });
-      links.push({from: parentLink.from, to: sibling.id, type: 'child'});
+      addNoteLink(parentLink.from, sibling.id, 'child');
       insertNoteBelowReference(sibling, n);
       syncNoteLabels();
       renderBuckets();
@@ -2646,11 +2731,8 @@
       while (ids[n.id]) n.id = uid();
       ids[n.id] = true;
     });
-    var nextLinks = Array.isArray(data.links) ? data.links.filter(function(l){
-      return l && ids[l.from] && ids[l.to] && l.from !== l.to;
-    }).map(function(l){
-      return {from:l.from, to:l.to, type:l.type || 'manual'};
-    }) : [];
+    var sanitized = sanitizeLinks(data.links, ids);
+    var nextLinks = sanitized.links;
     notes = nextNotes;
     links = nextLinks;
     bucketUiState = Object.create(null);
@@ -2675,7 +2757,7 @@
     selectedLinkKey = null;
     renderAll();
     saveNow();
-    return {notes:notes.length, links:links.length};
+    return {notes:notes.length, links:links.length, droppedLinks:sanitized.dropped, droppedChildLinks:sanitized.droppedChild};
   }
   function importJSON(text){
     return importData(text);
@@ -2750,6 +2832,10 @@
     installKeyboardShortcuts();
     wrapDrawLinks();
     try{ renderLinks(); }catch(_){}
+    if (pendingRepairFeedback){
+      noteFeedback(pendingRepairFeedback);
+      pendingRepairFeedback = null;
+    }
   }
   window.TaskCanvasNotes = {
     createNote: createNote,
@@ -2762,7 +2848,13 @@
     importJSON: importJSON,
     stageSelectedNotesAsTasks: stageSelectedNotesAsTasks,
     createLinkedTasksFromSelectedNotes: createLinkedTasksFromSelectedNotes,
-    linkNotes: function(from, to, type){ if (from && to && from !== to && !linkExists(from, to)){ links.push({from:from, to:to, type:type || 'manual'}); syncNoteLabels(); renderLinks(); saveSoon(); } },
+    linkNotes: function(from, to, type){
+      if (!addNoteLink(from, to, type || 'manual')) return false;
+      syncNoteLabels();
+      renderLinks();
+      saveSoon();
+      return true;
+    },
     linkSelectedNotes: linkSelectedNotes,
     selectLink: selectLink,
     deleteSelectedLink: deleteSelectedLink,
