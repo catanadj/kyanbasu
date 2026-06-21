@@ -1819,7 +1819,29 @@
   function selectedIds(){
     return Object.keys(selectedNoteIds).filter(function(id){ return !!selectedNoteIds[id] && !!noteById(id); });
   }
+  function publishContextSelection(){
+    if (!window.TaskCanvasContextBar || typeof window.TaskCanvasContextBar.update !== 'function') return;
+    var link = selectedLink();
+    if (link){
+      window.TaskCanvasContextBar.update({kind:'link', count:1, label:'Note link selected'});
+      return;
+    }
+    var ids = selectedIds();
+    if (!ids.length){ window.TaskCanvasContextBar.update({kind:'none'}); return; }
+    var primary = selectedNoteId && selectedNoteIds[selectedNoteId] ? selectedNoteId : ids[ids.length - 1];
+    var note = noteById(primary);
+    var labels = computeNoteLabels();
+    window.TaskCanvasContextBar.update({
+      kind:'note',
+      count:ids.length,
+      primary:primary,
+      label:ids.length === 1 ? ((labels[primary] || 'Note') + ' selected') : (ids.length + ' notes selected'),
+      hasChildren:!!childLinksFrom(primary).length,
+      collapsed:!!(note && note.collapsed)
+    });
+  }
   function selectNote(id, additive){
+    try{ if (typeof window.clearSelection === 'function') window.clearSelection(true); }catch(_){}
     selectedLinkKey = null;
     if (!noteById(id)){
       selectedNoteId = null;
@@ -1838,6 +1860,7 @@
     renderLinks();
   }
   function selectNotes(ids, additive){
+    try{ if (typeof window.clearSelection === 'function') window.clearSelection(true); }catch(_){}
     selectedLinkKey = null;
     if (!additive){
       selectedNoteIds = {};
@@ -1857,6 +1880,14 @@
       el.classList.toggle('selected', !!selectedNoteIds[el.getAttribute('data-note-id')]);
     });
     renderLinkInspector();
+    publishContextSelection();
+  }
+  function clearNoteSelection(){
+    selectedLinkKey = null;
+    selectedNoteId = null;
+    selectedNoteIds = {};
+    syncSelection();
+    renderLinks();
   }
   function focusNoteText(id){
     var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(id)+'"] .tcNoteText');
@@ -2171,6 +2202,7 @@
     qsa('.tcNoteLinkEndpoint').forEach(function(el){ el.remove(); });
   }
   function selectLink(key){
+    try{ if (typeof window.clearSelection === 'function') window.clearSelection(true); }catch(_){}
     selectedLinkKey = key || null;
     selectedNoteId = null;
     selectedNoteIds = {};
@@ -2385,6 +2417,7 @@
     });
     if (selectedLinkKey && !hasSelected) selectedLinkKey = null;
     renderLinkInspector();
+    publishContextSelection();
   }
   function createChildNote(parentId, title, body){
     var anchorId = arguments.length > 3 ? arguments[3] : null;
@@ -2863,6 +2896,8 @@
     toggleCollapse: toggleCollapse,
     setBucket: setBucket,
     selectNote: selectNote,
+    clearSelection: clearNoteSelection,
+    primaryNote: function(){ return selectedNoteId; },
     selectedNotes: function(){ return selectedIds(); },
     notes: function(){ return notes.slice(); },
     noteSpaceRects: noteSpaceRects,

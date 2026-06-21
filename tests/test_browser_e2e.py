@@ -2353,6 +2353,151 @@ window.addEventListener('load', function(){
         self.assertIn("toolbarGroupCommands", result["consoleParentClass"], msg=json.dumps(result))
         self.assertIn("toolbarGroupCanvas", result["resetParentClass"], msg=json.dumps(result))
 
+    def test_context_selection_bar_handles_note_and_link_actions(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CONTEXT_SELECTION_NOTES_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      function actions(){
+        return Array.prototype.slice.call(document.querySelectorAll('#contextSelectionActions button')).map(function(b){ return b.getAttribute('data-context-action'); });
+      }
+      function clickAction(name){
+        var btn = document.querySelector('#contextSelectionActions [data-context-action="'+name+'"]');
+        if (!btn) throw new Error('missing context action ' + name);
+        btn.click();
+      }
+      var a = window.TaskCanvasNotes.createNote(180, 240, 'Alpha', '', 'Planning', {skipAutoLayout:true});
+      var singleActions = actions();
+      clickAction('note-child');
+      var afterChild = window.TaskCanvasNotes.notes().length;
+      var b = window.TaskCanvasNotes.createNote(780, 240, 'Beta', '', 'Planning', {skipAutoLayout:true});
+      window.TaskCanvasNotes.selectNote(a.id);
+      window.TaskCanvasNotes.selectNote(b.id, true);
+      var multiActions = actions();
+      clickAction('note-task');
+      var stagedTasks = (window.STAGED_CMDS || []).filter(function(line){ return String(line).indexOf('task add ') === 0; }).length;
+      clickAction('note-link');
+      var linkState = window.TaskCanvasContextBar.state();
+      var linkActions = actions();
+      clickAction('link-delete');
+      var out = {
+        bar: !!document.getElementById('contextSelectionBar'),
+        singleActions: singleActions,
+        afterChild: afterChild,
+        multiActions: multiActions,
+        stagedTasks: stagedTasks,
+        linkState: linkState,
+        linkActions: linkActions,
+        remainingLinks: window.TaskCanvasNotes.links().length,
+        hiddenAfterUnlink: document.getElementById('contextSelectionBar').hidden
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out';
+      pre.textContent = JSON.stringify(out);
+      document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 900);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["bar"], msg=json.dumps(result))
+        self.assertIn("note-child", result["singleActions"], msg=json.dumps(result))
+        self.assertIn("note-sibling", result["singleActions"], msg=json.dumps(result))
+        self.assertEqual(result["afterChild"], 2, msg=json.dumps(result))
+        self.assertIn("note-link", result["multiActions"], msg=json.dumps(result))
+        self.assertIn("note-task", result["multiActions"], msg=json.dumps(result))
+        self.assertEqual(result["stagedTasks"], 2, msg=json.dumps(result))
+        self.assertEqual(result["linkState"]["kind"], "link", msg=json.dumps(result))
+        self.assertEqual(result["linkActions"], ["link-delete"], msg=json.dumps(result))
+        self.assertEqual(result["remainingLinks"], 1, msg=json.dumps(result))
+        self.assertTrue(result["hiddenAfterUnlink"], msg=json.dumps(result))
+
+    def test_context_selection_bar_switches_between_tasks_and_notes(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps(
+            {
+                "tasks": [
+                    {
+                        "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        "short": "aaaaaaaa",
+                        "desc": "Alpha task",
+                        "project": "Work",
+                        "tags": [],
+                        "has_depends": False,
+                    }
+                ],
+                "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
+            }
+        )
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CONTEXT_SELECTION_TASKS_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var task = (window.TASKS || [])[0];
+      addNodeForTask(task, 180, 240, {deferLayout:true});
+      var node = document.querySelector('#builderStage .node[data-short="aaaaaaaa"]');
+      selectNode(node);
+      var taskState = window.TaskCanvasContextBar.state();
+      var taskActions = Array.prototype.slice.call(document.querySelectorAll('#contextSelectionActions button')).map(function(b){ return b.getAttribute('data-context-action'); });
+      document.querySelector('#contextSelectionActions [data-context-action="done"]').click();
+      var note = window.TaskCanvasNotes.createNote(620, 260, 'Planning note', '', 'Planning', {skipAutoLayout:true});
+      var noteState = window.TaskCanvasContextBar.state();
+      var taskSelectedAfterNote = node.classList.contains('selected');
+      selectNode(node);
+      var finalState = window.TaskCanvasContextBar.state();
+      var out = {
+        taskState: taskState,
+        taskActions: taskActions,
+        stagedDone: node.classList.contains('stagedDone'),
+        noteState: noteState,
+        taskSelectedAfterNote: taskSelectedAfterNote,
+        finalState: finalState,
+        selectedNotesAfterTask: window.TaskCanvasNotes.selectedNotes().length
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out';
+      pre.textContent = JSON.stringify(out);
+      document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 900);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["taskState"]["kind"], "task", msg=json.dumps(result))
+        self.assertIn("locate", result["taskActions"], msg=json.dumps(result))
+        self.assertIn("modify", result["taskActions"], msg=json.dumps(result))
+        self.assertTrue(result["stagedDone"], msg=json.dumps(result))
+        self.assertEqual(result["noteState"]["kind"], "note", msg=json.dumps(result))
+        self.assertFalse(result["taskSelectedAfterNote"], msg=json.dumps(result))
+        self.assertEqual(result["finalState"]["kind"], "task", msg=json.dumps(result))
+        self.assertEqual(result["selectedNotesAfterTask"], 0, msg=json.dumps(result))
+
     def test_canvas_workbenches_switch_layouts_and_notes_without_clearing_commands(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps(

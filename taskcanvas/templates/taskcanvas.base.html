@@ -391,6 +391,50 @@
   }
   #builderWrap .canvas{right:var(--inspectorW);border-right:1px solid var(--line)}
   #viewerWrap .canvas{right:0}
+  .contextSelectionBar{
+    position:absolute;
+    top:12px;
+    left:calc((100% - var(--inspectorW)) / 2);
+    z-index:96;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    max-width:calc(100% - var(--inspectorW) - 32px);
+    padding:6px;
+    border:1px solid rgba(97,208,255,.26);
+    border-radius:8px;
+    background:rgba(8,15,25,.94);
+    box-shadow:0 10px 28px rgba(0,0,0,.32);
+    transform:translateX(-50%);
+    backdrop-filter:blur(14px);
+  }
+  .contextSelectionBar[hidden]{display:none}
+  .contextSelectionLabel{
+    min-width:0;
+    max-width:180px;
+    padding:0 8px;
+    overflow:hidden;
+    color:rgba(220,233,249,.78);
+    font-size:11px;
+    font-weight:700;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .contextSelectionActions{display:flex;align-items:center;gap:4px;min-width:0;overflow-x:auto}
+  .contextSelectionActions button{
+    flex:0 0 auto;
+    border:1px solid rgba(164,185,214,.22);
+    border-radius:6px;
+    padding:7px 9px;
+    background:rgba(255,255,255,.05);
+    color:var(--fg);
+    cursor:pointer;
+    font-size:11px;
+    font-weight:700;
+  }
+  .contextSelectionActions button:hover{border-color:rgba(97,208,255,.44);background:rgba(97,208,255,.12)}
+  .contextSelectionActions button.danger{border-color:rgba(255,108,124,.3);color:#ffd8dd}
+  body.inspector-collapsed .contextSelectionBar{left:50%;max-width:calc(100% - 32px)}
   .stage{position:relative;width:5000px;height:4000px;transform-origin:0 0}
   .areas{
     position:absolute;
@@ -1249,6 +1293,8 @@
     .fab{right:16px;bottom:18px}
     .fabMenu{right:16px;bottom:90px}
     #builderWrap .canvas{right:0}
+    .contextSelectionBar,
+    body.inspector-collapsed .contextSelectionBar{left:50%;max-width:calc(100% - 24px)}
     .inspector{
       top:auto;
       left:0;
@@ -1400,6 +1446,10 @@
         <svg id="builderLinks" class="links" viewBox="0 0 5000 4000" preserveAspectRatio="none"></svg>
         <div id="chromeLayer" class="chromeLayer"></div>
       </div>
+    </div>
+    <div id="contextSelectionBar" class="contextSelectionBar" hidden>
+      <div id="contextSelectionLabel" class="contextSelectionLabel"></div>
+      <div id="contextSelectionActions" class="contextSelectionActions"></div>
     </div>
     <aside id="inspectorPanel" class="inspector">
       <div class="inspectorHead">
@@ -1569,6 +1619,9 @@ var inspectorDone = document.getElementById('inspectorDone');
 var inspectorDelete = document.getElementById('inspectorDelete');
 var inspectorModify = document.getElementById('inspectorModify');
 var hideInspector = document.getElementById('hideInspector');
+var contextSelectionBar = document.getElementById('contextSelectionBar');
+var contextSelectionLabel = document.getElementById('contextSelectionLabel');
+var contextSelectionActions = document.getElementById('contextSelectionActions');
 var inspectorTimer = 0;
 var selectedProject = null;
 var dragProjMoved = false;
@@ -1974,6 +2027,7 @@ function removeProjectFromCanvas(project){
   drawLinks();
   try{ if (typeof refreshDepHandleLetters === 'function') refreshDepHandleLetters(); }catch(_){}
   updateConsole();
+  if (typeof publishTaskSelection === 'function') publishTaskSelection();
   queueInspectorRender(0);
   try{ if (typeof showToast === 'function') showToast('Removed project "'+project+'" from canvas ('+removedCount+' task'+(removedCount===1?'':'s')+').'); }catch(_){}
   return true;
@@ -2881,8 +2935,99 @@ if (inspectorModify) inspectorModify.addEventListener('click', function(){ trigg
 
 /* ===== Selection & node dragging ===== */
 var selected = new Set();
-function clearSelection(){ selected.forEach(function(n){ n.classList.remove('selected');}); selected.clear(); clearProjectSelection(true); queueInspectorRender(0); }
-function selectNode(n){ clearProjectSelection(true); n.classList.add('selected'); selected.add(n); queueInspectorRender(0); }
+var contextSelectionState = {kind:'none'};
+function contextActionButton(action, label, danger){
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.setAttribute('data-context-action', action);
+  btn.textContent = label;
+  if (danger) btn.className = 'danger';
+  return btn;
+}
+function renderContextSelectionBar(){
+  if (!contextSelectionBar || !contextSelectionLabel || !contextSelectionActions) return;
+  var state = contextSelectionState || {kind:'none'};
+  contextSelectionActions.innerHTML = '';
+  if (!state.kind || state.kind === 'none' || !state.count){
+    contextSelectionBar.hidden = true;
+    contextSelectionLabel.textContent = '';
+    return;
+  }
+  contextSelectionBar.hidden = false;
+  contextSelectionLabel.textContent = state.label || (state.count + ' selected');
+  var actions = [];
+  if (state.kind === 'task'){
+    actions.push(['locate', 'Locate']);
+    actions.push(['done', 'Done']);
+    if (state.count === 1) actions.push(['modify', 'Modify']);
+    actions.push(['delete', 'Delete', true]);
+  } else if (state.kind === 'note'){
+    if (state.count === 1){
+      actions.push(['note-child', 'Child']);
+      actions.push(['note-sibling', 'Sibling']);
+      if (state.hasChildren) actions.push(['note-collapse', state.collapsed ? 'Expand' : 'Collapse']);
+    }
+    if (state.count === 2) actions.push(['note-link', 'Link']);
+    actions.push(['note-task', state.count === 1 ? 'Create task' : 'Create tasks']);
+    actions.push(['note-delete', 'Delete', true]);
+  } else if (state.kind === 'link'){
+    actions.push(['link-delete', 'Unlink', true]);
+  }
+  actions.forEach(function(item){ contextSelectionActions.appendChild(contextActionButton(item[0], item[1], item[2])); });
+}
+function updateContextSelection(state){
+  contextSelectionState = state && state.kind ? state : {kind:'none'};
+  renderContextSelectionBar();
+}
+function publishTaskSelection(){
+  updateContextSelection(selected.size ? {kind:'task', count:selected.size, label:selected.size + ' task' + (selected.size === 1 ? '' : 's') + ' selected'} : {kind:'none'});
+}
+function runTaskContextAction(action){
+  var nodes = Array.from(selected).filter(function(n){ return n && n.isConnected; });
+  if (!nodes.length) return;
+  if (action === 'locate'){ centerNodeIntoView(nodes[0]); return; }
+  if (action === 'modify'){ triggerInspectorAction('modify'); return; }
+  var selector = action === 'done' ? '.btnDone' : (action === 'delete' ? '.btnDel' : '');
+  if (!selector) return;
+  nodes.forEach(function(node){ var btn = node.querySelector(selector); if (btn) btn.click(); });
+  queueInspectorRender(40);
+}
+if (contextSelectionActions) contextSelectionActions.addEventListener('click', function(ev){
+  var btn = ev.target && ev.target.closest ? ev.target.closest('[data-context-action]') : null;
+  if (!btn) return;
+  var action = btn.getAttribute('data-context-action');
+  if (action === 'locate' || action === 'done' || action === 'modify' || action === 'delete'){
+    runTaskContextAction(action);
+    return;
+  }
+  var api = window.TaskCanvasNotes;
+  if (!api) return;
+  var state = contextSelectionState || {};
+  if (action === 'note-child') api.createChildNote(state.primary);
+  else if (action === 'note-sibling') api.createSiblingNote(state.primary);
+  else if (action === 'note-collapse') api.toggleCollapse(state.primary);
+  else if (action === 'note-link') api.linkSelectedNotes();
+  else if (action === 'note-task') api.stageSelectedNotesAsTasks();
+  else if (action === 'note-delete') api.deleteSelectedNotes();
+  else if (action === 'link-delete') api.deleteSelectedLink();
+});
+window.TaskCanvasContextBar = {update:updateContextSelection, state:function(){ return contextSelectionState; }};
+function clearSelection(keepNotes){
+  selected.forEach(function(n){ n.classList.remove('selected');});
+  selected.clear();
+  clearProjectSelection(true);
+  if (!keepNotes && window.TaskCanvasNotes && typeof window.TaskCanvasNotes.clearSelection === 'function') window.TaskCanvasNotes.clearSelection(true);
+  publishTaskSelection();
+  queueInspectorRender(0);
+}
+function selectNode(n){
+  clearProjectSelection(true);
+  if (window.TaskCanvasNotes && typeof window.TaskCanvasNotes.clearSelection === 'function') window.TaskCanvasNotes.clearSelection(true);
+  n.classList.add('selected');
+  selected.add(n);
+  publishTaskSelection();
+  queueInspectorRender(0);
+}
 
 function makeDraggable(node){
   var dragging=false, group=false, sx=0, sy=0, start=[];
