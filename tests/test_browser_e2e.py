@@ -4177,6 +4177,77 @@ window.addEventListener('load', function(){
         self.assertTrue(result["badgeHiddenAfterUnlink"], msg=json.dumps(result))
         self.assertEqual(len(result["selectedNote"]), 1, msg=json.dumps(result))
 
+    def test_canvas_inspector_renders_note_selection_and_actions(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_NOTE_INSPECTOR_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var root = window.TaskCanvasNotes.createNote(180, 240, "Plan Alpha", "", "Planning", {skipAutoLayout:true});
+      window.TaskCanvasNotes.selectNote(root.id);
+      setTimeout(function(){
+        var before = {
+          title:(document.getElementById('inspectorTitle') || {}).textContent || '',
+          sub:(document.getElementById('inspectorSub') || {}).textContent || '',
+          done:(document.getElementById('inspectorDone') || {}).textContent || '',
+          modify:(document.getElementById('inspectorModify') || {}).textContent || '',
+          body:(document.getElementById('inspectorBody') || {}).textContent || ''
+        };
+        document.getElementById('inspectorDone').click();
+        setTimeout(function(){
+          var notes = window.TaskCanvasNotes.notes();
+          var selected = window.TaskCanvasNotes.selectedNotes();
+          var selectedNote = notes.filter(function(n){ return n.id === selected[0]; })[0] || {};
+          var after = {
+            title:(document.getElementById('inspectorTitle') || {}).textContent || '',
+            sub:(document.getElementById('inspectorSub') || {}).textContent || '',
+            done:(document.getElementById('inspectorDone') || {}).textContent || '',
+            modify:(document.getElementById('inspectorModify') || {}).textContent || '',
+            body:(document.getElementById('inspectorBody') || {}).textContent || ''
+          };
+          var out = {
+            before:before,
+            after:after,
+            notes:notes.length,
+            links:window.TaskCanvasNotes.links().length,
+            selected:selected.length,
+            selectedContent:selectedNote.content || ''
+          };
+          var pre = document.createElement('pre');
+          pre.id = 'e2e-out';
+          pre.textContent = JSON.stringify(out);
+          document.body.appendChild(pre);
+        }, 120);
+      }, 80);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["before"]["title"], "A1 selected", msg=json.dumps(result))
+        self.assertEqual(result["before"]["sub"], "Plan Alpha", msg=json.dumps(result))
+        self.assertEqual(result["before"]["done"], "Child", msg=json.dumps(result))
+        self.assertEqual(result["before"]["modify"], "Sibling", msg=json.dumps(result))
+        self.assertIn("Planning", result["before"]["body"], msg=json.dumps(result))
+        self.assertEqual(result["notes"], 2, msg=json.dumps(result))
+        self.assertEqual(result["links"], 1, msg=json.dumps(result))
+        self.assertEqual(result["selected"], 1, msg=json.dumps(result))
+        self.assertEqual(result["selectedContent"], "New branch", msg=json.dumps(result))
+        self.assertEqual(result["after"]["title"], "A1-1 selected", msg=json.dumps(result))
+
     def test_canvas_notes_tab_places_child_right_and_pushes_blocker(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

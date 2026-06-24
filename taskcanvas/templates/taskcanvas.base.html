@@ -2518,6 +2518,7 @@ function queueInspectorRender(delay){
     renderInspector();
   }, Math.max(0, delay || 0));
 }
+window.queueInspectorRender = queueInspectorRender;
 function primarySelectedNode(){
   var arr = Array.from(selected).filter(function(n){ return n && n.isConnected; });
   return arr.length ? arr[0] : null;
@@ -2732,8 +2733,125 @@ function addMissingProjectTasks(project){
   }
   return added;
 }
+function noteInspectorSnapshot(){
+  try{
+    if (window.TaskCanvasNotes && typeof window.TaskCanvasNotes.selectionSnapshot === 'function'){
+      return window.TaskCanvasNotes.selectionSnapshot() || {kind:'none', count:0};
+    }
+  }catch(_){}
+  return {kind:'none', count:0};
+}
+function noteInspectorText(text, fallback){
+  text = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!text) return fallback || 'New note';
+  return text.length > 96 ? text.slice(0, 93) + '...' : text;
+}
+function noteInspectorTaskRows(refs){
+  refs = Array.isArray(refs) ? refs : [];
+  if (!refs.length) return '<div class="inspectorEmpty"><div>No linked tasks.</div></div>';
+  return '<div class="inspectorList">' + refs.map(function(ref){
+    var meta = [];
+    if (ref.short) meta.push(ref.short);
+    if (ref.project) meta.push(ref.project);
+    return '<div class="inspectorListItem">' +
+      '<strong>'+escapeHtml(ref.desc || ref.uuid || ref.short || 'Linked task')+'</strong>' +
+      (meta.length ? '<div class="inspectorItemMeta">'+escapeHtml(meta.join(' • '))+'</div>' : '') +
+      '</div>';
+  }).join('') + '</div>';
+}
+function noteInspectorRows(notes){
+  notes = Array.isArray(notes) ? notes : [];
+  if (!notes.length) return '<div class="inspectorEmpty"><div>No notes selected.</div></div>';
+  return '<div class="inspectorList">' + notes.slice(0, 8).map(function(note){
+    var meta = [];
+    if (note.bucket) meta.push(note.bucket);
+    if (note.childCount) meta.push(note.childCount + ' child' + (note.childCount === 1 ? '' : 'ren'));
+    if (note.linkCount) meta.push(note.linkCount + ' link' + (note.linkCount === 1 ? '' : 's'));
+    if (note.taskRefs && note.taskRefs.length) meta.push(note.taskRefs.length + ' task' + (note.taskRefs.length === 1 ? '' : 's'));
+    return '<div class="inspectorListItem"><strong>'+escapeHtml(note.label || 'Note')+'</strong> '+
+      escapeHtml(noteInspectorText(note.content, 'New note')) +
+      (meta.length ? '<div class="inspectorItemMeta">'+escapeHtml(meta.join(' • '))+'</div>' : '') +
+      '</div>';
+  }).join('') + (notes.length > 8 ? '<div class="inspectorItemMeta">'+(notes.length - 8)+' more selected</div>' : '') + '</div>';
+}
+function renderNoteInspector(snapshot){
+  var api = window.TaskCanvasNotes || null;
+  var selectedNotes = (snapshot && snapshot.selectedNotes) || [];
+  var primaryId = snapshot && snapshot.primary;
+  var primary = selectedNotes.filter(function(n){ return n.id === primaryId; })[0] || selectedNotes[0] || null;
+  if (snapshot && snapshot.kind === 'link' && snapshot.link){
+    var link = snapshot.link;
+    inspectorLocate.disabled = true;
+    inspectorDone.disabled = true;
+    inspectorDelete.disabled = false;
+    inspectorModify.disabled = true;
+    inspectorLocate.textContent = 'Locate';
+    inspectorDone.textContent = 'Relink';
+    inspectorDelete.textContent = 'Unlink';
+    inspectorModify.textContent = 'Details';
+    inspectorTitle.textContent = 'Note link selected';
+    inspectorSub.textContent = (link.fromLabel || 'Note') + ' -> ' + (link.toLabel || 'Note');
+    inspectorBody.innerHTML =
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorChips">' +
+          '<span class="inspectorChip info">'+escapeHtml(link.type || 'manual')+'</span>' +
+          '<span class="inspectorChip">Directional link</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorLabel">Endpoints</div>' +
+        '<div class="inspectorList">' +
+          '<div class="inspectorListItem"><strong>From '+escapeHtml(link.fromLabel || '')+'</strong><div class="inspectorItemMeta">'+escapeHtml(noteInspectorText(link.fromText, 'New note'))+'</div></div>' +
+          '<div class="inspectorListItem"><strong>To '+escapeHtml(link.toLabel || '')+'</strong><div class="inspectorItemMeta">'+escapeHtml(noteInspectorText(link.toText, 'New note'))+'</div></div>' +
+        '</div>' +
+      '</div>';
+    return true;
+  }
+  if (!snapshot || snapshot.kind !== 'note' || !selectedNotes.length) return false;
+  var buckets = uniqueStrings(selectedNotes.map(function(n){ return n.bucket || '(no bucket)'; }));
+  var links = selectedNotes.reduce(function(total, n){ return total + (n.linkCount || 0); }, 0);
+  var tasks = selectedNotes.reduce(function(total, n){ return total + ((n.taskRefs || []).length); }, 0);
+  var children = selectedNotes.reduce(function(total, n){ return total + (n.childCount || 0); }, 0);
+  inspectorLocate.disabled = !primary;
+  inspectorDone.disabled = !primary;
+  inspectorDelete.disabled = false;
+  inspectorModify.disabled = !(api && (selectedNotes.length === 1 || selectedNotes.length === 2));
+  inspectorLocate.textContent = 'Locate';
+  inspectorDone.textContent = selectedNotes.length === 1 ? 'Child' : 'Tasks';
+  inspectorDelete.textContent = 'Delete';
+  inspectorModify.textContent = selectedNotes.length === 1 ? 'Sibling' : (selectedNotes.length === 2 ? 'Link' : 'Details');
+  inspectorTitle.textContent = selectedNotes.length === 1 ? ((primary.label || 'Note') + ' selected') : (selectedNotes.length + ' notes selected');
+  inspectorSub.textContent = selectedNotes.length === 1 ? noteInspectorText(primary.content, 'New note') : 'Group note selection';
+  inspectorBody.innerHTML =
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorMetrics">' +
+        '<div class="metricCard"><div class="metricValue">'+selectedNotes.length+'</div><div class="metricLabel">Selected</div></div>' +
+        '<div class="metricCard"><div class="metricValue">'+buckets.length+'</div><div class="metricLabel">Buckets</div></div>' +
+        '<div class="metricCard"><div class="metricValue">'+links+'</div><div class="metricLabel">Links</div></div>' +
+        '<div class="metricCard"><div class="metricValue">'+tasks+'</div><div class="metricLabel">Tasks</div></div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorChips">' +
+        buckets.map(function(bucket){ return '<span class="inspectorChip info">'+escapeHtml(bucket)+'</span>'; }).join('') +
+        (children ? '<span class="inspectorChip">'+children+' child'+(children === 1 ? '' : 'ren')+'</span>' : '') +
+        (primary && primary.collapsed ? '<span class="inspectorChip warn">Collapsed</span>' : '') +
+      '</div>' +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">'+(selectedNotes.length === 1 ? 'Note' : 'Selected notes')+'</div>' +
+      noteInspectorRows(selectedNotes) +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">Linked tasks</div>' +
+      noteInspectorTaskRows(primary ? primary.taskRefs : []) +
+    '</div>';
+  return true;
+}
 function renderInspector(){
   if (!inspectorPanel || !inspectorBody || !inspectorTitle || !inspectorSub) return;
+  var noteSnapshot = noteInspectorSnapshot();
+  if (noteSnapshot && noteSnapshot.kind && noteSnapshot.kind !== 'none' && renderNoteInspector(noteSnapshot)) return;
   if (selectedProject){
     var project = selectedProject;
     var allTasks = tasksForProject(project);
@@ -2907,6 +3025,36 @@ function renderInspector(){
     '</div>';
 }
 function triggerInspectorAction(kind){
+  var noteSnapshot = noteInspectorSnapshot();
+  if (noteSnapshot && noteSnapshot.kind && noteSnapshot.kind !== 'none'){
+    var api = window.TaskCanvasNotes || null;
+    if (!api) return;
+    if (noteSnapshot.kind === 'link'){
+      if (kind === 'delete' && typeof api.deleteSelectedLink === 'function') api.deleteSelectedLink();
+      queueInspectorRender(0);
+      return;
+    }
+    var primary = noteSnapshot.primary;
+    if (kind === 'locate' && primary && typeof api.focusSearchResult === 'function'){ api.focusSearchResult(primary); return; }
+    if (kind === 'done'){
+      if ((noteSnapshot.count || 0) === 1 && primary && typeof api.createChildNote === 'function') api.createChildNote(primary);
+      else if (typeof api.stageSelectedNotesAsTasks === 'function') api.stageSelectedNotesAsTasks();
+      queueInspectorRender(40);
+      return;
+    }
+    if (kind === 'modify'){
+      if ((noteSnapshot.count || 0) === 1 && primary && typeof api.createSiblingNote === 'function') api.createSiblingNote(primary);
+      else if ((noteSnapshot.count || 0) === 2 && typeof api.linkSelectedNotes === 'function') api.linkSelectedNotes();
+      queueInspectorRender(40);
+      return;
+    }
+    if (kind === 'delete' && typeof api.deleteSelectedNotes === 'function'){
+      api.deleteSelectedNotes();
+      queueInspectorRender(40);
+      return;
+    }
+    return;
+  }
   if (selectedProject){
     if (kind === 'locate'){ centerProjectIntoView(selectedProject); return; }
     if (kind === 'done'){

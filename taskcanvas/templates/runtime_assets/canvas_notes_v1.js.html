@@ -1819,6 +1819,59 @@
   function selectedIds(){
     return Object.keys(selectedNoteIds).filter(function(id){ return !!selectedNoteIds[id] && !!noteById(id); });
   }
+  function noteSelectionSnapshot(){
+    var labels = computeNoteLabels();
+    var selected = selectedIds();
+    var picked = selected.map(function(id){
+      var n = noteById(id);
+      var relatedLinks = noteLinkRowsFor(id);
+      return {
+        id:id,
+        label:labels[id] || '',
+        content:n && n.content || '',
+        bucket:noteBucket(n),
+        collapsed:!!(n && n.collapsed),
+        childCount:childLinksFrom(id).length,
+        linkCount:relatedLinks.length,
+        taskRefs:noteTaskRefs(n).slice(),
+        x:toInt(n && n.x, 0),
+        y:toInt(n && n.y, 0)
+      };
+    });
+    var link = selectedLink();
+    if (link){
+      return {
+        kind:'link',
+        count:1,
+        selectedNotes:[],
+        link:{
+          key:noteLinkKey(link),
+          from:link.from,
+          to:link.to,
+          type:link.type || 'manual',
+          fromLabel:labels[link.from] || '',
+          toLabel:labels[link.to] || '',
+          fromText:(noteById(link.from) && noteById(link.from).content) || '',
+          toText:(noteById(link.to) && noteById(link.to).content) || ''
+        }
+      };
+    }
+    if (!picked.length) return {kind:'none', count:0, selectedNotes:[]};
+    var primary = selectedNoteId && selectedNoteIds[selectedNoteId] ? selectedNoteId : selected[selected.length - 1];
+    return {
+      kind:'note',
+      count:picked.length,
+      primary:primary,
+      selectedNotes:picked,
+      buckets:bucketNames(),
+      labels:labels
+    };
+  }
+  function notifyInspectorSelectionChanged(){
+    try{
+      if (typeof window.queueInspectorRender === 'function') window.queueInspectorRender(0);
+    }catch(_){}
+  }
   function publishContextSelection(){
     if (!window.TaskCanvasContextBar || typeof window.TaskCanvasContextBar.update !== 'function') return;
     var link = selectedLink();
@@ -1881,6 +1934,7 @@
     });
     renderLinkInspector();
     publishContextSelection();
+    notifyInspectorSelectionChanged();
   }
   function clearNoteSelection(){
     selectedLinkKey = null;
@@ -2899,6 +2953,7 @@
     clearSelection: clearNoteSelection,
     primaryNote: function(){ return selectedNoteId; },
     selectedNotes: function(){ return selectedIds(); },
+    selectionSnapshot: noteSelectionSnapshot,
     notes: function(){ return notes.slice(); },
     noteSpaceRects: noteSpaceRects,
     outline: noteOutline,
