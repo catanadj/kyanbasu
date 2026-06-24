@@ -4195,8 +4195,14 @@ window.addEventListener('load', function(){
           sub:(document.getElementById('inspectorSub') || {}).textContent || '',
           done:(document.getElementById('inspectorDone') || {}).textContent || '',
           modify:(document.getElementById('inspectorModify') || {}).textContent || '',
-          body:(document.getElementById('inspectorBody') || {}).textContent || ''
+          body:(document.getElementById('inspectorBody') || {}).textContent || '',
+          editor:(document.getElementById('inspectorNoteContent') || {}).value || ''
         };
+        var editor = document.getElementById('inspectorNoteContent');
+        editor.value = 'Plan Alpha updated';
+        editor.dispatchEvent(new Event('input', {bubbles:true}));
+        var editedNote = window.TaskCanvasNotes.notes().filter(function(n){ return n.id === root.id; })[0] || {};
+        var cardText = (document.querySelector('.tcNoteNode[data-note-id="'+root.id+'"] .tcNoteText') || {}).textContent || '';
         document.getElementById('inspectorDone').click();
         setTimeout(function(){
           var notes = window.TaskCanvasNotes.notes();
@@ -4215,7 +4221,9 @@ window.addEventListener('load', function(){
             notes:notes.length,
             links:window.TaskCanvasNotes.links().length,
             selected:selected.length,
-            selectedContent:selectedNote.content || ''
+            selectedContent:selectedNote.content || '',
+            editedContent:editedNote.content || '',
+            cardText:cardText
           };
           var pre = document.createElement('pre');
           pre.id = 'e2e-out';
@@ -4241,7 +4249,10 @@ window.addEventListener('load', function(){
         self.assertEqual(result["before"]["sub"], "Plan Alpha", msg=json.dumps(result))
         self.assertEqual(result["before"]["done"], "Child", msg=json.dumps(result))
         self.assertEqual(result["before"]["modify"], "Sibling", msg=json.dumps(result))
+        self.assertEqual(result["before"]["editor"], "Plan Alpha", msg=json.dumps(result))
         self.assertIn("Planning", result["before"]["body"], msg=json.dumps(result))
+        self.assertEqual(result["editedContent"], "Plan Alpha updated", msg=json.dumps(result))
+        self.assertEqual(result["cardText"], "Plan Alpha updated", msg=json.dumps(result))
         self.assertEqual(result["notes"], 2, msg=json.dumps(result))
         self.assertEqual(result["links"], 1, msg=json.dumps(result))
         self.assertEqual(result["selected"], 1, msg=json.dumps(result))

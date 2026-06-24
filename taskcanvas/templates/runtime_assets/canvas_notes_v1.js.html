@@ -61,6 +61,18 @@
     for (var i=0;i<notes.length;i++) if (notes[i].id === id) return notes[i];
     return null;
   }
+  function setNoteContent(id, content){
+    var n = noteById(id);
+    if (!n) return false;
+    var next = String(content || '').trim() || 'New note';
+    if (n.content === next) return true;
+    n.content = next;
+    var text = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(id)+'"] .tcNoteText');
+    if (text && text.textContent !== next) text.textContent = next;
+    syncNoteTaskBadges();
+    saveSoon();
+    return true;
+  }
   function noteBucket(n){
     return bucketText(n && n.bucket);
   }
@@ -1693,7 +1705,7 @@
   function wireNote(el){
     var id = el.getAttribute('data-note-id');
     var text = qs('.tcNoteText', el);
-    text.addEventListener('input', function(){ var n = noteById(id); if (n){ n.content = text.textContent.trim() || 'New note'; saveSoon(); }});
+    text.addEventListener('input', function(){ setNoteContent(id, text.textContent); });
     qs('.tcNoteBucketLabel', el).addEventListener('click', function(ev){
       ev.preventDefault(); ev.stopPropagation();
       editBucket(id);
@@ -2949,6 +2961,7 @@
     compactMindMap: compactMindMap,
     toggleCollapse: toggleCollapse,
     setBucket: setBucket,
+    setContent: setNoteContent,
     selectNote: selectNote,
     clearSelection: clearNoteSelection,
     primaryNote: function(){ return selectedNoteId; },

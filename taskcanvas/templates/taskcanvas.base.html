@@ -926,6 +926,22 @@
     white-space:pre-wrap;
     word-break:break-word;
   }
+  .inspectorField{
+    width:100%;
+    min-height:104px;
+    resize:vertical;
+    padding:12px;
+    border:1px solid var(--line);
+    border-radius:14px;
+    background:rgba(7,13,22,.72);
+    color:var(--fg);
+    font:13px/1.45 var(--font-ui);
+    outline:none;
+  }
+  .inspectorField:focus{
+    border-color:rgba(97,208,255,.42);
+    box-shadow:0 0 0 3px rgba(97,208,255,.1);
+  }
   body.inspector-collapsed #builderWrap .canvas{right:0;border-right:none}
   body.inspector-collapsed .inspector{
     width:0;
@@ -2774,6 +2790,18 @@ function noteInspectorRows(notes){
       '</div>';
   }).join('') + (notes.length > 8 ? '<div class="inspectorItemMeta">'+(notes.length - 8)+' more selected</div>' : '') + '</div>';
 }
+function wireNoteInspectorEditor(note){
+  if (!note || !note.id) return;
+  var editor = document.getElementById('inspectorNoteContent');
+  if (!editor) return;
+  editor.addEventListener('input', function(){
+    try{
+      if (window.TaskCanvasNotes && typeof window.TaskCanvasNotes.setContent === 'function'){
+        window.TaskCanvasNotes.setContent(note.id, editor.value);
+      }
+    }catch(_){}
+  });
+}
 function renderNoteInspector(snapshot){
   var api = window.TaskCanvasNotes || null;
   var selectedNotes = (snapshot && snapshot.selectedNotes) || [];
@@ -2842,10 +2870,17 @@ function renderNoteInspector(snapshot){
       '<div class="inspectorLabel">'+(selectedNotes.length === 1 ? 'Note' : 'Selected notes')+'</div>' +
       noteInspectorRows(selectedNotes) +
     '</div>' +
+    (selectedNotes.length === 1
+      ? '<div class="inspectorGroup">' +
+          '<div class="inspectorLabel">Edit note</div>' +
+          '<textarea id="inspectorNoteContent" class="inspectorField" spellcheck="true">'+escapeHtml(primary.content || '')+'</textarea>' +
+        '</div>'
+      : '') +
     '<div class="inspectorGroup">' +
       '<div class="inspectorLabel">Linked tasks</div>' +
       noteInspectorTaskRows(primary ? primary.taskRefs : []) +
     '</div>';
+  if (selectedNotes.length === 1) wireNoteInspectorEditor(primary);
   return true;
 }
 function renderInspector(){
