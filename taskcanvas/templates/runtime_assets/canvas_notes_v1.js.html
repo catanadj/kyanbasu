@@ -505,7 +505,9 @@
     return bucketColorState[bucket];
   }
   function bucketColorVars(bucket){
-    var color = bucketColor(bucket);
+    return colorVars(bucketColor(bucket));
+  }
+  function colorVars(color){
     return {
       accent: color,
       soft: rgbaFromHex(color, 0.14),
@@ -522,6 +524,34 @@
     saveBucketColorState();
     return bucketColorState[bucket];
   }
+  function setBucketColor(bucket, color){
+    bucket = bucketText(bucket);
+    color = String(color || '').trim();
+    if (bucketPalette.indexOf(color) === -1 && !hexToRgb(color)) return false;
+    bucketColorState[bucket] = color;
+    renderAll();
+    saveBucketColorState();
+    return true;
+  }
+  function noteColor(note){
+    return note && note.color ? String(note.color).trim() : bucketColor(noteBucket(note));
+  }
+  function setNoteColor(id, color){
+    var n = noteById(id);
+    if (!n) return false;
+    color = String(color || '').trim();
+    if (!color || color === 'bucket'){
+      delete n.color;
+      renderAll();
+      saveSoon();
+      return true;
+    }
+    if (bucketPalette.indexOf(color) === -1 && !hexToRgb(color)) return false;
+    n.color = color;
+    renderAll();
+    saveSoon();
+    return true;
+  }
   function normalizeNote(n){
     n = n || {};
     if (!n.id) n.id = uid();
@@ -531,6 +561,8 @@
     n.x = toInt(n.x, 160);
     n.y = toInt(n.y, 160);
     n.bucket = bucketText(n.bucket);
+    n.color = String(n.color || '').trim();
+    if (!n.color || (bucketPalette.indexOf(n.color) === -1 && !hexToRgb(n.color))) delete n.color;
     n.collapsed = !!n.collapsed;
     n.taskRefs = Array.isArray(n.taskRefs) ? n.taskRefs.map(normalizeTaskRef).filter(Boolean) : [];
     return n;
@@ -1673,7 +1705,7 @@
       st.appendChild(el);
       wireNote(el);
     }
-    var vars = bucketColorVars(noteBucket(n));
+    var vars = colorVars(noteColor(n));
     el.style.setProperty('--note-accent', vars.accent);
     el.style.setProperty('--note-accent-soft', vars.soft);
     el.style.setProperty('--note-accent-faint', vars.faint);
@@ -1838,6 +1870,8 @@
         label:labels[id] || '',
         content:n && n.content || '',
         bucket:noteBucket(n),
+        color:noteColor(n),
+        rawColor:n && n.color || '',
         collapsed:!!(n && n.collapsed),
         childCount:childLinksFrom(id).length,
         linkCount:relatedLinks.length,
@@ -1872,6 +1906,7 @@
       primary:primary,
       selectedNotes:picked,
       buckets:bucketNames(),
+      palette:bucketPalette.slice(),
       labels:labels
     };
   }
@@ -2795,7 +2830,9 @@
       version: 1,
       exportedAt: new Date().toISOString(),
       notes: notes.map(function(n){
-        return {id:n.id, x:toInt(n.x, 160), y:toInt(n.y, 160), content:n.content || 'New note', bucket:noteBucket(n), collapsed:!!n.collapsed, taskRefs:noteTaskRefs(n).slice()};
+        var row = {id:n.id, x:toInt(n.x, 160), y:toInt(n.y, 160), content:n.content || 'New note', bucket:noteBucket(n), collapsed:!!n.collapsed, taskRefs:noteTaskRefs(n).slice()};
+        if (n.color) row.color = n.color;
+        return row;
       }),
       links: links.map(function(l){
         return {from:l.from, to:l.to, type:l.type || 'manual'};
@@ -2957,6 +2994,9 @@
     compactMindMap: compactMindMap,
     toggleCollapse: toggleCollapse,
     setBucket: setBucket,
+    setBucketColor: setBucketColor,
+    setNoteColor: setNoteColor,
+    bucketPalette: function(){ return bucketPalette.slice(); },
     setContent: setNoteContent,
     selectNote: selectNote,
     clearSelection: clearNoteSelection,

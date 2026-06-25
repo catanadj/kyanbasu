@@ -4467,18 +4467,66 @@ window.addEventListener('load', function(){
         var before = {
           title:(document.getElementById('inspectorTitle') || {}).textContent || '',
           label:document.querySelector('.inspectorLabel:nth-of-type(1)') ? document.querySelector('.inspectorLabel:nth-of-type(1)').textContent : '',
-          bucket:(document.getElementById('inspectorNoteBucket') || {}).value || '',
-          placeholder:(document.getElementById('inspectorNoteBucket') || {}).getAttribute('placeholder') || ''
+          bucket:(document.getElementById('inspectorNoteBucketSelect') || {}).value || '',
+          bucketPlaceholder:(document.querySelector('#inspectorNoteBucketSelect option[value=""]') || {}).textContent || '',
+          newHidden:(document.getElementById('inspectorNoteBucket') || {}).hidden,
+          placeholder:(document.getElementById('inspectorNoteBucket') || {}).getAttribute('placeholder') || '',
+          options:Array.prototype.slice.call(document.querySelectorAll('#inspectorNoteBucketSelect option')).map(function(el){ return el.value; }).filter(function(v){ return v && v !== '__new__'; }).sort(),
+          newOption:!!document.querySelector('#inspectorNoteBucketSelect option[value="__new__"]'),
+          reset:!!document.querySelector('[data-note-color="bucket"]'),
+          swatches:document.querySelectorAll('[data-note-color]').length
         };
+        var colorBtn = document.querySelector('[data-note-color="#2fbf71"]');
+        if (colorBtn) colorBtn.click();
         var bucketInput = document.getElementById('inspectorNoteBucket');
-        bucketInput.value = 'Shared';
-        bucketInput.dispatchEvent(new Event('change', {bubbles:true}));
         setTimeout(function(){
+          var colorA = (document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]') || {}).style.getPropertyValue('--note-accent').trim();
+          var colorB = (document.querySelector('.tcNoteNode[data-note-id="'+b.id+'"]') || {}).style.getPropertyValue('--note-accent').trim();
+          var colorC = (document.querySelector('.tcNoteNode[data-note-id="'+c.id+'"]') || {}).style.getPropertyValue('--note-accent').trim();
+          var exportedAfterColor = window.TaskCanvasNotes.exportData();
+          var exportedByContent = {};
+          (exportedAfterColor.notes || []).forEach(function(n){ exportedByContent[n.content] = n; });
+          var bucketSelect = document.getElementById('inspectorNoteBucketSelect');
+          bucketSelect.value = 'Later';
+          bucketSelect.dispatchEvent(new Event('change', {bubbles:true}));
+          setTimeout(function(){
+          var afterExisting = {};
+          window.TaskCanvasNotes.notes().forEach(function(n){ afterExisting[n.content] = n.bucket; });
+          var resetBtn = document.querySelector('[data-note-color="bucket"]');
+          if (resetBtn) resetBtn.click();
+          setTimeout(function(){
+          var exportedAfterReset = window.TaskCanvasNotes.exportData();
+          var resetByContent = {};
+          (exportedAfterReset.notes || []).forEach(function(n){ resetByContent[n.content] = n; });
+          bucketSelect = document.getElementById('inspectorNoteBucketSelect');
+          bucketSelect.value = '__new__';
+          bucketSelect.dispatchEvent(new Event('change', {bubbles:true}));
+          bucketInput = document.getElementById('inspectorNoteBucket');
+          bucketInput.value = 'Shared';
+          bucketInput.dispatchEvent(new Event('change', {bubbles:true}));
+          setTimeout(function(){
           var notes = window.TaskCanvasNotes.notes();
           var byContent = {};
           notes.forEach(function(n){ byContent[n.content] = n; });
           var out = {
             before:before,
+            colors:{
+              A:colorA,
+              B:colorB,
+              C:colorC,
+              exportedA:exportedByContent.A && exportedByContent.A.color || null,
+              exportedB:exportedByContent.B && exportedByContent.B.color || null,
+              exportedC:exportedByContent.C && exportedByContent.C.color || null,
+              planning:exportedAfterColor.buckets && exportedAfterColor.buckets.Planning && exportedAfterColor.buckets.Planning.color,
+              delivery:exportedAfterColor.buckets && exportedAfterColor.buckets.Delivery && exportedAfterColor.buckets.Delivery.color,
+              later:exportedAfterColor.buckets && exportedAfterColor.buckets.Later && exportedAfterColor.buckets.Later.color
+            },
+            afterExisting: afterExisting,
+            resetColors:{
+              A: resetByContent.A && resetByContent.A.color || null,
+              B: resetByContent.B && resetByContent.B.color || null
+            },
+            newInputVisible: !(document.getElementById('inspectorNoteBucket') || {}).hidden,
             buckets: {
               A: byContent.A && byContent.A.bucket,
               B: byContent.B && byContent.B.bucket,
@@ -4492,6 +4540,9 @@ window.addEventListener('load', function(){
           pre.id = 'e2e-out';
           pre.textContent = JSON.stringify(out);
           document.body.appendChild(pre);
+        }, 160);
+        }, 120);
+        }, 120);
         }, 160);
       }, 120);
     }catch(e){
@@ -4510,7 +4561,25 @@ window.addEventListener('load', function(){
         result = json.loads(raw)
         self.assertEqual(result["before"]["title"], "2 notes selected", msg=json.dumps(result))
         self.assertEqual(result["before"]["bucket"], "", msg=json.dumps(result))
-        self.assertEqual(result["before"]["placeholder"], "Move selected notes to bucket", msg=json.dumps(result))
+        self.assertEqual(result["before"]["bucketPlaceholder"], "Mixed buckets", msg=json.dumps(result))
+        self.assertTrue(result["before"]["newHidden"], msg=json.dumps(result))
+        self.assertEqual(result["before"]["placeholder"], "New bucket name", msg=json.dumps(result))
+        self.assertEqual(result["before"]["options"], ["Delivery", "Later", "Planning"], msg=json.dumps(result))
+        self.assertTrue(result["before"]["newOption"], msg=json.dumps(result))
+        self.assertTrue(result["before"]["reset"], msg=json.dumps(result))
+        self.assertGreater(result["before"]["swatches"], 0, msg=json.dumps(result))
+        self.assertEqual(result["colors"]["A"], "#2fbf71", msg=json.dumps(result))
+        self.assertEqual(result["colors"]["B"], "#2fbf71", msg=json.dumps(result))
+        self.assertNotEqual(result["colors"]["C"], "#2fbf71", msg=json.dumps(result))
+        self.assertEqual(result["colors"]["exportedA"], "#2fbf71", msg=json.dumps(result))
+        self.assertEqual(result["colors"]["exportedB"], "#2fbf71", msg=json.dumps(result))
+        self.assertIsNone(result["colors"]["exportedC"], msg=json.dumps(result))
+        self.assertNotEqual(result["colors"]["planning"], "#2fbf71", msg=json.dumps(result))
+        self.assertNotEqual(result["colors"]["delivery"], "#2fbf71", msg=json.dumps(result))
+        self.assertNotEqual(result["colors"]["later"], "#2fbf71", msg=json.dumps(result))
+        self.assertEqual(result["afterExisting"], {"A": "Later", "B": "Later", "C": "Later"}, msg=json.dumps(result))
+        self.assertEqual(result["resetColors"], {"A": None, "B": None}, msg=json.dumps(result))
+        self.assertFalse(result["newInputVisible"], msg=json.dumps(result))
         self.assertEqual(result["buckets"], {"A": "Shared", "B": "Shared", "C": "Later"}, msg=json.dumps(result))
         self.assertEqual(result["selected"], 2, msg=json.dumps(result))
         self.assertEqual(result["selectedNodes"], 2, msg=json.dumps(result))

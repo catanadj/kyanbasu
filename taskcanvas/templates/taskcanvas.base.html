@@ -956,6 +956,33 @@
     border-color:rgba(97,208,255,.42);
     box-shadow:0 0 0 3px rgba(97,208,255,.1);
   }
+  .inspectorSwatches{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .inspectorSwatchReset{
+    width:auto;
+    min-width:86px;
+    padding:0 10px;
+    border-radius:999px;
+    color:var(--fg);
+    background:rgba(255,255,255,.045);
+    font-size:11px;
+    font-weight:700;
+  }
+  .inspectorSwatch{
+    width:24px;
+    height:24px;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,.26);
+    box-shadow:inset 0 0 0 2px rgba(7,13,22,.52);
+    cursor:pointer;
+  }
+  .inspectorSwatch[aria-pressed="true"]{
+    outline:2px solid rgba(255,255,255,.72);
+    outline-offset:2px;
+  }
   body.inspector-collapsed #builderWrap .canvas{right:0;border-right:none}
   body.inspector-collapsed .inspector{
     width:0;
@@ -2816,31 +2843,45 @@ function wireNoteInspectorEditor(note){
     }catch(_){}
   });
 }
+function noteInspectorBucketOptions(notes, allBuckets){
+  notes = Array.isArray(notes) ? notes : (notes ? [notes] : []);
+  return uniqueStrings((allBuckets || []).concat(notes.map(function(note){
+    return note && note.bucket || '(no bucket)';
+  })));
+}
 function noteInspectorBucketInput(note, allBuckets){
-  var buckets = uniqueStrings((allBuckets || []).concat([note && note.bucket || '(no bucket)']));
-  return '<input id="inspectorNoteBucket" class="inspectorInput" type="text" list="inspectorNoteBucketOptions" value="'+escapeHtml(note && note.bucket || '(no bucket)')+'">' +
-    '<datalist id="inspectorNoteBucketOptions">' +
-      buckets.map(function(bucket){ return '<option value="'+escapeHtml(bucket)+'"></option>'; }).join('') +
-    '</datalist>';
+  var buckets = noteInspectorBucketOptions(note, allBuckets);
+  var current = note && note.bucket || '(no bucket)';
+  return '<select id="inspectorNoteBucketSelect" class="inspectorInput">' +
+      buckets.map(function(bucket){ return '<option value="'+escapeHtml(bucket)+'"'+(bucket === current ? ' selected' : '')+'>'+escapeHtml(bucket)+'</option>'; }).join('') +
+      '<option value="__new__">New bucket...</option>' +
+    '</select>' +
+    '<input id="inspectorNoteBucket" class="inspectorInput" type="text" value="'+escapeHtml(current)+'" placeholder="New bucket name" hidden>';
 }
 function noteInspectorBulkBucketInput(notes, allBuckets){
   notes = Array.isArray(notes) ? notes : [];
   var selectedBuckets = uniqueStrings(notes.map(function(note){ return note && note.bucket || '(no bucket)'; }));
   var value = selectedBuckets.length === 1 ? selectedBuckets[0] : '';
-  var buckets = uniqueStrings((allBuckets || []).concat(selectedBuckets));
-  return '<input id="inspectorNoteBucket" class="inspectorInput" type="text" list="inspectorNoteBucketOptions" value="'+escapeHtml(value)+'" placeholder="Move selected notes to bucket">' +
-    '<datalist id="inspectorNoteBucketOptions">' +
-      buckets.map(function(bucket){ return '<option value="'+escapeHtml(bucket)+'"></option>'; }).join('') +
-    '</datalist>';
+  var buckets = noteInspectorBucketOptions(notes, allBuckets);
+  return '<select id="inspectorNoteBucketSelect" class="inspectorInput">' +
+      (value ? '' : '<option value="" selected disabled>Mixed buckets</option>') +
+      buckets.map(function(bucket){ return '<option value="'+escapeHtml(bucket)+'"'+(bucket === value ? ' selected' : '')+'>'+escapeHtml(bucket)+'</option>'; }).join('') +
+      '<option value="__new__">New bucket...</option>' +
+    '</select>' +
+    '<input id="inspectorNoteBucket" class="inspectorInput" type="text" value="" placeholder="New bucket name" hidden>';
 }
 function wireNoteInspectorBucket(notes){
   notes = Array.isArray(notes) ? notes : (notes ? [notes] : []);
   var ids = notes.map(function(note){ return note && note.id; }).filter(Boolean);
   if (!ids.length) return;
+  var select = document.getElementById('inspectorNoteBucketSelect');
   var input = document.getElementById('inspectorNoteBucket');
-  if (!input) return;
-  function applyBucket(){
-    var value = input.value;
+  if (!select || !input) return;
+  function setInputMode(enabled){
+    input.hidden = !enabled;
+    if (enabled) setTimeout(function(){ try{ input.focus(); input.select(); }catch(_){} }, 0);
+  }
+  function applyBucket(value){
     if (!String(value || '').trim()) return;
     try{
       if (window.TaskCanvasNotes && typeof window.TaskCanvasNotes.setBucket === 'function'){
@@ -2849,13 +2890,48 @@ function wireNoteInspectorBucket(notes){
       }
     }catch(_){}
   }
-  input.addEventListener('change', applyBucket);
+  select.addEventListener('change', function(){
+    if (select.value === '__new__'){
+      input.value = '';
+      setInputMode(true);
+      return;
+    }
+    setInputMode(false);
+    applyBucket(select.value);
+  });
+  input.addEventListener('change', function(){ applyBucket(input.value); });
   input.addEventListener('keydown', function(ev){
     if (ev.key === 'Enter'){
       ev.preventDefault();
       input.blur();
-      applyBucket();
+      applyBucket(input.value);
     }
+  });
+}
+function noteInspectorColorSwatches(notes, palette){
+  notes = Array.isArray(notes) ? notes : [];
+  palette = Array.isArray(palette) && palette.length ? palette : [];
+  var explicitColors = uniqueStrings(notes.map(function(note){ return note && note.rawColor; }).filter(Boolean));
+  var colors = uniqueStrings(notes.map(function(note){ return note && note.color; }).filter(Boolean));
+  return '<div class="inspectorSwatches">' +
+    '<button type="button" class="inspectorSwatch inspectorSwatchReset" data-note-color="bucket" aria-label="Use bucket color" aria-pressed="'+(!explicitColors.length ? 'true' : 'false')+'">Bucket</button>' +
+    palette.map(function(color){
+    var active = colors.length === 1 && colors[0] === color;
+    return '<button type="button" class="inspectorSwatch" data-note-color="'+escapeHtml(color)+'" aria-label="Set note color '+escapeHtml(color)+'" aria-pressed="'+(active ? 'true' : 'false')+'" style="background:'+escapeHtml(color)+'"></button>';
+  }).join('') + '</div>';
+}
+function wireNoteInspectorColors(notes){
+  notes = Array.isArray(notes) ? notes : (notes ? [notes] : []);
+  var ids = notes.map(function(note){ return note && note.id; }).filter(Boolean);
+  if (!ids.length) return;
+  var api = window.TaskCanvasNotes || null;
+  if (!api || typeof api.setNoteColor !== 'function') return;
+  Array.from(document.querySelectorAll('[data-note-color]')).forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var color = btn.getAttribute('data-note-color') || '';
+      ids.forEach(function(id){ api.setNoteColor(id, color); });
+      queueInspectorRender(0);
+    });
   });
 }
 function renderNoteInspector(snapshot){
@@ -2927,10 +3003,14 @@ function renderNoteInspector(snapshot){
       noteInspectorRows(selectedNotes) +
     '</div>' +
     '<div class="inspectorGroup">' +
-      '<div class="inspectorLabel">'+(selectedNotes.length === 1 ? 'Bucket' : 'Move to bucket')+'</div>' +
+      '<div class="inspectorLabel">Bucket</div>' +
       (selectedNotes.length === 1
         ? noteInspectorBucketInput(primary, snapshot.buckets || [])
         : noteInspectorBulkBucketInput(selectedNotes, snapshot.buckets || [])) +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">'+(selectedNotes.length === 1 ? 'Color' : 'Set note color')+'</div>' +
+      noteInspectorColorSwatches(selectedNotes, snapshot.palette || []) +
     '</div>' +
     (selectedNotes.length === 1
       ? '<div class="inspectorGroup">' +
@@ -2943,6 +3023,7 @@ function renderNoteInspector(snapshot){
       noteInspectorTaskRows(primary ? primary.taskRefs : []) +
     '</div>';
   wireNoteInspectorBucket(selectedNotes);
+  wireNoteInspectorColors(selectedNotes);
   if (selectedNotes.length === 1){
     wireNoteInspectorEditor(primary);
   }
