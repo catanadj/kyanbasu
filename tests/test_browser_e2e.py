@@ -4448,6 +4448,74 @@ window.addEventListener('load', function(){
         self.assertEqual(result["domNotes"], 2)
         self.assertEqual(result["console"], "")
 
+    def test_canvas_inspector_moves_multiple_notes_to_bucket(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_MULTI_BUCKET_INSPECTOR_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var a = window.TaskCanvasNotes.createNote(180, 240, "A", "", "Planning", {skipAutoLayout:true});
+      var b = window.TaskCanvasNotes.createNote(440, 240, "B", "", "Delivery", {skipAutoLayout:true});
+      var c = window.TaskCanvasNotes.createNote(760, 240, "C", "", "Later", {skipAutoLayout:true});
+      window.TaskCanvasNotes.selectNote(a.id);
+      window.TaskCanvasNotes.selectNote(b.id, true);
+      setTimeout(function(){
+        var before = {
+          title:(document.getElementById('inspectorTitle') || {}).textContent || '',
+          label:document.querySelector('.inspectorLabel:nth-of-type(1)') ? document.querySelector('.inspectorLabel:nth-of-type(1)').textContent : '',
+          bucket:(document.getElementById('inspectorNoteBucket') || {}).value || '',
+          placeholder:(document.getElementById('inspectorNoteBucket') || {}).getAttribute('placeholder') || ''
+        };
+        var bucketInput = document.getElementById('inspectorNoteBucket');
+        bucketInput.value = 'Shared';
+        bucketInput.dispatchEvent(new Event('change', {bubbles:true}));
+        setTimeout(function(){
+          var notes = window.TaskCanvasNotes.notes();
+          var byContent = {};
+          notes.forEach(function(n){ byContent[n.content] = n; });
+          var out = {
+            before:before,
+            buckets: {
+              A: byContent.A && byContent.A.bucket,
+              B: byContent.B && byContent.B.bucket,
+              C: byContent.C && byContent.C.bucket
+            },
+            selected: window.TaskCanvasNotes.selectedNotes().length,
+            selectedNodes: document.querySelectorAll('.tcNoteNode.selected').length,
+            cardBuckets: Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode.selected .tcNoteBucketLabel')).map(function(el){ return el.textContent; }).sort()
+          };
+          var pre = document.createElement('pre');
+          pre.id = 'e2e-out';
+          pre.textContent = JSON.stringify(out);
+          document.body.appendChild(pre);
+        }, 160);
+      }, 120);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["before"]["title"], "2 notes selected", msg=json.dumps(result))
+        self.assertEqual(result["before"]["bucket"], "", msg=json.dumps(result))
+        self.assertEqual(result["before"]["placeholder"], "Move selected notes to bucket", msg=json.dumps(result))
+        self.assertEqual(result["buckets"], {"A": "Shared", "B": "Shared", "C": "Later"}, msg=json.dumps(result))
+        self.assertEqual(result["selected"], 2, msg=json.dumps(result))
+        self.assertEqual(result["selectedNodes"], 2, msg=json.dumps(result))
+        self.assertEqual(result["cardBuckets"], ["Shared", "Shared"], msg=json.dumps(result))
+
     def test_canvas_notes_shift_click_multiselects_notes(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

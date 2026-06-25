@@ -2823,23 +2823,38 @@ function noteInspectorBucketInput(note, allBuckets){
       buckets.map(function(bucket){ return '<option value="'+escapeHtml(bucket)+'"></option>'; }).join('') +
     '</datalist>';
 }
-function wireNoteInspectorBucket(note){
-  if (!note || !note.id) return;
+function noteInspectorBulkBucketInput(notes, allBuckets){
+  notes = Array.isArray(notes) ? notes : [];
+  var selectedBuckets = uniqueStrings(notes.map(function(note){ return note && note.bucket || '(no bucket)'; }));
+  var value = selectedBuckets.length === 1 ? selectedBuckets[0] : '';
+  var buckets = uniqueStrings((allBuckets || []).concat(selectedBuckets));
+  return '<input id="inspectorNoteBucket" class="inspectorInput" type="text" list="inspectorNoteBucketOptions" value="'+escapeHtml(value)+'" placeholder="Move selected notes to bucket">' +
+    '<datalist id="inspectorNoteBucketOptions">' +
+      buckets.map(function(bucket){ return '<option value="'+escapeHtml(bucket)+'"></option>'; }).join('') +
+    '</datalist>';
+}
+function wireNoteInspectorBucket(notes){
+  notes = Array.isArray(notes) ? notes : (notes ? [notes] : []);
+  var ids = notes.map(function(note){ return note && note.id; }).filter(Boolean);
+  if (!ids.length) return;
   var input = document.getElementById('inspectorNoteBucket');
   if (!input) return;
-  input.addEventListener('change', function(){
+  function applyBucket(){
+    var value = input.value;
+    if (!String(value || '').trim()) return;
     try{
       if (window.TaskCanvasNotes && typeof window.TaskCanvasNotes.setBucket === 'function'){
-        window.TaskCanvasNotes.setBucket(note.id, input.value);
+        ids.forEach(function(id){ window.TaskCanvasNotes.setBucket(id, value); });
         queueInspectorRender(0);
       }
     }catch(_){}
-  });
+  }
+  input.addEventListener('change', applyBucket);
   input.addEventListener('keydown', function(ev){
     if (ev.key === 'Enter'){
       ev.preventDefault();
       input.blur();
-      input.dispatchEvent(new Event('change', {bubbles:true}));
+      applyBucket();
     }
   });
 }
@@ -2911,12 +2926,12 @@ function renderNoteInspector(snapshot){
       '<div class="inspectorLabel">'+(selectedNotes.length === 1 ? 'Note' : 'Selected notes')+'</div>' +
       noteInspectorRows(selectedNotes) +
     '</div>' +
-    (selectedNotes.length === 1
-      ? '<div class="inspectorGroup">' +
-          '<div class="inspectorLabel">Bucket</div>' +
-          noteInspectorBucketInput(primary, snapshot.buckets || []) +
-        '</div>'
-      : '') +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">'+(selectedNotes.length === 1 ? 'Bucket' : 'Move to bucket')+'</div>' +
+      (selectedNotes.length === 1
+        ? noteInspectorBucketInput(primary, snapshot.buckets || [])
+        : noteInspectorBulkBucketInput(selectedNotes, snapshot.buckets || [])) +
+    '</div>' +
     (selectedNotes.length === 1
       ? '<div class="inspectorGroup">' +
           '<div class="inspectorLabel">Edit note</div>' +
@@ -2927,8 +2942,8 @@ function renderNoteInspector(snapshot){
       '<div class="inspectorLabel">Linked tasks</div>' +
       noteInspectorTaskRows(primary ? primary.taskRefs : []) +
     '</div>';
+  wireNoteInspectorBucket(selectedNotes);
   if (selectedNotes.length === 1){
-    wireNoteInspectorBucket(primary);
     wireNoteInspectorEditor(primary);
   }
   return true;
