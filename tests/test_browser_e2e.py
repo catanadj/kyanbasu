@@ -3449,6 +3449,7 @@ window.addEventListener('load', function(){
           reflowButton: !!document.getElementById('noteReflowBtn'),
           reflowText: (document.getElementById('noteReflowBtn') || {}).textContent || "",
           actionButtons: document.querySelectorAll('.tcNoteNode [data-note-child]').length,
+          cardLinkButtons: document.querySelectorAll('.tcNoteNode [data-note-link]').length,
           notes: notes.length,
           childLinks: links.filter(function(l){ return l.type === 'child'; }).length,
           childPaths: document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink[data-type="child"]').length,
@@ -3478,6 +3479,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["reflowButton"])
         self.assertEqual(result["reflowText"], "Compact map")
         self.assertEqual(result["actionButtons"], 4)
+        self.assertEqual(result["cardLinkButtons"], 0)
         self.assertEqual(result["notes"], 4)
         self.assertEqual(result["childLinks"], 3)
         self.assertEqual(result["childPaths"], 3)

@@ -1668,7 +1668,7 @@
       el.className = 'tcNoteNode';
       el.setAttribute('data-note-id', n.id);
       el.innerHTML =
-        '<div class="tcNoteHead"><div class="tcNoteMeta"><span class="tcNoteCode" title="Note"></span><button type="button" class="tcNoteBucketLabel" title="Edit bucket"></button><button type="button" class="tcNoteTaskBadge" title="No linked tasks" hidden></button></div><div class="tcNoteActions"><button type="button" data-note-collapse title="Collapse branch">v</button><button type="button" data-note-child title="Add child note">+</button><button type="button" data-note-link title="Link from this note">L</button><button type="button" data-note-delete title="Delete selected notes">x</button></div></div>' +
+        '<div class="tcNoteHead"><div class="tcNoteMeta"><span class="tcNoteCode" title="Note"></span><button type="button" class="tcNoteBucketLabel" title="Edit bucket"></button><button type="button" class="tcNoteTaskBadge" title="No linked tasks" hidden></button></div><div class="tcNoteActions"><button type="button" data-note-collapse title="Collapse branch">v</button><button type="button" data-note-child title="Add child note">+</button><button type="button" data-note-delete title="Delete selected notes">x</button></div></div>' +
         '<div class="tcNoteText" contenteditable="true"></div>';
       st.appendChild(el);
       wireNote(el);
@@ -1734,10 +1734,6 @@
       ev.preventDefault(); ev.stopPropagation();
       if (selectedNoteIds[id] && selectedIds().length > 1) deleteSelectedNotes();
       else deleteNote(id);
-    });
-    qs('[data-note-link]', el).addEventListener('click', function(ev){
-      ev.preventDefault(); ev.stopPropagation();
-      linkMode = true; noteMode = false; syncButtons(); handleLinkClick(id);
     });
     qs('[data-note-child]', el).addEventListener('click', function(ev){
       ev.preventDefault(); ev.stopPropagation();
