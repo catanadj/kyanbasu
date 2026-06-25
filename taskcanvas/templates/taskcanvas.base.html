@@ -942,6 +942,20 @@
     border-color:rgba(97,208,255,.42);
     box-shadow:0 0 0 3px rgba(97,208,255,.1);
   }
+  .inspectorInput{
+    width:100%;
+    padding:10px 12px;
+    border:1px solid var(--line);
+    border-radius:12px;
+    background:rgba(7,13,22,.72);
+    color:var(--fg);
+    font:13px/1.35 var(--font-ui);
+    outline:none;
+  }
+  .inspectorInput:focus{
+    border-color:rgba(97,208,255,.42);
+    box-shadow:0 0 0 3px rgba(97,208,255,.1);
+  }
   body.inspector-collapsed #builderWrap .canvas{right:0;border-right:none}
   body.inspector-collapsed .inspector{
     width:0;
@@ -2802,6 +2816,33 @@ function wireNoteInspectorEditor(note){
     }catch(_){}
   });
 }
+function noteInspectorBucketInput(note, allBuckets){
+  var buckets = uniqueStrings((allBuckets || []).concat([note && note.bucket || '(no bucket)']));
+  return '<input id="inspectorNoteBucket" class="inspectorInput" type="text" list="inspectorNoteBucketOptions" value="'+escapeHtml(note && note.bucket || '(no bucket)')+'">' +
+    '<datalist id="inspectorNoteBucketOptions">' +
+      buckets.map(function(bucket){ return '<option value="'+escapeHtml(bucket)+'"></option>'; }).join('') +
+    '</datalist>';
+}
+function wireNoteInspectorBucket(note){
+  if (!note || !note.id) return;
+  var input = document.getElementById('inspectorNoteBucket');
+  if (!input) return;
+  input.addEventListener('change', function(){
+    try{
+      if (window.TaskCanvasNotes && typeof window.TaskCanvasNotes.setBucket === 'function'){
+        window.TaskCanvasNotes.setBucket(note.id, input.value);
+        queueInspectorRender(0);
+      }
+    }catch(_){}
+  });
+  input.addEventListener('keydown', function(ev){
+    if (ev.key === 'Enter'){
+      ev.preventDefault();
+      input.blur();
+      input.dispatchEvent(new Event('change', {bubbles:true}));
+    }
+  });
+}
 function renderNoteInspector(snapshot){
   var api = window.TaskCanvasNotes || null;
   var selectedNotes = (snapshot && snapshot.selectedNotes) || [];
@@ -2872,6 +2913,12 @@ function renderNoteInspector(snapshot){
     '</div>' +
     (selectedNotes.length === 1
       ? '<div class="inspectorGroup">' +
+          '<div class="inspectorLabel">Bucket</div>' +
+          noteInspectorBucketInput(primary, snapshot.buckets || []) +
+        '</div>'
+      : '') +
+    (selectedNotes.length === 1
+      ? '<div class="inspectorGroup">' +
           '<div class="inspectorLabel">Edit note</div>' +
           '<textarea id="inspectorNoteContent" class="inspectorField" spellcheck="true">'+escapeHtml(primary.content || '')+'</textarea>' +
         '</div>'
@@ -2880,7 +2927,10 @@ function renderNoteInspector(snapshot){
       '<div class="inspectorLabel">Linked tasks</div>' +
       noteInspectorTaskRows(primary ? primary.taskRefs : []) +
     '</div>';
-  if (selectedNotes.length === 1) wireNoteInspectorEditor(primary);
+  if (selectedNotes.length === 1){
+    wireNoteInspectorBucket(primary);
+    wireNoteInspectorEditor(primary);
+  }
   return true;
 }
 function renderInspector(){

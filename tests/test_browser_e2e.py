@@ -4198,13 +4198,18 @@ window.addEventListener('load', function(){
           done:(document.getElementById('inspectorDone') || {}).textContent || '',
           modify:(document.getElementById('inspectorModify') || {}).textContent || '',
           body:(document.getElementById('inspectorBody') || {}).textContent || '',
-          editor:(document.getElementById('inspectorNoteContent') || {}).value || ''
+          editor:(document.getElementById('inspectorNoteContent') || {}).value || '',
+          bucket:(document.getElementById('inspectorNoteBucket') || {}).value || ''
         };
         var editor = document.getElementById('inspectorNoteContent');
         editor.value = 'Plan Alpha updated';
         editor.dispatchEvent(new Event('input', {bubbles:true}));
+        var bucketInput = document.getElementById('inspectorNoteBucket');
+        bucketInput.value = 'Delivery';
+        bucketInput.dispatchEvent(new Event('change', {bubbles:true}));
         var editedNote = window.TaskCanvasNotes.notes().filter(function(n){ return n.id === root.id; })[0] || {};
         var cardText = (document.querySelector('.tcNoteNode[data-note-id="'+root.id+'"] .tcNoteText') || {}).textContent || '';
+        var cardBucket = (document.querySelector('.tcNoteNode[data-note-id="'+root.id+'"] .tcNoteBucketLabel') || {}).textContent || '';
         document.getElementById('inspectorDone').click();
         setTimeout(function(){
           var notes = window.TaskCanvasNotes.notes();
@@ -4225,7 +4230,9 @@ window.addEventListener('load', function(){
             selected:selected.length,
             selectedContent:selectedNote.content || '',
             editedContent:editedNote.content || '',
-            cardText:cardText
+            editedBucket:editedNote.bucket || '',
+            cardText:cardText,
+            cardBucket:cardBucket
           };
           var pre = document.createElement('pre');
           pre.id = 'e2e-out';
@@ -4252,9 +4259,12 @@ window.addEventListener('load', function(){
         self.assertEqual(result["before"]["done"], "Child", msg=json.dumps(result))
         self.assertEqual(result["before"]["modify"], "Sibling", msg=json.dumps(result))
         self.assertEqual(result["before"]["editor"], "Plan Alpha", msg=json.dumps(result))
+        self.assertEqual(result["before"]["bucket"], "Planning", msg=json.dumps(result))
         self.assertIn("Planning", result["before"]["body"], msg=json.dumps(result))
         self.assertEqual(result["editedContent"], "Plan Alpha updated", msg=json.dumps(result))
+        self.assertEqual(result["editedBucket"], "Delivery", msg=json.dumps(result))
         self.assertEqual(result["cardText"], "Plan Alpha updated", msg=json.dumps(result))
+        self.assertEqual(result["cardBucket"], "Delivery", msg=json.dumps(result))
         self.assertEqual(result["notes"], 2, msg=json.dumps(result))
         self.assertEqual(result["links"], 1, msg=json.dumps(result))
         self.assertEqual(result["selected"], 1, msg=json.dumps(result))
