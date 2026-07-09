@@ -376,6 +376,19 @@ window.addEventListener('load', function(){
           value: { writeText: function(txt){ window.__reviewCopiedText = txt; return Promise.resolve(); } }
         });
       }catch(_){}
+      window.__reviewDownloads = [];
+      window.__reviewObjectUrls = {};
+      try{
+        window.URL.createObjectURL = function(blob){
+          var url = 'blob:review-' + Object.keys(window.__reviewObjectUrls).length;
+          window.__reviewObjectUrls[url] = blob;
+          return url;
+        };
+        window.URL.revokeObjectURL = function(url){ window.__reviewRevokedUrl = url; };
+        HTMLAnchorElement.prototype.click = function(){
+          window.__reviewDownloads.push({href:this.href, download:this.download});
+        };
+      }catch(_){}
       window.TASKS.push({
         uuid:"new-review",
         short:"new-rev",
@@ -395,13 +408,24 @@ window.addEventListener('load', function(){
         var current = window.TaskCanvasReview.current();
         var panel = document.getElementById('reviewChangesPanel');
         var copyBtn = document.getElementById('reviewCopyBtn');
+        var downloadBtn = document.getElementById('reviewDownloadBtn');
         if (copyBtn) copyBtn.click();
+        if (downloadBtn) downloadBtn.click();
         setTimeout(function(){
+        var download = (window.__reviewDownloads || [])[0] || {};
+        var blob = window.__reviewObjectUrls ? window.__reviewObjectUrls[download.href] : null;
+        var scriptPromise = blob && blob.text ? blob.text() : Promise.resolve("");
+        scriptPromise.then(function(scriptText){
         var out = {
           open: panel && panel.classList.contains('open'),
           button: !!document.getElementById('reviewChangesBtn'),
           copyButton: !!copyBtn,
           copyDisabled: copyBtn ? copyBtn.disabled : null,
+          downloadButton: !!downloadBtn,
+          downloadDisabled: downloadBtn ? downloadBtn.disabled : null,
+          downloadName: download.download || "",
+          downloadHref: download.href || "",
+          scriptText: scriptText,
           copied: window.__reviewCopiedText || "",
           groups: {
             newTasks: current.groups.newTasks.length,
@@ -416,12 +440,14 @@ window.addEventListener('load', function(){
           },
           text: panel ? panel.textContent : "",
           raw: current.text,
-          preflight: current.preflight
+          preflight: current.preflight,
+          impact: current.impact
         };
         var pre = document.createElement('pre');
         pre.id = 'e2e-out';
         pre.textContent = JSON.stringify(out);
         document.body.appendChild(pre);
+        });
         }, 80);
       }, 120);
     }catch(e){
@@ -442,7 +468,13 @@ window.addEventListener('load', function(){
         self.assertTrue(result["open"])
         self.assertTrue(result["copyButton"])
         self.assertFalse(result["copyDisabled"])
+        self.assertTrue(result["downloadButton"])
+        self.assertFalse(result["downloadDisabled"])
+        self.assertEqual(result["downloadName"], "taskcanvas-reviewed-commands.sh")
+        self.assertTrue(result["downloadHref"].startswith("blob:review-"), msg=json.dumps(result))
         self.assertEqual(result["copied"], result["raw"])
+        self.assertTrue(result["scriptText"].startswith("#!/usr/bin/env bash\nset -euo pipefail"), msg=json.dumps(result))
+        self.assertIn(result["raw"], result["scriptText"])
         self.assertEqual(result["groups"]["newTasks"], 1)
         self.assertEqual(result["groups"]["terminal"], 1)
         self.assertEqual(result["groups"]["completions"], 1)
@@ -453,7 +485,21 @@ window.addEventListener('load', function(){
         self.assertEqual(result["groups"]["dependencyRemoves"], 0)
         self.assertTrue(result["preflight"]["ok"])
         self.assertEqual(result["preflight"]["errors"], 0)
+        self.assertEqual(result["impact"]["counts"]["newTasks"], 1)
+        self.assertEqual(result["impact"]["counts"]["completions"], 1)
+        self.assertEqual(result["impact"]["counts"]["deletions"], 0)
+        self.assertEqual(result["impact"]["counts"]["dependencyAdds"], 1)
+        self.assertEqual(result["impact"]["counts"]["dependencyRemoves"], 0)
+        self.assertGreaterEqual(result["impact"]["counts"]["fieldChanges"], 1)
+        self.assertGreaterEqual(len(result["impact"]["rows"]), 4)
+        self.assertGreaterEqual(len(result["impact"]["destructive"]), 1)
         self.assertIn("Review Changes", result["text"])
+        self.assertIn("Impact Summary", result["text"])
+        self.assertIn("Creates task: Review panel task", result["text"])
+        self.assertIn("aaaaaaaa · Alpha: due date changes to tomorrow", result["text"])
+        self.assertIn("aaaaaaaa · Alpha: will depend on bbbbbbbb · Beta", result["text"])
+        self.assertIn("bbbbbbbb · Beta will be marked done", result["text"])
+        self.assertIn("Needs attention", result["text"])
         self.assertIn("New Tasks", result["text"])
         self.assertIn("Completed Tasks", result["text"])
         self.assertIn("Dependency Adds", result["text"])
@@ -491,6 +537,12 @@ window.addEventListener('load', function(){
           value: { writeText: function(txt){ window.__reviewCopiedText = txt; return Promise.resolve(); } }
         });
       }catch(_){}
+      window.__reviewDownloads = [];
+      try{
+        HTMLAnchorElement.prototype.click = function(){
+          window.__reviewDownloads.push({href:this.href, download:this.download});
+        };
+      }catch(_){}
       window.STAGED_CMDS = [
         "task aaaaaaaa modify depends:aaaaaaaa",
         "task aaaaaaaa modify",
@@ -502,12 +554,17 @@ window.addEventListener('load', function(){
         var current = window.TaskCanvasReview.current();
         var panel = document.getElementById('reviewChangesPanel');
         var copyBtn = document.getElementById('reviewCopyBtn');
+        var downloadBtn = document.getElementById('reviewDownloadBtn');
         if (copyBtn) copyBtn.click();
+        if (downloadBtn) downloadBtn.click();
         setTimeout(function(){
         var out = {
           preflight: current.preflight,
           copyButton: !!copyBtn,
           copyDisabled: copyBtn ? copyBtn.disabled : null,
+          downloadButton: !!downloadBtn,
+          downloadDisabled: downloadBtn ? downloadBtn.disabled : null,
+          downloads: (window.__reviewDownloads || []).length,
           copied: window.__reviewCopiedText || "",
           text: panel ? panel.textContent : ""
         };
@@ -536,6 +593,9 @@ window.addEventListener('load', function(){
         self.assertEqual(result["preflight"]["warnings"], 1, msg=json.dumps(result))
         self.assertTrue(result["copyButton"], msg=json.dumps(result))
         self.assertTrue(result["copyDisabled"], msg=json.dumps(result))
+        self.assertTrue(result["downloadButton"], msg=json.dumps(result))
+        self.assertTrue(result["downloadDisabled"], msg=json.dumps(result))
+        self.assertEqual(result["downloads"], 0, msg=json.dumps(result))
         self.assertEqual(result["copied"], "", msg=json.dumps(result))
         self.assertIn("Preflight blocked", result["text"])
         self.assertIn("Only task commands are supported", result["text"])

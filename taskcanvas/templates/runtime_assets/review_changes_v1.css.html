@@ -27,7 +27,7 @@
   }
   #reviewChangesPanel .reviewTitle { font-weight: 700; font-size: 14px; }
   #reviewChangesPanel .reviewSub { margin-top: 3px; color: #98a8bd; font-size: 12px; }
-  #reviewChangesPanel .reviewActions { display: flex; align-items: center; gap: 8px; }
+  #reviewChangesPanel .reviewActions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
   #reviewChangesPanel .reviewActions button:disabled {
     cursor: not-allowed;
     opacity: .48;
@@ -137,11 +137,57 @@
     border-color: rgba(242,177,74,.32);
     background: rgba(242,177,74,.07);
   }
+  #reviewChangesPanel .reviewImpactMetrics {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+    padding: 10px;
+  }
+  #reviewChangesPanel .reviewImpact .reviewMetric { margin: 0; }
+  #reviewChangesPanel .reviewDestructive {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 0 10px 10px;
+    padding: 9px 10px;
+    border: 1px solid rgba(255,108,124,.28);
+    border-radius: 8px;
+    background: rgba(255,108,124,.08);
+  }
+  #reviewChangesPanel .reviewDestructive strong { color: #ff9aa8; font-size: 12px; }
+  #reviewChangesPanel .reviewDestructive span { color: #b8c5d6; font-size: 12px; text-align: right; }
+  #reviewChangesPanel .reviewImpactRows {
+    display: grid;
+    gap: 1px;
+    border-top: 1px solid rgba(164,185,214,.08);
+  }
+  #reviewChangesPanel .reviewImpactRow {
+    display: grid;
+    grid-template-columns: minmax(110px, 150px) minmax(0, 1fr);
+    gap: 10px;
+    padding: 8px 10px;
+    background: rgba(7,12,22,.42);
+  }
+  #reviewChangesPanel .reviewImpactRow span {
+    color: #8ea1ba;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  #reviewChangesPanel .reviewImpactRow div { color: #e6edf3; font-size: 12px; }
+  #reviewChangesPanel .reviewImpactDanger {
+    background: rgba(255,108,124,.075);
+  }
   @media (max-width: 900px) {
     #reviewChangesPanel { left: 12px; right: 12px; bottom: 14px; max-height: 78vh; }
     #reviewChangesPanel .reviewPreflight { align-items: flex-start; flex-direction: column; }
     #reviewChangesPanel .reviewPreflight span { text-align: left; }
     #reviewChangesPanel .reviewSummary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #reviewChangesPanel .reviewImpactMetrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #reviewChangesPanel .reviewDestructive { align-items: flex-start; flex-direction: column; }
+    #reviewChangesPanel .reviewDestructive span { text-align: left; }
     #reviewChangesPanel .reviewItem { grid-template-columns: 1fr; }
+    #reviewChangesPanel .reviewImpactRow { grid-template-columns: 1fr; }
   }
 </style>
