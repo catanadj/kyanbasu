@@ -370,6 +370,12 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
+      try{
+        Object.defineProperty(navigator, 'clipboard', {
+          configurable: true,
+          value: { writeText: function(txt){ window.__reviewCopiedText = txt; return Promise.resolve(); } }
+        });
+      }catch(_){}
       window.TASKS.push({
         uuid:"new-review",
         short:"new-rev",
@@ -388,23 +394,35 @@ window.addEventListener('load', function(){
       setTimeout(function(){
         var current = window.TaskCanvasReview.current();
         var panel = document.getElementById('reviewChangesPanel');
+        var copyBtn = document.getElementById('reviewCopyBtn');
+        if (copyBtn) copyBtn.click();
+        setTimeout(function(){
         var out = {
           open: panel && panel.classList.contains('open'),
           button: !!document.getElementById('reviewChangesBtn'),
+          copyButton: !!copyBtn,
+          copyDisabled: copyBtn ? copyBtn.disabled : null,
+          copied: window.__reviewCopiedText || "",
           groups: {
             newTasks: current.groups.newTasks.length,
             terminal: current.groups.terminal.length,
+            completions: current.groups.completions.length,
+            deletions: current.groups.deletions.length,
             fieldChanges: current.groups.fieldChanges.length,
             dependencies: current.groups.dependencies.length,
+            dependencyAdds: current.groups.dependencyAdds.length,
+            dependencyRemoves: current.groups.dependencyRemoves.length,
             other: current.groups.other.length
           },
           text: panel ? panel.textContent : "",
-          raw: current.text
+          raw: current.text,
+          preflight: current.preflight
         };
         var pre = document.createElement('pre');
         pre.id = 'e2e-out';
         pre.textContent = JSON.stringify(out);
         document.body.appendChild(pre);
+        }, 80);
       }, 120);
     }catch(e){
       var pre2 = document.createElement('pre');
@@ -422,14 +440,107 @@ window.addEventListener('load', function(){
         result = json.loads(raw)
         self.assertTrue(result["button"])
         self.assertTrue(result["open"])
+        self.assertTrue(result["copyButton"])
+        self.assertFalse(result["copyDisabled"])
+        self.assertEqual(result["copied"], result["raw"])
         self.assertEqual(result["groups"]["newTasks"], 1)
         self.assertEqual(result["groups"]["terminal"], 1)
+        self.assertEqual(result["groups"]["completions"], 1)
+        self.assertEqual(result["groups"]["deletions"], 0)
         self.assertGreaterEqual(result["groups"]["fieldChanges"], 1)
         self.assertEqual(result["groups"]["dependencies"], 1)
+        self.assertEqual(result["groups"]["dependencyAdds"], 1)
+        self.assertEqual(result["groups"]["dependencyRemoves"], 0)
+        self.assertTrue(result["preflight"]["ok"])
+        self.assertEqual(result["preflight"]["errors"], 0)
         self.assertIn("Review Changes", result["text"])
         self.assertIn("New Tasks", result["text"])
-        self.assertIn("Dependency Changes", result["text"])
+        self.assertIn("Completed Tasks", result["text"])
+        self.assertIn("Dependency Adds", result["text"])
+        self.assertIn("aaaaaaaa · Alpha", result["text"])
         self.assertIn("task add 'Review panel task'", result["raw"])
+
+    def test_review_changes_preflight_blocks_invalid_staged_commands(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps(
+            {
+                "tasks": [
+                    {
+                        "uuid": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                        "short": "aaaaaaaa",
+                        "desc": "Alpha",
+                        "project": "Work",
+                        "tags": [],
+                        "has_depends": False,
+                    }
+                ],
+                "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
+                "init_projects": ["Work"],
+            }
+        )
+        html = build_runtime_html(base_html, payload, 1, lambda *_: None)
+
+        harness = """
+<script id="E2E_REVIEW_PREFLIGHT_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      try{
+        Object.defineProperty(navigator, 'clipboard', {
+          configurable: true,
+          value: { writeText: function(txt){ window.__reviewCopiedText = txt; return Promise.resolve(); } }
+        });
+      }catch(_){}
+      window.STAGED_CMDS = [
+        "task aaaaaaaa modify depends:aaaaaaaa",
+        "task aaaaaaaa modify",
+        "rm -rf nope"
+      ];
+      if (typeof updateConsole === 'function') updateConsole();
+      document.getElementById('reviewChangesBtn').click();
+      setTimeout(function(){
+        var current = window.TaskCanvasReview.current();
+        var panel = document.getElementById('reviewChangesPanel');
+        var copyBtn = document.getElementById('reviewCopyBtn');
+        if (copyBtn) copyBtn.click();
+        setTimeout(function(){
+        var out = {
+          preflight: current.preflight,
+          copyButton: !!copyBtn,
+          copyDisabled: copyBtn ? copyBtn.disabled : null,
+          copied: window.__reviewCopiedText || "",
+          text: panel ? panel.textContent : ""
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+        }, 80);
+      }, 120);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 800);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertFalse(result["preflight"]["ok"], msg=json.dumps(result))
+        self.assertEqual(result["preflight"]["errors"], 2, msg=json.dumps(result))
+        self.assertEqual(result["preflight"]["warnings"], 1, msg=json.dumps(result))
+        self.assertTrue(result["copyButton"], msg=json.dumps(result))
+        self.assertTrue(result["copyDisabled"], msg=json.dumps(result))
+        self.assertEqual(result["copied"], "", msg=json.dumps(result))
+        self.assertIn("Preflight blocked", result["text"])
+        self.assertIn("Only task commands are supported", result["text"])
+        self.assertIn("A task cannot depend on itself", result["text"])
+        self.assertIn("Empty modify command", result["text"])
 
     def test_done_delete_toggle_does_not_duplicate_console_commands(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")

@@ -28,10 +28,37 @@
   #reviewChangesPanel .reviewTitle { font-weight: 700; font-size: 14px; }
   #reviewChangesPanel .reviewSub { margin-top: 3px; color: #98a8bd; font-size: 12px; }
   #reviewChangesPanel .reviewActions { display: flex; align-items: center; gap: 8px; }
+  #reviewChangesPanel .reviewActions button:disabled {
+    cursor: not-allowed;
+    opacity: .48;
+  }
   #reviewChangesPanel .reviewBody { overflow: auto; padding: 12px 14px 14px; }
+  #reviewChangesPanel .reviewPreflight {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(164,185,214,.16);
+    background: rgba(255,255,255,.035);
+  }
+  #reviewChangesPanel .reviewPreflight strong { font-size: 13px; }
+  #reviewChangesPanel .reviewPreflight span { color: #a8b6c8; font-size: 12px; text-align: right; }
+  #reviewChangesPanel .reviewPreflightOk {
+    border-color: rgba(66,212,129,.28);
+    background: rgba(66,212,129,.08);
+  }
+  #reviewChangesPanel .reviewPreflightOk strong { color: #8ee6ad; }
+  #reviewChangesPanel .reviewPreflightBlocked {
+    border-color: rgba(255,108,124,.34);
+    background: rgba(255,108,124,.08);
+  }
+  #reviewChangesPanel .reviewPreflightBlocked strong { color: #ff9aa8; }
   #reviewChangesPanel .reviewSummary {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 8px;
     margin-bottom: 12px;
   }
@@ -78,6 +105,12 @@
     border-top: 1px solid rgba(164,185,214,.08);
   }
   #reviewChangesPanel .reviewItemType { color: #9db2cc; font-size: 12px; }
+  #reviewChangesPanel .reviewItemMeta {
+    margin-top: 3px;
+    color: #7f91aa;
+    font-size: 11px;
+    line-height: 1.25;
+  }
   #reviewChangesPanel code,
   #reviewChangesPanel pre {
     font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -106,6 +139,8 @@
   }
   @media (max-width: 900px) {
     #reviewChangesPanel { left: 12px; right: 12px; bottom: 14px; max-height: 78vh; }
+    #reviewChangesPanel .reviewPreflight { align-items: flex-start; flex-direction: column; }
+    #reviewChangesPanel .reviewPreflight span { text-align: left; }
     #reviewChangesPanel .reviewSummary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     #reviewChangesPanel .reviewItem { grid-template-columns: 1fr; }
   }

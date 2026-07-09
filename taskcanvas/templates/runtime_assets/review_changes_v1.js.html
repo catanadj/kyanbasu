@@ -8,25 +8,157 @@
     });
   }
   function qs(s, root){ return (root || document).querySelector(s); }
+  function toast(msg){
+    if (typeof window.showToast === 'function') return window.showToast(msg);
+    try{ console.log(msg); }catch(_){}
+  }
+  function lineCount(text){
+    return String(text || '').split(/\r?\n/).filter(function(line){ return String(line || '').trim(); }).length;
+  }
   function lineId(line){
     var m = /^task\s+(\S+)\s+\S+\b/i.exec(String(line || '').trim());
     return m ? m[1] : '';
+  }
+  function taskForId(id){
+    id = String(id || '');
+    if (!id) return null;
+    try{
+      if (window.TASK_BY_SHORT && window.TASK_BY_SHORT[id]) return window.TASK_BY_SHORT[id];
+      var tasks = Array.isArray(window.TASKS) ? window.TASKS : [];
+      for (var i=0;i<tasks.length;i++){
+        var t = tasks[i] || {};
+        if (t.uuid === id || t.short === id) return t;
+      }
+    }catch(_){}
+    return null;
+  }
+  function taskLabel(id){
+    var t = taskForId(id);
+    if (!t) return id || '';
+    var short = t.short || id || t.uuid || '';
+    var desc = t.desc || t.description || '';
+    return desc ? (short + ' · ' + desc) : short;
+  }
+  function modifierKind(tok){
+    tok = String(tok || '').trim();
+    if (!tok) return '';
+    if (/^depends:-/i.test(tok)) return 'dependencyRemove';
+    if (/^depends:/i.test(tok)) return 'dependencyAdd';
+    if (/^[+-][^\s]+$/.test(tok)) return 'tag';
+    if (/^project:/i.test(tok)) return 'project';
+    if (/^due:/i.test(tok)) return 'due';
+    if (/^priority:/i.test(tok)) return 'priority';
+    return /^[A-Za-z0-9_.-]+:.+$/.test(tok) ? 'field' : 'modifier';
+  }
+  function describeModify(tokens){
+    var counts = {dependencyAdd:0, dependencyRemove:0, tag:0, project:0, due:0, priority:0, field:0, modifier:0};
+    tokens.forEach(function(tok){
+      var k = modifierKind(tok);
+      if (k && typeof counts[k] === 'number') counts[k] += 1;
+    });
+    var parts = [];
+    if (counts.project) parts.push('project');
+    if (counts.due) parts.push('due');
+    if (counts.priority) parts.push('priority');
+    if (counts.tag) parts.push(counts.tag === 1 ? 'tag' : (counts.tag + ' tags'));
+    if (counts.field) parts.push(counts.field === 1 ? 'field' : (counts.field + ' fields'));
+    if (counts.modifier) parts.push(counts.modifier === 1 ? 'modifier' : (counts.modifier + ' modifiers'));
+    return parts.length ? ('Updates ' + parts.join(', ')) : 'Modify task';
+  }
+  function pushUnique(list, severity, message, line){
+    var key = severity + '\n' + message + '\n' + String(line || '');
+    for (var i=0;i<list.length;i++){
+      var item = list[i] || {};
+      if (item._key === key) return;
+    }
+    list.push({_key:key, severity:severity, message:message, line:String(line || '')});
+  }
+  function rawLinePreflight(line, issues){
+    var s = String(line || '').trim();
+    if (!s) return;
+    if (!/^task\b/i.test(s)){
+      pushUnique(issues, 'error', 'Only task commands are supported in staged output.', s);
+      return;
+    }
+    if (/^task\s+(add|log)\s*$/i.test(s)){
+      pushUnique(issues, 'error', 'New task commands need a description.', s);
+      return;
+    }
+    var mTerm = /^task\s+(\S*)\s+(done|delete)\s*$/i.exec(s);
+    if (mTerm && !mTerm[1]) pushUnique(issues, 'error', 'Done/delete commands need a task id.', s);
+    var mMod = /^task\s+(\S+)\s+modify(?:\s+(.*))?$/i.exec(s);
+    if (mMod && !String(mMod[2] || '').trim()){
+      pushUnique(issues, 'warning', 'Empty modify command will not change anything.', s);
+    }
+  }
+  function normalizedLinePreflight(line, issues){
+    var s = String(line || '').trim();
+    if (!s) return;
+    var mod = /^task\s+(\S+)\s+modify(?:\s+(.*))?$/i.exec(s);
+    if (!mod) return;
+    var id = mod[1];
+    var toks = String(mod[2] || '').trim().split(/\s+/).filter(Boolean);
+    toks.forEach(function(tok){
+      if (!/^depends:/i.test(tok)) return;
+      var target = tok.replace(/^depends:-?/i, '');
+      if (!target){
+        pushUnique(issues, 'error', 'Dependency modifier needs a target task id.', s);
+      } else if (target === id){
+        pushUnique(issues, 'error', 'A task cannot depend on itself.', s);
+      }
+    });
+  }
+  function preflight(built){
+    built = built || {};
+    var issues = [];
+    var raw = Array.isArray(built.rawLines) ? built.rawLines : [];
+    var normalized = Array.isArray(built.normalizedLines) ? built.normalizedLines : [];
+    raw.forEach(function(line){ rawLinePreflight(line, issues); });
+    normalized.forEach(function(line){ normalizedLinePreflight(line, issues); });
+    (Array.isArray(built.warnings) ? built.warnings : []).forEach(function(w){
+      pushUnique(issues, 'warning', String(w || 'Command warning'), '');
+    });
+    var errors = issues.filter(function(i){ return i.severity === 'error'; }).length;
+    var warnings = issues.filter(function(i){ return i.severity !== 'error'; }).length;
+    return {
+      issues: issues.map(function(i){ return {severity:i.severity, message:i.message, line:i.line}; }),
+      errors: errors,
+      warnings: warnings,
+      ok: errors === 0
+    };
   }
   function classify(line){
     var s = String(line || '').trim();
     if (!s) return null;
     if (/^task\s+(add|log)\s+/i.test(s)) return [{group:'newTasks', type:/^task\s+log\s+/i.test(s) ? 'New completed task' : 'New task', line:s}];
     var items = [];
-    if (/\sdepends:[^\s]+/i.test(s)) items.push({group:'dependencies', type:'Dependency change', line:s, id:lineId(s)});
     var terminal = /^task\s+(\S+)\s+(done|delete)\s*$/i.exec(s);
-    if (terminal) return [{group:'terminal', type:terminal[2].toLowerCase() === 'done' ? 'Mark done' : 'Delete task', line:s, id:terminal[1]}];
+    if (terminal){
+      var verb = terminal[2].toLowerCase();
+      return [{
+        group:'terminal',
+        subGroup: verb === 'done' ? 'completions' : 'deletions',
+        type: verb === 'done' ? 'Mark done' : 'Delete task',
+        line:s,
+        id:terminal[1],
+        subject: taskLabel(terminal[1])
+      }];
+    }
     var mod = /^task\s+(\S+)\s+modify(?:\s+(.*))?$/i.exec(s);
     if (mod){
       var rest = String(mod[2] || '').trim();
       var toks = rest ? rest.split(/\s+/).filter(Boolean) : [];
-      var hasField = toks.some(function(t){ return /^project:/i.test(t) || /^due:/i.test(t) || /^[+-][^\s]+$/.test(t); });
-      if (hasField) items.push({group:'fieldChanges', type:'Task field change', line:s, id:mod[1]});
-      if (!items.length) items.push({group:'other', type:'Modify task', line:s, id:mod[1]});
+      var depAdds = toks.filter(function(t){ return modifierKind(t) === 'dependencyAdd'; });
+      var depRemoves = toks.filter(function(t){ return modifierKind(t) === 'dependencyRemove'; });
+      var fieldToks = toks.filter(function(t){ var k = modifierKind(t); return k && k !== 'dependencyAdd' && k !== 'dependencyRemove'; });
+      depAdds.forEach(function(tok){
+        items.push({group:'dependencies', subGroup:'dependencyAdds', type:'Add dependency', line:s, id:mod[1], subject:taskLabel(mod[1]), target:tok.replace(/^depends:/i, '')});
+      });
+      depRemoves.forEach(function(tok){
+        items.push({group:'dependencies', subGroup:'dependencyRemoves', type:'Remove dependency', line:s, id:mod[1], subject:taskLabel(mod[1]), target:tok.replace(/^depends:-/i, '')});
+      });
+      if (fieldToks.length) items.push({group:'fieldChanges', type:describeModify(fieldToks), line:s, id:mod[1], subject:taskLabel(mod[1])});
+      if (!items.length) items.push({group:'other', type:'Modify task', line:s, id:mod[1], subject:taskLabel(mod[1])});
       return items;
     }
     if (items.length) return items;
@@ -36,16 +168,19 @@
     var api = window.TaskCanvasCommands || {};
     var built = api && typeof api.build === 'function' ? api.build({runtime: window}) : {text: (typeof buildCommands === 'function' ? String(buildCommands() || '') : ''), warnings: []};
     var normalized = Array.isArray(built.normalizedLines) ? built.normalizedLines : String(built.text || '').split(/\r?\n/).filter(Boolean);
-    var groups = {newTasks:[], terminal:[], fieldChanges:[], dependencies:[], other:[]};
+    var groups = {newTasks:[], terminal:[], completions:[], deletions:[], fieldChanges:[], dependencies:[], dependencyAdds:[], dependencyRemoves:[], other:[]};
     normalized.forEach(function(line){
       var items = classify(line) || [];
       items.forEach(function(item){
-        if (item && groups[item.group]) groups[item.group].push(item);
+        if (!item) return;
+        if (groups[item.group]) groups[item.group].push(item);
+        if (item.subGroup && groups[item.subGroup]) groups[item.subGroup].push(item);
       });
     });
     return {
       text: String(built.text || ''),
       warnings: Array.isArray(built.warnings) ? built.warnings : [],
+      preflight: preflight(built),
       groups: groups,
       total: normalized.length
     };
@@ -53,12 +188,33 @@
   function metric(label, value){
     return '<div class="reviewMetric"><strong>'+esc(value)+'</strong><span>'+esc(label)+'</span></div>';
   }
+  function preflightBanner(pf){
+    pf = pf || {ok:true, errors:0, warnings:0, issues:[]};
+    var cls = pf.ok ? 'reviewPreflightOk' : 'reviewPreflightBlocked';
+    var title = pf.ok ? 'Preflight passed' : 'Preflight blocked';
+    var detail = pf.ok
+      ? (pf.warnings ? (pf.warnings + ' warning' + (pf.warnings === 1 ? '' : 's') + ' to review') : 'Commands are ready for review and copy.')
+      : (pf.errors + ' error' + (pf.errors === 1 ? '' : 's') + ' must be fixed before apply.');
+    return '<div class="reviewPreflight '+cls+'"><strong>'+esc(title)+'</strong><span>'+esc(detail)+'</span></div>';
+  }
   function section(title, items){
     if (!items.length) return '';
     return '<section class="reviewSection"><div class="reviewSectionHead"><span>'+esc(title)+'</span><span class="reviewCount">'+items.length+'</span></div><div class="reviewList">' +
       items.map(function(item){
-        var label = item.id ? (item.type + ' · ' + item.id) : item.type;
-        return '<div class="reviewItem"><div class="reviewItemType">'+esc(label)+'</div><code>'+esc(item.line)+'</code></div>';
+        var label = item.subject ? (item.type + ' · ' + item.subject) : (item.id ? (item.type + ' · ' + item.id) : item.type);
+        var meta = item.target ? '<div class="reviewItemMeta">Target: '+esc(taskLabel(item.target))+'</div>' : '';
+        return '<div class="reviewItem"><div><div class="reviewItemType">'+esc(label)+'</div>'+meta+'</div><code>'+esc(item.line)+'</code></div>';
+      }).join('') +
+      '</div></section>';
+  }
+  function issueSection(preflight){
+    var issues = preflight && Array.isArray(preflight.issues) ? preflight.issues : [];
+    if (!issues.length) return '';
+    return '<section class="reviewSection reviewWarnings"><div class="reviewSectionHead"><span>Preflight Issues</span><span class="reviewCount">'+issues.length+'</span></div><div class="reviewList">' +
+      issues.map(function(issue){
+        var sev = issue.severity === 'error' ? 'Error' : 'Warning';
+        var line = issue.line ? '<code>'+esc(issue.line)+'</code>' : '<code>'+esc(issue.message)+'</code>';
+        return '<div class="reviewItem"><div><div class="reviewItemType">'+esc(sev)+'</div><div class="reviewItemMeta">'+esc(issue.message)+'</div></div>'+line+'</div>';
       }).join('') +
       '</div></section>';
   }
@@ -66,35 +222,80 @@
     var panel = ensurePanel();
     var body = qs('.reviewBody', panel);
     var sub = qs('.reviewSub', panel);
+    var copyBtn = qs('#reviewCopyBtn', panel);
     var data = currentReview();
     var g = data.groups;
     var changed = data.total;
     if (sub) sub.textContent = changed ? (changed + ' command' + (changed === 1 ? '' : 's') + ' staged') : 'No staged changes';
+    if (copyBtn){
+      var blocked = !changed || !(data.preflight && data.preflight.ok);
+      copyBtn.disabled = blocked;
+      copyBtn.title = !changed ? 'No reviewed commands to copy' : (blocked ? 'Fix preflight errors before copying reviewed commands' : 'Copy reviewed Taskwarrior commands');
+    }
     if (!body) return data;
     if (!changed){
       body.innerHTML = '<div class="reviewEmpty">No staged Taskwarrior changes yet.</div>';
       return data;
     }
-    var html = '<div class="reviewSummary">' +
+    var html = preflightBanner(data.preflight) + '<div class="reviewSummary">' +
       metric('New', g.newTasks.length) +
-      metric('Done/Delete', g.terminal.length) +
+      metric('Done', g.completions.length) +
+      metric('Delete', g.deletions.length) +
       metric('Fields', g.fieldChanges.length) +
       metric('Dependencies', g.dependencies.length) +
       metric('Other', g.other.length) +
       '</div>';
-    if (data.warnings.length){
-      html += '<section class="reviewSection reviewWarnings"><div class="reviewSectionHead"><span>Warnings</span><span class="reviewCount">'+data.warnings.length+'</span></div><div class="reviewList">' +
-        data.warnings.map(function(w){ return '<div class="reviewItem"><div class="reviewItemType">Command core</div><code>'+esc(w)+'</code></div>'; }).join('') +
-        '</div></section>';
-    }
+    html += issueSection(data.preflight);
     html += section('New Tasks', g.newTasks);
-    html += section('Completed Or Deleted', g.terminal);
+    html += section('Completed Tasks', g.completions);
+    html += section('Deleted Tasks', g.deletions);
     html += section('Task Field Changes', g.fieldChanges);
-    html += section('Dependency Changes', g.dependencies);
+    html += section('Dependency Adds', g.dependencyAdds);
+    html += section('Dependency Removes', g.dependencyRemoves);
     html += section('Other Commands', g.other);
     html += '<section class="reviewSection"><div class="reviewSectionHead"><span>Raw Commands</span><span class="reviewCount">'+changed+'</span></div><pre>'+esc(data.text)+'</pre></section>';
     body.innerHTML = html;
     return data;
+  }
+  function copyReviewed(){
+    var data = currentReview();
+    if (!data.total){
+      toast('No reviewed commands to copy.');
+      return Promise.resolve(false);
+    }
+    if (!(data.preflight && data.preflight.ok)){
+      toast('Fix preflight errors before copying.');
+      render();
+      return Promise.resolve(false);
+    }
+    var text = String(data.text || '').trim();
+    if (!text){
+      toast('No reviewed commands to copy.');
+      return Promise.resolve(false);
+    }
+    var n = lineCount(text);
+    function ok(){
+      toast('Copied ' + n + ' reviewed command' + (n === 1 ? '.' : 's.'));
+      return true;
+    }
+    function fallback(){
+      try{
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok();
+      }catch(_){
+        try{ alert('Copy failed'); }catch(__){}
+        return false;
+      }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      return navigator.clipboard.writeText(text).then(ok).catch(fallback);
+    }
+    return Promise.resolve(fallback());
   }
   function ensureButton(){
     var existing = document.getElementById('reviewChangesBtn');
@@ -123,12 +324,15 @@
     panel.innerHTML =
       '<div class="reviewHead">' +
         '<div><div class="reviewTitle">Review Changes</div><div class="reviewSub">No staged changes</div></div>' +
-        '<div class="reviewActions"><button id="reviewRefreshBtn" class="btn ghost" type="button">Refresh</button><button id="reviewCloseBtn" class="btn ghost" type="button">Close</button></div>' +
+        '<div class="reviewActions"><button id="reviewCopyBtn" class="btn primary" type="button">Copy reviewed</button><button id="reviewRefreshBtn" class="btn ghost" type="button">Refresh</button><button id="reviewCloseBtn" class="btn ghost" type="button">Close</button></div>' +
       '</div>' +
       '<div class="reviewBody"></div>';
+    var pendingCopyBtn = qs('#reviewCopyBtn', panel);
+    if (pendingCopyBtn) pendingCopyBtn.__copyFullOverride = true;
     document.body.appendChild(panel);
     qs('#reviewCloseBtn', panel).addEventListener('click', function(){ panel.classList.remove('open'); });
     qs('#reviewRefreshBtn', panel).addEventListener('click', function(){ render(); });
+    qs('#reviewCopyBtn', panel).addEventListener('click', function(){ copyReviewed(); });
     render();
     return panel;
   }
@@ -149,7 +353,7 @@
     render();
   }
 
-  window.TaskCanvasReview = { current: currentReview, render: render };
+  window.TaskCanvasReview = { current: currentReview, render: render, copy: copyReviewed };
   window.addEventListener('load', function(){ setTimeout(boot, 80); });
   document.addEventListener('twdata', function(){ setTimeout(boot, 0); });
 })();</script>
