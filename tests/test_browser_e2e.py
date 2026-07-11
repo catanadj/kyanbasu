@@ -755,6 +755,16 @@ window.addEventListener('load', function(){
           links: document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink').length,
           apiNotes: window.TaskCanvasNotes.notes().length,
           apiLinks: window.TaskCanvasNotes.links().length,
+          coreVersion: window.TaskCanvasNotesCore && window.TaskCanvasNotesCore.version,
+          rejectsSelfChild: !window.TaskCanvasNotesCore.validateLink(
+            {from:a.id, to:a.id, type:'child'},
+            [],
+            {notes:window.TaskCanvasNotes.notes()}
+          ).ok,
+          legacyContent: window.TaskCanvasNotesCore.normalizeNote(
+            {id:'legacy', title:'Old title', body:'Old body'},
+            {}
+          ).content,
           firstContent: window.TaskCanvasNotes.notes()[0] && window.TaskCanvasNotes.notes()[0].content,
           hasTitleKey: window.TaskCanvasNotes.notes().some(function(n){ return Object.prototype.hasOwnProperty.call(n, 'title'); }),
           console: (document.getElementById('consoleText') || {}).value || "",
@@ -787,6 +797,9 @@ window.addEventListener('load', function(){
         self.assertEqual(result["links"], 1)
         self.assertEqual(result["apiNotes"], 2)
         self.assertEqual(result["apiLinks"], 1)
+        self.assertEqual(result["coreVersion"], 1)
+        self.assertTrue(result["rejectsSelfChild"])
+        self.assertEqual(result["legacyContent"], "Old title\nOld body")
         self.assertEqual(result["firstContent"], "Plan\nBreak work down")
         self.assertFalse(result["hasTitleKey"])
         self.assertEqual(result["console"], "")

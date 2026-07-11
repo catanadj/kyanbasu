@@ -90,6 +90,7 @@ def build_runtime_html(
         ("FEATURE_SINGLE_CONSOLE_AUGMENT_V1", "single_console_augment_v1.js.html"),
         ("__FEATURE_REVIEW_CHANGES_V1__", "review_changes_v1.js.html"),
         ("__FEATURE_CANVAS_NAVIGATOR_V1__", "canvas_navigator_v1.js.html"),
+        ("FEATURE_CANVAS_NOTES_CORE_V1", "canvas_notes_core_v1.js.html"),
         ("__FEATURE_CANVAS_NOTES_V1__", "canvas_notes_v1.js.html"),
         ("__CANVAS_WORKBENCHES_V1__", "canvas_workbenches_v1.js.html"),
         ("__FEATURE_CONSOLE_EDITOR_V1__", "console_editor_v1.js.html"),

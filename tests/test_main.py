@@ -228,6 +228,7 @@ class TestMainFlow(unittest.TestCase):
                 'id="FEATURE_CANVAS_NAVIGATOR_V1_CSS"',
                 'id="FEATURE_CANVAS_NAVIGATOR_V1"',
                 'id="FEATURE_CANVAS_NOTES_V1_CSS"',
+                'id="FEATURE_CANVAS_NOTES_CORE_V1"',
                 'id="FEATURE_CANVAS_NOTES_V1"',
                 'id="FEATURE_CONSOLE_EDITOR_V1_CSS"',
                 'id="FEATURE_CONSOLE_EDITOR_V1"',

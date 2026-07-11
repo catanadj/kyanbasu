@@ -22,6 +22,8 @@
   var noteSearchQuery = '';
   var noteSearchMatches = [];
   var pendingRepairFeedback = null;
+  var NoteCore = window.TaskCanvasNotesCore;
+  if (!NoteCore) throw new Error('TaskCanvasNotesCore must load before canvas notes');
   var bucketPalette = [
     '#5b8def', '#2fbf71', '#f2b84b', '#ec7a72', '#9b7df2',
     '#42c5c7', '#f18ab2', '#93c85a', '#f08b3e', '#4d8bff'
@@ -145,7 +147,7 @@
     el.setAttribute('data-state', stateName || 'idle');
   }
   function noteLinkKey(link){
-    return link ? [link.from || '', link.to || '', link.type || 'manual'].join('::') : '';
+    return NoteCore.linkKey(link);
   }
   function childLinksFrom(id){
     return links.filter(function(l){ return l && l.type === 'child' && l.from === id && noteById(l.to); });
@@ -159,36 +161,12 @@
     }
     return null;
   }
-  function childPathExists(startId, targetId, sourceLinks, exceptKey){
-    var stack = [startId];
-    var seen = {};
-    while (stack.length){
-      var id = stack.pop();
-      if (id === targetId) return true;
-      if (seen[id]) continue;
-      seen[id] = true;
-      sourceLinks.forEach(function(l){
-        if (!l || l.type !== 'child' || noteLinkKey(l) === exceptKey || l.from !== id) return;
-        stack.push(l.to);
-      });
-    }
-    return false;
-  }
   function validateLink(from, to, type, sourceLinks, exceptKey, validIds){
-    type = type || 'manual';
-    sourceLinks = sourceLinks || links;
-    var exists = validIds ? function(id){ return !!validIds[id]; } : function(id){ return !!noteById(id); };
-    if (!from || !to || !exists(from) || !exists(to)) return {ok:false, reason:'Cannot link missing notes.'};
-    if (from === to) return {ok:false, reason:type === 'child' ? 'A note cannot be its own child.' : 'A note cannot link to itself.'};
-    if (sourceLinks.some(function(l){
-      return l && noteLinkKey(l) !== exceptKey && l.from === from && l.to === to;
-    })) return {ok:false, reason:'These notes are already linked.'};
-    if (type !== 'child') return {ok:true, reason:''};
-    if (sourceLinks.some(function(l){
-      return l && noteLinkKey(l) !== exceptKey && l.type === 'child' && l.to === to;
-    })) return {ok:false, reason:'This note already has a parent.'};
-    if (childPathExists(to, from, sourceLinks, exceptKey)) return {ok:false, reason:'This child link would create a cycle.'};
-    return {ok:true, reason:''};
+    return NoteCore.validateLink(
+      {from:from, to:to, type:type || 'manual'},
+      sourceLinks || links,
+      {exceptKey:exceptKey, validIds:validIds, notes:notes}
+    );
   }
   function addNoteLink(from, to, type){
     type = type || 'manual';
@@ -198,80 +176,13 @@
     return true;
   }
   function sanitizeLinks(rawLinks, validIds){
-    var accepted = [];
-    var dropped = 0;
-    var droppedChild = 0;
-    (Array.isArray(rawLinks) ? rawLinks : []).forEach(function(l){
-      if (!l || typeof l !== 'object') { dropped++; return; }
-      var candidate = {from:l.from, to:l.to, type:l.type || 'manual'};
-      if (!validateLink(candidate.from, candidate.to, candidate.type, accepted, null, validIds).ok){
-        dropped++;
-        if (candidate.type === 'child') droppedChild++;
-        return;
-      }
-      accepted.push(candidate);
-    });
-    return {links:accepted, dropped:dropped, droppedChild:droppedChild};
-  }
-  function noteCodePrefix(index){
-    var n = Math.max(0, index);
-    var out = '';
-    do {
-      out = String.fromCharCode(65 + (n % 26)) + out;
-      n = Math.floor(n / 26) - 1;
-    } while (n >= 0);
-    return out;
-  }
-  function sortRootsForLabels(items){
-    return items.slice().sort(function(a, b){
-      var ax = toInt(a.x, 160), bx = toInt(b.x, 160);
-      if (ax !== bx) return ax - bx;
-      var ay = toInt(a.y, 160), by = toInt(b.y, 160);
-      if (ay !== by) return ay - by;
-      return String(a.id).localeCompare(String(b.id));
-    });
-  }
-  function sortChildrenForLabels(items){
-    return items.slice().sort(function(a, b){
-      var ay = toInt(a.y, 160), by = toInt(b.y, 160);
-      if (ay !== by) return ay - by;
-      var ax = toInt(a.x, 160), bx = toInt(b.x, 160);
-      if (ax !== bx) return ax - bx;
-      return String(a.id).localeCompare(String(b.id));
-    });
+    return NoteCore.sanitizeLinks(rawLinks, validIds);
   }
   function computeNoteLabels(){
-    var labels = {};
-    var roots = sortRootsForLabels(notes.filter(function(n){ return n && !hasChildParent(n.id); }));
-    function walk(n, label, seen){
-      if (!n || seen[n.id]) return;
-      seen[n.id] = true;
-      labels[n.id] = label;
-      var kids = sortChildrenForLabels(childLinksFrom(n.id).map(function(l){ return noteById(l.to); }).filter(Boolean));
-      kids.forEach(function(child, idx){ walk(child, label + '-' + (idx + 1), Object.assign({}, seen)); });
-    }
-    roots.forEach(function(root, idx){ walk(root, noteCodePrefix(idx) + '1', {}); });
-    return labels;
+    return NoteCore.computeLabels(notes, links);
   }
   function noteOutline(){
-    var labels = computeNoteLabels();
-    function pack(n, depth, seen){
-      if (!n || seen[n.id]) return null;
-      seen[n.id] = true;
-      var kids = sortChildrenForLabels(childLinksFrom(n.id).map(function(l){ return noteById(l.to); }).filter(Boolean));
-      return {
-        id: n.id,
-        label: labels[n.id] || '',
-        content: n.content || '',
-        bucket: noteBucket(n),
-        depth: depth || 0,
-        collapsed: !!n.collapsed,
-        children: kids.map(function(child){ return pack(child, (depth || 0) + 1, Object.assign({}, seen)); }).filter(Boolean)
-      };
-    }
-    return sortRootsForLabels(notes.filter(function(n){ return n && !hasChildParent(n.id); })).map(function(root){
-      return pack(root, 0, {});
-    }).filter(Boolean);
+    return NoteCore.outline(notes, links);
   }
   function syncNoteLabels(){
     var labels = computeNoteLabels();
@@ -284,28 +195,8 @@
     });
     return labels;
   }
-  function noteSearchHaystack(note, label){
-    return [
-      label || '',
-      note && note.content || '',
-      noteBucket(note)
-    ].join(' ').toLowerCase();
-  }
   function searchNotes(query){
-    query = String(query || '').trim().toLowerCase();
-    if (!query) return [];
-    var labels = computeNoteLabels();
-    return notes.filter(function(n){
-      return noteSearchHaystack(n, labels[n.id]).indexOf(query) !== -1;
-    }).sort(function(a, b){
-      var al = labels[a.id] || '';
-      var bl = labels[b.id] || '';
-      var ac = noteSearchHaystack(a, al).indexOf(query);
-      var bc = noteSearchHaystack(b, bl).indexOf(query);
-      if (ac !== bc) return ac - bc;
-      if (al !== bl) return al.localeCompare(bl);
-      return String(a.id).localeCompare(String(b.id));
-    });
+    return NoteCore.search(notes, links, query);
   }
   function syncNoteSearchHighlights(){
     var ids = Object.create(null);
@@ -382,17 +273,13 @@
     return true;
   }
   function noteText(title, body){
-    var a = String(title || '').trim();
-    var b = String(body || '').trim();
-    if (a && b) return a + '\n' + b;
-    return a || b || 'New note';
+    return NoteCore.noteText(title, body);
   }
   function commandText(s){
     return String(s || '').replace(/\s+/g, ' ').trim() || 'New note';
   }
   function bucketText(bucket){
-    var text = String(bucket || '').trim();
-    return text || '(no bucket)';
+    return NoteCore.bucketText(bucket);
   }
   function bucketCollapsed(bucket){
     return !!bucketUiState[bucketText(bucket)];
@@ -553,31 +440,13 @@
     return true;
   }
   function normalizeNote(n){
-    n = n || {};
-    if (!n.id) n.id = uid();
-    if (!n.content) n.content = noteText(n.title, n.body);
-    delete n.title;
-    delete n.body;
-    n.x = toInt(n.x, 160);
-    n.y = toInt(n.y, 160);
-    n.bucket = bucketText(n.bucket);
-    n.color = String(n.color || '').trim();
-    if (!n.color || (bucketPalette.indexOf(n.color) === -1 && !hexToRgb(n.color))) delete n.color;
-    n.collapsed = !!n.collapsed;
-    n.taskRefs = Array.isArray(n.taskRefs) ? n.taskRefs.map(normalizeTaskRef).filter(Boolean) : [];
-    return n;
+    return NoteCore.normalizeNote(n, {
+      uid: uid,
+      isValidColor: function(color){ return bucketPalette.indexOf(color) !== -1 || !!hexToRgb(color); }
+    });
   }
   function normalizeTaskRef(ref){
-    if (!ref) return null;
-    var uuid = String(ref.uuid || '').trim();
-    var short = String(ref.short || '').trim();
-    if (!uuid && !short) return null;
-    return {
-      uuid: uuid,
-      short: short,
-      desc: String(ref.desc || '').trim(),
-      project: String(ref.project || '').trim()
-    };
+    return NoteCore.normalizeTaskRef(ref);
   }
   function taskById(id){
     id = String(id || '');

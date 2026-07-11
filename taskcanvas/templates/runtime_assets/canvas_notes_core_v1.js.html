@@ -1,0 +1,241 @@
+<script id="FEATURE_CANVAS_NOTES_CORE_V1">
+(function(){
+  if (window.TaskCanvasNotesCore) return;
+
+  function toInt(value, fallback){
+    var parsed = parseInt(value, 10);
+    return isFinite(parsed) ? parsed : fallback;
+  }
+
+  function bucketText(bucket){
+    var text = String(bucket || '').trim();
+    return text || '(no bucket)';
+  }
+
+  function noteText(title, body){
+    var first = String(title || '').trim();
+    var second = String(body || '').trim();
+    if (first && second) return first + '\n' + second;
+    return first || second || 'New note';
+  }
+
+  function normalizeTaskRef(ref){
+    if (!ref) return null;
+    var uuid = String(ref.uuid || '').trim();
+    var short = String(ref.short || '').trim();
+    if (!uuid && !short) return null;
+    return {
+      uuid: uuid,
+      short: short,
+      desc: String(ref.desc || '').trim(),
+      project: String(ref.project || '').trim()
+    };
+  }
+
+  function normalizeNote(note, options){
+    note = note || {};
+    options = options || {};
+    if (!note.id) note.id = options.uid ? options.uid() : '';
+    if (!note.content) note.content = noteText(note.title, note.body);
+    delete note.title;
+    delete note.body;
+    note.x = toInt(note.x, 160);
+    note.y = toInt(note.y, 160);
+    note.bucket = bucketText(note.bucket);
+    note.color = String(note.color || '').trim();
+    if (!note.color || (options.isValidColor && !options.isValidColor(note.color))) delete note.color;
+    note.collapsed = !!note.collapsed;
+    note.taskRefs = Array.isArray(note.taskRefs) ? note.taskRefs.map(normalizeTaskRef).filter(Boolean) : [];
+    return note;
+  }
+
+  function linkKey(link){
+    return link ? [link.from || '', link.to || '', link.type || 'manual'].join('::') : '';
+  }
+
+  function childPathExists(startId, targetId, links, exceptKey){
+    var stack = [startId];
+    var seen = Object.create(null);
+    while (stack.length){
+      var id = stack.pop();
+      if (id === targetId) return true;
+      if (seen[id]) continue;
+      seen[id] = true;
+      links.forEach(function(link){
+        if (!link || link.type !== 'child' || linkKey(link) === exceptKey || link.from !== id) return;
+        stack.push(link.to);
+      });
+    }
+    return false;
+  }
+
+  function validIdChecker(notes, validIds){
+    if (validIds) return function(id){ return !!validIds[id]; };
+    var ids = Object.create(null);
+    (Array.isArray(notes) ? notes : []).forEach(function(note){ if (note && note.id) ids[note.id] = true; });
+    return function(id){ return !!ids[id]; };
+  }
+
+  function validateLink(candidate, links, options){
+    candidate = candidate || {};
+    links = Array.isArray(links) ? links : [];
+    options = options || {};
+    var from = candidate.from;
+    var to = candidate.to;
+    var type = candidate.type || 'manual';
+    var exceptKey = options.exceptKey || null;
+    var exists = validIdChecker(options.notes, options.validIds);
+    if (!from || !to || !exists(from) || !exists(to)) return {ok:false, reason:'Cannot link missing notes.'};
+    if (from === to) return {ok:false, reason:type === 'child' ? 'A note cannot be its own child.' : 'A note cannot link to itself.'};
+    if (links.some(function(link){
+      return link && linkKey(link) !== exceptKey && link.from === from && link.to === to;
+    })) return {ok:false, reason:'These notes are already linked.'};
+    if (type !== 'child') return {ok:true, reason:''};
+    if (links.some(function(link){
+      return link && linkKey(link) !== exceptKey && link.type === 'child' && link.to === to;
+    })) return {ok:false, reason:'This note already has a parent.'};
+    if (childPathExists(to, from, links, exceptKey)) return {ok:false, reason:'This child link would create a cycle.'};
+    return {ok:true, reason:''};
+  }
+
+  function sanitizeLinks(rawLinks, validIds){
+    var accepted = [];
+    var dropped = 0;
+    var droppedChild = 0;
+    (Array.isArray(rawLinks) ? rawLinks : []).forEach(function(link){
+      if (!link || typeof link !== 'object') { dropped++; return; }
+      var candidate = {from:link.from, to:link.to, type:link.type || 'manual'};
+      if (!validateLink(candidate, accepted, {validIds:validIds}).ok){
+        dropped++;
+        if (candidate.type === 'child') droppedChild++;
+        return;
+      }
+      accepted.push(candidate);
+    });
+    return {links:accepted, dropped:dropped, droppedChild:droppedChild};
+  }
+
+  function noteCodePrefix(index){
+    var value = Math.max(0, index);
+    var output = '';
+    do {
+      output = String.fromCharCode(65 + (value % 26)) + output;
+      value = Math.floor(value / 26) - 1;
+    } while (value >= 0);
+    return output;
+  }
+
+  function sortRoots(items){
+    return items.slice().sort(function(a, b){
+      var ax = toInt(a.x, 160), bx = toInt(b.x, 160);
+      if (ax !== bx) return ax - bx;
+      var ay = toInt(a.y, 160), by = toInt(b.y, 160);
+      if (ay !== by) return ay - by;
+      return String(a.id).localeCompare(String(b.id));
+    });
+  }
+
+  function sortChildren(items){
+    return items.slice().sort(function(a, b){
+      var ay = toInt(a.y, 160), by = toInt(b.y, 160);
+      if (ay !== by) return ay - by;
+      var ax = toInt(a.x, 160), bx = toInt(b.x, 160);
+      if (ax !== bx) return ax - bx;
+      return String(a.id).localeCompare(String(b.id));
+    });
+  }
+
+  function graphIndex(notes, links){
+    var byId = Object.create(null);
+    var parentByChild = Object.create(null);
+    var childrenByParent = Object.create(null);
+    notes.forEach(function(note){ if (note && note.id) byId[note.id] = note; });
+    links.forEach(function(link){
+      if (!link || link.type !== 'child' || !byId[link.from] || !byId[link.to]) return;
+      parentByChild[link.to] = link.from;
+      if (!childrenByParent[link.from]) childrenByParent[link.from] = [];
+      childrenByParent[link.from].push(byId[link.to]);
+    });
+    Object.keys(childrenByParent).forEach(function(id){ childrenByParent[id] = sortChildren(childrenByParent[id]); });
+    return {byId:byId, parentByChild:parentByChild, childrenByParent:childrenByParent};
+  }
+
+  function computeLabels(notes, links){
+    notes = Array.isArray(notes) ? notes : [];
+    links = Array.isArray(links) ? links : [];
+    var index = graphIndex(notes, links);
+    var labels = {};
+    var roots = sortRoots(notes.filter(function(note){ return note && !index.parentByChild[note.id]; }));
+    function walk(note, label, seen){
+      if (!note || seen[note.id]) return;
+      var nextSeen = Object.assign({}, seen);
+      nextSeen[note.id] = true;
+      labels[note.id] = label;
+      (index.childrenByParent[note.id] || []).forEach(function(child, childIndex){
+        walk(child, label + '-' + (childIndex + 1), nextSeen);
+      });
+    }
+    roots.forEach(function(root, rootIndex){ walk(root, noteCodePrefix(rootIndex) + '1', {}); });
+    return labels;
+  }
+
+  function outline(notes, links){
+    notes = Array.isArray(notes) ? notes : [];
+    links = Array.isArray(links) ? links : [];
+    var index = graphIndex(notes, links);
+    var labels = computeLabels(notes, links);
+    function pack(note, depth, seen){
+      if (!note || seen[note.id]) return null;
+      var nextSeen = Object.assign({}, seen);
+      nextSeen[note.id] = true;
+      return {
+        id: note.id,
+        label: labels[note.id] || '',
+        content: note.content || '',
+        bucket: bucketText(note.bucket),
+        depth: depth || 0,
+        collapsed: !!note.collapsed,
+        children: (index.childrenByParent[note.id] || []).map(function(child){
+          return pack(child, (depth || 0) + 1, nextSeen);
+        }).filter(Boolean)
+      };
+    }
+    return sortRoots(notes.filter(function(note){ return note && !index.parentByChild[note.id]; })).map(function(root){
+      return pack(root, 0, {});
+    }).filter(Boolean);
+  }
+
+  function search(notes, links, query){
+    notes = Array.isArray(notes) ? notes : [];
+    query = String(query || '').trim().toLowerCase();
+    if (!query) return [];
+    var labels = computeLabels(notes, links);
+    function haystack(note){
+      return [labels[note.id] || '', note.content || '', bucketText(note.bucket)].join(' ').toLowerCase();
+    }
+    return notes.filter(function(note){ return haystack(note).indexOf(query) !== -1; }).sort(function(a, b){
+      var al = labels[a.id] || '';
+      var bl = labels[b.id] || '';
+      var ac = haystack(a).indexOf(query);
+      var bc = haystack(b).indexOf(query);
+      if (ac !== bc) return ac - bc;
+      if (al !== bl) return al.localeCompare(bl);
+      return String(a.id).localeCompare(String(b.id));
+    });
+  }
+
+  window.TaskCanvasNotesCore = {
+    version: 1,
+    bucketText: bucketText,
+    noteText: noteText,
+    normalizeTaskRef: normalizeTaskRef,
+    normalizeNote: normalizeNote,
+    linkKey: linkKey,
+    validateLink: validateLink,
+    sanitizeLinks: sanitizeLinks,
+    computeLabels: computeLabels,
+    outline: outline,
+    search: search
+  };
+})();
+</script>
