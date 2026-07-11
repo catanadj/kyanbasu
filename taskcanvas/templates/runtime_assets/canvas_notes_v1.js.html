@@ -23,7 +23,9 @@
   var noteSearchMatches = [];
   var pendingRepairFeedback = null;
   var NoteCore = window.TaskCanvasNotesCore;
+  var NoteStorage = window.TaskCanvasStorage;
   if (!NoteCore) throw new Error('TaskCanvasNotesCore must load before canvas notes');
+  if (!NoteStorage) throw new Error('TaskCanvasStorage must load before canvas notes');
   var bucketPalette = [
     '#5b8def', '#2fbf71', '#f2b84b', '#ec7a72', '#9b7df2',
     '#42c5c7', '#f18ab2', '#93c85a', '#f08b3e', '#4d8bff'
@@ -35,28 +37,20 @@
   function stage(){ return document.getElementById('builderStage'); }
   function canvas(){ return qs('#builderWrap .canvas'); }
   function toInt(v, d){ var n = parseInt(v, 10); return isFinite(n) ? n : d; }
-  function key(){
-    var seed = 'fallback';
-    try{
-      if (window.DATA && Array.isArray(DATA.tasks)){
-        seed = DATA.tasks.map(function(t){ return t && (t.uuid || t.short || t.desc || ''); }).join('|').slice(0, 240) || 'empty';
-      } else if (location && location.pathname) {
-        seed = location.pathname;
-      }
-    }catch(_){}
-    return 'taskcanvas:notes:v1:' + seed;
+  function legacyKey(){
+    return NoteStorage.legacyNotesBaseKey();
   }
   function bucketStateKey(){
-    return key() + ':buckets';
+    return legacyKey() + ':buckets';
   }
   function bucketLayoutKey(){
-    return key() + ':bucket-layout';
+    return legacyKey() + ':bucket-layout';
   }
   function bucketFollowKey(){
-    return key() + ':bucket-follow';
+    return legacyKey() + ':bucket-follow';
   }
   function bucketColorKey(){
-    return key() + ':bucket-color';
+    return legacyKey() + ':bucket-color';
   }
   function uid(){ return 'note-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7); }
   function noteById(id){
@@ -293,9 +287,8 @@
   }
   function loadBucketState(){
     try{
-      var raw = localStorage.getItem(bucketStateKey());
-      if (!raw) return;
-      var parsed = JSON.parse(raw);
+      var parsed = NoteStorage.getJSON('note-buckets', null, bucketStateKey());
+      if (!parsed) return;
       bucketUiState = Object.create(null);
       Object.keys(parsed || {}).forEach(function(k){
         bucketUiState[bucketText(k)] = !!parsed[k];
@@ -303,13 +296,12 @@
     }catch(_){ bucketUiState = Object.create(null); }
   }
   function saveBucketState(){
-    try{ localStorage.setItem(bucketStateKey(), JSON.stringify(bucketUiState)); }catch(_){}
+    return NoteStorage.setJSON('note-buckets', bucketUiState);
   }
   function loadBucketLayoutState(){
     try{
-      var raw = localStorage.getItem(bucketLayoutKey());
-      if (!raw) return;
-      var parsed = JSON.parse(raw);
+      var parsed = NoteStorage.getJSON('note-bucket-layout', null, bucketLayoutKey());
+      if (!parsed) return;
       bucketLayoutState = Object.create(null);
       Object.keys(parsed || {}).forEach(function(k){
         var entry = parsed[k] || {};
@@ -321,13 +313,12 @@
     }catch(_){ bucketLayoutState = Object.create(null); }
   }
   function saveBucketLayoutState(){
-    try{ localStorage.setItem(bucketLayoutKey(), JSON.stringify(bucketLayoutState)); }catch(_){}
+    return NoteStorage.setJSON('note-bucket-layout', bucketLayoutState);
   }
   function loadBucketFollowState(){
     try{
-      var raw = localStorage.getItem(bucketFollowKey());
-      if (!raw) return;
-      var parsed = JSON.parse(raw);
+      var parsed = NoteStorage.getJSON('note-bucket-follow', null, bucketFollowKey());
+      if (!parsed) return;
       bucketFollowState = Object.create(null);
       Object.keys(parsed || {}).forEach(function(k){
         bucketFollowState[bucketText(k)] = parsed[k] !== false;
@@ -335,13 +326,12 @@
     }catch(_){ bucketFollowState = Object.create(null); }
   }
   function saveBucketFollowState(){
-    try{ localStorage.setItem(bucketFollowKey(), JSON.stringify(bucketFollowState)); }catch(_){}
+    return NoteStorage.setJSON('note-bucket-follow', bucketFollowState);
   }
   function loadBucketColorState(){
     try{
-      var raw = localStorage.getItem(bucketColorKey());
-      if (!raw) return;
-      var parsed = JSON.parse(raw);
+      var parsed = NoteStorage.getJSON('note-bucket-color', null, bucketColorKey());
+      if (!parsed) return;
       bucketColorState = Object.create(null);
       Object.keys(parsed || {}).forEach(function(k){
         var color = String(parsed[k] || '').trim();
@@ -350,7 +340,7 @@
     }catch(_){ bucketColorState = Object.create(null); }
   }
   function saveBucketColorState(){
-    try{ localStorage.setItem(bucketColorKey(), JSON.stringify(bucketColorState)); }catch(_){}
+    return NoteStorage.setJSON('note-bucket-color', bucketColorState);
   }
   function bucketLayout(bucket){
     bucket = bucketText(bucket);
@@ -617,20 +607,18 @@
     saveTimer = setTimeout(saveNow, 180);
   }
   function saveNow(){
-    var saved = true;
-    try{ localStorage.setItem(key(), JSON.stringify({notes:notes, links:links})); }catch(_){ saved = false; }
-    saveBucketState();
-    saveBucketLayoutState();
-    saveBucketFollowState();
-    saveBucketColorState();
+    var saved = NoteStorage.setJSON('notes', {notes:notes, links:links}, {snapshot:true});
+    saved = saveBucketState() && saved;
+    saved = saveBucketLayoutState() && saved;
+    saved = saveBucketFollowState() && saved;
+    saved = saveBucketColorState() && saved;
     setNoteSaveStatus(saved ? 'Saved' : 'Save failed', saved ? 'saved' : 'error');
     if (!saved) noteFeedback('Could not save planning notes.');
   }
   function loadState(){
     try{
-      var raw = localStorage.getItem(key());
-      if (!raw) return;
-      var parsed = JSON.parse(raw);
+      var parsed = NoteStorage.getJSON('notes', null, legacyKey());
+      if (!parsed) return;
       notes = Array.isArray(parsed.notes) ? parsed.notes : [];
       notes = notes.map(normalizeNote);
       var ids = {};
@@ -638,7 +626,7 @@
       var sanitized = sanitizeLinks(parsed.links, ids);
       links = sanitized.links;
       if (sanitized.dropped){
-        try{ localStorage.setItem(key(), JSON.stringify({notes:notes, links:links})); }catch(_){}
+        NoteStorage.setJSON('notes', {notes:notes, links:links});
         pendingRepairFeedback = 'Repaired ' + sanitized.dropped + ' invalid saved note link' + (sanitized.dropped === 1 ? '.' : 's.');
       }
     }catch(_){ notes = []; links = []; }

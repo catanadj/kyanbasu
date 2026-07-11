@@ -74,6 +74,7 @@ class TestMainFlow(unittest.TestCase):
             m = re.search(r"<script id='payload_data' type='application/json'>(.*?)</script>", html, flags=re.S)
             self.assertIsNotNone(m)
             payload = json.loads(m.group(1))
+            self.assertRegex(payload["workspace_id"], r"^[0-9a-f]{16}$")
             self.assertEqual(payload["init_projects"], ["FromSelector", "Home"])
             self.assertEqual(payload["init_task_uuids"], ["bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"])
 
@@ -225,6 +226,7 @@ class TestMainFlow(unittest.TestCase):
                 'id="FEATURE_PROJECT_ADD_TAG_V4"',
                 'id="FEATURE_REVIEW_CHANGES_V1_CSS"',
                 'id="FEATURE_REVIEW_CHANGES_V1"',
+                'id="FEATURE_CANVAS_STORAGE_V1"',
                 'id="FEATURE_CANVAS_NAVIGATOR_V1_CSS"',
                 'id="FEATURE_CANVAS_NAVIGATOR_V1"',
                 'id="FEATURE_CANVAS_NOTES_V1_CSS"',

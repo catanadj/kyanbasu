@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import os
@@ -114,6 +115,12 @@ def _apply_initial_placements(payload: dict, init_projects: list[str], init_task
     return payload
 
 
+def _apply_workspace_identity(payload: dict) -> dict:
+    path = str(OUT_HTML.expanduser().resolve())
+    payload["workspace_id"] = hashlib.sha256(path.encode("utf-8")).hexdigest()[:16]
+    return payload
+
+
 def _render_html(tasks_all: list[dict], payload: dict) -> str:
     base_html = _load_runtime_html()
     return build_runtime_html(base_html, _json_text(payload), len(tasks_all), eprint)
@@ -170,6 +177,7 @@ def main(argv: list[str] | None = None) -> int:
         return _fail(str(e), code=1)
 
     payload = build_payload(tasks_all)
+    payload = _apply_workspace_identity(payload)
     init_projects = _resolve_initial_projects(tasks_all, args.projects, args.selector)
     payload = _apply_initial_placements(payload, init_projects, init_task_uuids)
 

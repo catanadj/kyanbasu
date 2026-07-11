@@ -27,6 +27,10 @@ class PayloadGraph(TypedDict):
     child_to_parents: dict[str, list[str]]
 
 
-class RuntimePayload(TypedDict):
+class RuntimePayloadBase(TypedDict):
     tasks: list[PayloadTask]
     graph: PayloadGraph
+
+
+class RuntimePayload(RuntimePayloadBase, total=False):
+    workspace_id: str

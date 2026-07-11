@@ -1,0 +1,158 @@
+<script id="FEATURE_CANVAS_STORAGE_V1">
+(function(){
+  if (window.TaskCanvasStorage) return;
+
+  var PREFIX = 'taskcanvas:workspace:v1:';
+  var SNAPSHOT_LIMIT = 5;
+
+  function fnv1a(text){
+    var hash = 2166136261 >>> 0;
+    text = String(text || '');
+    for (var i=0; i<text.length; i++){
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(16);
+  }
+
+  function workspaceId(){
+    try{
+      var embedded = window.DATA && String(window.DATA.workspace_id || '').trim();
+      if (embedded) return embedded.replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 80);
+    }catch(_){}
+    try{
+      if (window.location && window.location.pathname) return 'path-' + fnv1a(window.location.pathname);
+    }catch(_){}
+    return 'fallback';
+  }
+
+  function storageKey(area){
+    return PREFIX + workspaceId() + ':' + String(area || 'state');
+  }
+
+  function snapshotKey(area){
+    return storageKey(area) + ':snapshots';
+  }
+
+  function parse(raw, fallback){
+    if (raw == null || raw === '') return fallback;
+    try{ return JSON.parse(raw); }catch(_){ return fallback; }
+  }
+
+  function getRaw(area, legacyKey){
+    var stableKey = storageKey(area);
+    try{
+      var current = localStorage.getItem(stableKey);
+      if (current != null) return current;
+      if (!legacyKey) return null;
+      var legacy = localStorage.getItem(legacyKey);
+      if (legacy == null) return null;
+      localStorage.setItem(stableKey, legacy);
+      try{ localStorage.setItem(stableKey + ':migrated-from', String(legacyKey)); }catch(_){}
+      return legacy;
+    }catch(_){ return null; }
+  }
+
+  function snapshots(area){
+    try{
+      var rows = parse(localStorage.getItem(snapshotKey(area)), []);
+      return Array.isArray(rows) ? rows : [];
+    }catch(_){ return []; }
+  }
+
+  function saveSnapshot(area, raw){
+    if (raw == null) return true;
+    try{
+      var rows = snapshots(area);
+      if (rows.length && rows[0] && rows[0].raw === raw) return true;
+      rows.unshift({savedAt:Date.now(), raw:raw});
+      if (rows.length > SNAPSHOT_LIMIT) rows.length = SNAPSHOT_LIMIT;
+      localStorage.setItem(snapshotKey(area), JSON.stringify(rows));
+      return true;
+    }catch(_){ return false; }
+  }
+
+  function setRaw(area, raw, options){
+    options = options || {};
+    var key = storageKey(area);
+    try{
+      var current = localStorage.getItem(key);
+      if (current === raw) return true;
+      if (options.snapshot && current != null) saveSnapshot(area, current);
+      localStorage.setItem(key, raw);
+      return true;
+    }catch(_){ return false; }
+  }
+
+  function getJSON(area, fallback, legacyKey){
+    return parse(getRaw(area, legacyKey), fallback);
+  }
+
+  function setJSON(area, value, options){
+    try{ return setRaw(area, JSON.stringify(value), options); }
+    catch(_){ return false; }
+  }
+
+  function restoreSnapshot(area, index){
+    var rows = snapshots(area);
+    index = parseInt(index, 10) || 0;
+    if (index < 0 || index >= rows.length || !rows[index] || typeof rows[index].raw !== 'string') return null;
+    var raw = rows[index].raw;
+    if (!setRaw(area, raw, {snapshot:true})) return null;
+    return parse(raw, null);
+  }
+
+  function taskRows(){
+    try{
+      if (window.DATA && Array.isArray(window.DATA.tasks)) return window.DATA.tasks;
+      if (Array.isArray(window.TASKS)) return window.TASKS;
+    }catch(_){}
+    return [];
+  }
+
+  function legacyNotesBaseKey(){
+    var seed = 'fallback';
+    try{
+      if (window.DATA && Array.isArray(window.DATA.tasks)){
+        seed = window.DATA.tasks.map(function(task){ return task && (task.uuid || task.short || task.desc || ''); }).join('|').slice(0, 240) || 'empty';
+      } else if (window.location && window.location.pathname) {
+        seed = window.location.pathname;
+      }
+    }catch(_){}
+    return 'taskcanvas:notes:v1:' + seed;
+  }
+
+  function legacyWorkbenchesKey(){
+    var tasks = taskRows();
+    if (!tasks.length) return 'taskcanvas:workbenches:v1:empty';
+    var ids = tasks.map(function(task){ return task ? String(task.uuid || task.short || '') : ''; }).filter(Boolean).sort().join('|');
+    return 'taskcanvas:workbenches:v1:' + fnv1a(ids);
+  }
+
+  function legacyCandidates(prefix){
+    var result = [];
+    try{
+      for (var i=0; i<localStorage.length; i++){
+        var key = localStorage.key(i);
+        if (key && key.indexOf(prefix) === 0) result.push(key);
+      }
+    }catch(_){}
+    return result.sort();
+  }
+
+  window.TaskCanvasStorage = {
+    version: 1,
+    workspaceId: workspaceId,
+    key: storageKey,
+    getRaw: getRaw,
+    setRaw: setRaw,
+    getJSON: getJSON,
+    setJSON: setJSON,
+    snapshots: snapshots,
+    restoreSnapshot: restoreSnapshot,
+    legacyNotesBaseKey: legacyNotesBaseKey,
+    legacyWorkbenchesKey: legacyWorkbenchesKey,
+    legacyCandidates: legacyCandidates
+  };
+})();
+</script>

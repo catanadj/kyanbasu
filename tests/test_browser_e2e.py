@@ -730,6 +730,62 @@ window.addEventListener('load', function(){
         self.assertTrue(result["stagedDone"])
         self.assertRegex(result["text"], r"task '?[0-9a-f-]+'? done")
 
+    def test_canvas_storage_key_is_stable_and_snapshots_are_bounded_and_restorable(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps(
+            {
+                "workspace_id": "storage-contract",
+                "tasks": [],
+                "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
+            }
+        )
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_STORAGE_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var storage = window.TaskCanvasStorage;
+      var keyBefore = storage.key('probe');
+      for (var i=1; i<=8; i++) storage.setJSON('probe', {value:i}, {snapshot:true});
+      var historyBeforeRestore = storage.snapshots('probe').map(function(row){
+        return JSON.parse(row.raw).value;
+      });
+      var restored = storage.restoreSnapshot('probe', 4);
+      window.DATA.tasks.push({uuid:'changed-task-set'});
+      var out = {
+        keyBefore:keyBefore,
+        keyAfter:storage.key('probe'),
+        workspaceId:storage.workspaceId(),
+        history:historyBeforeRestore,
+        restored:restored && restored.value,
+        current:storage.getJSON('probe', null).value
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out';
+      pre.textContent = JSON.stringify(out);
+      document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["workspaceId"], "storage-contract")
+        self.assertEqual(result["keyAfter"], result["keyBefore"])
+        self.assertEqual(result["history"], [7, 6, 5, 4, 3])
+        self.assertEqual(result["restored"], 3)
+        self.assertEqual(result["current"], 3)
+
     def test_canvas_notes_runtime_creates_links_and_stays_out_of_commands(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
@@ -743,6 +799,8 @@ window.addEventListener('load', function(){
       var a = window.TaskCanvasNotes.createNote(260, 220, "Plan", "Break work down");
       var b = window.TaskCanvasNotes.createNote(560, 250, "Step 1", "Trace current flow");
       window.TaskCanvasNotes.linkNotes(a.id, b.id);
+      window.TaskCanvasNotes.save();
+      window.TaskCanvasNotes.setContent(b.id, 'Updated step');
       window.TaskCanvasNotes.save();
       if (typeof updateConsole === 'function') updateConsole();
       setTimeout(function(){
@@ -768,7 +826,9 @@ window.addEventListener('load', function(){
           firstContent: window.TaskCanvasNotes.notes()[0] && window.TaskCanvasNotes.notes()[0].content,
           hasTitleKey: window.TaskCanvasNotes.notes().some(function(n){ return Object.prototype.hasOwnProperty.call(n, 'title'); }),
           console: (document.getElementById('consoleText') || {}).value || "",
-          savedKeys: Object.keys(localStorage).filter(function(k){ return k.indexOf('taskcanvas:notes:v1:') === 0; }).length
+          savedKeys: Object.keys(localStorage).filter(function(k){ return k.indexOf('taskcanvas:workspace:v1:') === 0; }).length,
+          storageKey: window.TaskCanvasStorage.key('notes'),
+          snapshotCount: window.TaskCanvasStorage.snapshots('notes').length
         };
         var pre = document.createElement('pre');
         pre.id = 'e2e-out';
@@ -804,6 +864,8 @@ window.addEventListener('load', function(){
         self.assertFalse(result["hasTitleKey"])
         self.assertEqual(result["console"], "")
         self.assertGreaterEqual(result["savedKeys"], 1)
+        self.assertTrue(result["storageKey"].startswith("taskcanvas:workspace:v1:"))
+        self.assertGreaterEqual(result["snapshotCount"], 1)
 
     def test_canvas_notes_selects_and_unlinks_canvas_link(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
@@ -1261,7 +1323,7 @@ window.addEventListener('load', function(){
           exportedFirstBucket: exported.notes[0] && exported.notes[0].bucket,
           exportedSecondBucket: exported.notes[1] && exported.notes[1].bucket,
           visibleNotes: Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){ return el.style.display !== 'none'; }).length,
-          savedKeys: Object.keys(localStorage).filter(function(k){ return k.indexOf('taskcanvas:notes:v1:') === 0; }).length,
+          savedKeys: Object.keys(localStorage).filter(function(k){ return k.indexOf('taskcanvas:workspace:v1:') === 0; }).length,
           console: (document.getElementById('consoleText') || {}).value || ""
         };
         var pre = document.createElement('pre');
@@ -3818,11 +3880,14 @@ window.addEventListener('load', function(){
   window.addEventListener('load', function(){
     setTimeout(function(){
       try{
-        var persisted = JSON.parse(localStorage.getItem(storageKey) || '{}');
+        var stableKey = window.TaskCanvasStorage.key('notes');
+        var persisted = JSON.parse(localStorage.getItem(stableKey) || '{}');
         var out = {
           runtimeLinks: window.TaskCanvasNotes.links().map(function(l){ return l.from + ':' + l.to; }),
           persistedLinks: (persisted.links || []).map(function(l){ return l.from + ':' + l.to; }),
           notes: window.TaskCanvasNotes.notes().length,
+          stableKey: stableKey,
+          migratedFrom: localStorage.getItem(stableKey + ':migrated-from') || '',
           repairToast: (document.getElementById('devConsoleToast') || {}).textContent || ''
         };
         var pre = document.createElement('pre');
@@ -3847,6 +3912,8 @@ window.addEventListener('load', function(){
         self.assertEqual(result["notes"], 3, msg=json.dumps(result))
         self.assertEqual(result["runtimeLinks"], ["a:b"], msg=json.dumps(result))
         self.assertEqual(result["persistedLinks"], ["a:b"], msg=json.dumps(result))
+        self.assertTrue(result["stableKey"].startswith("taskcanvas:workspace:v1:"), msg=json.dumps(result))
+        self.assertEqual(result["migratedFrom"], "taskcanvas:notes:v1:empty", msg=json.dumps(result))
         self.assertEqual(result["repairToast"], "Repaired 3 invalid saved note links.", msg=json.dumps(result))
 
     def test_canvas_notes_shows_saving_and_saved_status(self):

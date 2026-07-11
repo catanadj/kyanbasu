@@ -3,7 +3,8 @@
   if (window.__CANVAS_WORKBENCHES_V1__) return;
   window.__CANVAS_WORKBENCHES_V1__ = true;
 
-  var PREFIX = 'taskcanvas:workbenches:v1:';
+  var CanvasStorage = window.TaskCanvasStorage;
+  if (!CanvasStorage) throw new Error('TaskCanvasStorage must load before canvas workbenches');
   var state = null;
   var saveTimer = 0;
   var switching = false;
@@ -11,19 +12,7 @@
   function qs(sel, root){ return (root || document).querySelector(sel); }
   function qsa(sel, root){ return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
   function uid(){ return 'wb-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7); }
-  function hasTasks(){ return !!(window.TASKS && Array.isArray(window.TASKS) && window.TASKS.length); }
-  function fnv1a(text){
-    var h = 2166136261 >>> 0;
-    for (var i=0; i<text.length; i++){ h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
-    return (h >>> 0).toString(16);
-  }
-  function storageKey(){
-    try{
-      if (!hasTasks()) return PREFIX + 'empty';
-      var ids = window.TASKS.map(function(t){ return t ? String(t.uuid || t.short || '') : ''; }).filter(Boolean).sort().join('|');
-      return PREFIX + fnv1a(ids);
-    }catch(_){ return PREFIX + 'fallback'; }
-  }
+  function legacyStorageKey(){ return CanvasStorage.legacyWorkbenchesKey(); }
   function defaultState(){
     return {version:1, activeId:'main', nextIndex:2, workbenches:[{id:'main', name:'Main', layout:null, notes:null}]};
   }
@@ -41,14 +30,14 @@
   function load(){
     if (state) return state;
     try{
-      var raw = localStorage.getItem(storageKey());
-      state = normalize(raw ? JSON.parse(raw) : defaultState());
+      var saved = CanvasStorage.getJSON('workbenches', null, legacyStorageKey());
+      state = normalize(saved || defaultState());
     }catch(_){ state = defaultState(); }
     return state;
   }
   function saveNow(){
     if (!state) return;
-    try{ localStorage.setItem(storageKey(), JSON.stringify(state)); }catch(_){}
+    CanvasStorage.setJSON('workbenches', state, {snapshot:true});
   }
   function saveSoon(){
     if (switching) return;
