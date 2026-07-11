@@ -2,6 +2,54 @@
 (function(){
   if (window.TaskCanvasNotesCore) return;
 
+  var NOTE_KINDS = [
+    {value:'note', label:'Plain'},
+    {value:'idea', label:'Idea'},
+    {value:'question', label:'Question'},
+    {value:'evidence', label:'Evidence'},
+    {value:'assumption', label:'Assumption'},
+    {value:'decision', label:'Decision'},
+    {value:'action', label:'Action'},
+    {value:'reference', label:'Reference'}
+  ];
+  var NOTE_STATUSES = [
+    {value:'open', label:'Open'},
+    {value:'resolved', label:'Resolved'},
+    {value:'parked', label:'Parked'}
+  ];
+  var NOTE_RELATIONS = [
+    {value:'manual', label:'Related to', inverseLabel:'Related from', structural:false},
+    {value:'supports', label:'Supports', inverseLabel:'Supported by', structural:false},
+    {value:'challenges', label:'Challenges', inverseLabel:'Challenged by', structural:false},
+    {value:'answers', label:'Answers', inverseLabel:'Answered by', structural:false},
+    {value:'causes', label:'Causes', inverseLabel:'Caused by', structural:false},
+    {value:'leads_to', label:'Leads to', inverseLabel:'Follows from', structural:false},
+    {value:'child', label:'Parent of', inverseLabel:'Child of', structural:true}
+  ];
+
+  function optionValue(value, options, fallback){
+    value = String(value || '').trim().toLowerCase();
+    for (var i=0; i<options.length; i++) if (options[i].value === value) return value;
+    return fallback;
+  }
+
+  function optionLabel(value, options, fallback){
+    value = optionValue(value, options, fallback);
+    for (var i=0; i<options.length; i++) if (options[i].value === value) return options[i].label;
+    return value;
+  }
+
+  function normalizeKind(value){ return optionValue(value, NOTE_KINDS, 'note'); }
+  function normalizeStatus(value){ return optionValue(value, NOTE_STATUSES, 'open'); }
+  function normalizeRelation(value){ return optionValue(value, NOTE_RELATIONS, 'manual'); }
+  function relationLabel(value, inverse){
+    value = normalizeRelation(value);
+    for (var i=0; i<NOTE_RELATIONS.length; i++){
+      if (NOTE_RELATIONS[i].value === value) return inverse ? NOTE_RELATIONS[i].inverseLabel : NOTE_RELATIONS[i].label;
+    }
+    return inverse ? 'Related from' : 'Related to';
+  }
+
   function toInt(value, fallback){
     var parsed = parseInt(value, 10);
     return isFinite(parsed) ? parsed : fallback;
@@ -42,6 +90,8 @@
     note.x = toInt(note.x, 160);
     note.y = toInt(note.y, 160);
     note.bucket = bucketText(note.bucket);
+    note.kind = normalizeKind(note.kind);
+    note.status = normalizeStatus(note.status);
     note.color = String(note.color || '').trim();
     if (!note.color || (options.isValidColor && !options.isValidColor(note.color))) delete note.color;
     note.collapsed = !!note.collapsed;
@@ -50,7 +100,7 @@
   }
 
   function linkKey(link){
-    return link ? [link.from || '', link.to || '', link.type || 'manual'].join('::') : '';
+    return link ? [link.from || '', link.to || '', normalizeRelation(link.type)].join('::') : '';
   }
 
   function childPathExists(startId, targetId, links, exceptKey){
@@ -82,7 +132,7 @@
     options = options || {};
     var from = candidate.from;
     var to = candidate.to;
-    var type = candidate.type || 'manual';
+    var type = normalizeRelation(candidate.type);
     var exceptKey = options.exceptKey || null;
     var exists = validIdChecker(options.notes, options.validIds);
     if (!from || !to || !exists(from) || !exists(to)) return {ok:false, reason:'Cannot link missing notes.'};
@@ -104,7 +154,7 @@
     var droppedChild = 0;
     (Array.isArray(rawLinks) ? rawLinks : []).forEach(function(link){
       if (!link || typeof link !== 'object') { dropped++; return; }
-      var candidate = {from:link.from, to:link.to, type:link.type || 'manual'};
+      var candidate = {from:link.from, to:link.to, type:normalizeRelation(link.type)};
       if (!validateLink(candidate, accepted, {validIds:validIds}).ok){
         dropped++;
         if (candidate.type === 'child') droppedChild++;
@@ -193,6 +243,10 @@
         label: labels[note.id] || '',
         content: note.content || '',
         bucket: bucketText(note.bucket),
+        kind: normalizeKind(note.kind),
+        kindLabel: optionLabel(note.kind, NOTE_KINDS, 'note'),
+        status: normalizeStatus(note.status),
+        statusLabel: optionLabel(note.status, NOTE_STATUSES, 'open'),
         depth: depth || 0,
         collapsed: !!note.collapsed,
         children: (index.childrenByParent[note.id] || []).map(function(child){
@@ -207,11 +261,30 @@
 
   function search(notes, links, query){
     notes = Array.isArray(notes) ? notes : [];
+    links = Array.isArray(links) ? links : [];
     query = String(query || '').trim().toLowerCase();
     if (!query) return [];
     var labels = computeLabels(notes, links);
+    function linkTerms(note){
+      var terms = [];
+      links.forEach(function(link){
+        if (!link) return;
+        if (link.from === note.id) terms.push(relationLabel(link.type, false));
+        if (link.to === note.id) terms.push(relationLabel(link.type, true));
+      });
+      return terms.join(' ');
+    }
     function haystack(note){
-      return [labels[note.id] || '', note.content || '', bucketText(note.bucket)].join(' ').toLowerCase();
+      return [
+        labels[note.id] || '',
+        note.content || '',
+        bucketText(note.bucket),
+        normalizeKind(note.kind),
+        optionLabel(note.kind, NOTE_KINDS, 'note'),
+        normalizeStatus(note.status),
+        optionLabel(note.status, NOTE_STATUSES, 'open'),
+        linkTerms(note)
+      ].join(' ').toLowerCase();
     }
     return notes.filter(function(note){ return haystack(note).indexOf(query) !== -1; }).sort(function(a, b){
       var al = labels[a.id] || '';
@@ -225,11 +298,24 @@
   }
 
   window.TaskCanvasNotesCore = {
-    version: 1,
+    version: 3,
     bucketText: bucketText,
     noteText: noteText,
     normalizeTaskRef: normalizeTaskRef,
     normalizeNote: normalizeNote,
+    normalizeKind: normalizeKind,
+    normalizeStatus: normalizeStatus,
+    kindLabel: function(value){ return optionLabel(value, NOTE_KINDS, 'note'); },
+    statusLabel: function(value){ return optionLabel(value, NOTE_STATUSES, 'open'); },
+    kindOptions: function(){ return NOTE_KINDS.map(function(option){ return {value:option.value, label:option.label}; }); },
+    statusOptions: function(){ return NOTE_STATUSES.map(function(option){ return {value:option.value, label:option.label}; }); },
+    normalizeRelation: normalizeRelation,
+    relationLabel: relationLabel,
+    relationOptions: function(includeStructural){
+      return NOTE_RELATIONS.filter(function(option){ return includeStructural || !option.structural; }).map(function(option){
+        return {value:option.value, label:option.label, inverseLabel:option.inverseLabel, structural:option.structural};
+      });
+    },
     linkKey: linkKey,
     validateLink: validateLink,
     sanitizeLinks: sanitizeLinks,

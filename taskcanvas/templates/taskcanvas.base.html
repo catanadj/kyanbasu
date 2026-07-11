@@ -1091,7 +1091,7 @@
   }
   .viewerNote{
     display:grid;
-    grid-template-columns:auto minmax(0, 1fr) auto;
+    grid-template-columns:auto minmax(0, 1fr) auto auto;
     gap:10px;
     align-items:start;
     padding:9px 10px;
@@ -1117,6 +1117,22 @@
     font-size:11px;
     white-space:nowrap;
   }
+  .viewerNoteSemantics{
+    display:flex;
+    align-items:center;
+    gap:4px;
+    color:var(--muted);
+    font-size:10px;
+    white-space:nowrap;
+  }
+  .viewerNoteSemantic{
+    padding:2px 4px;
+    border:1px solid rgba(164,185,214,.16);
+    border-radius:5px;
+    background:rgba(255,255,255,.04);
+  }
+  .viewerNoteSemantic.resolved{color:#9ce8bd;border-color:rgba(47,191,113,.24)}
+  .viewerNoteSemantic.parked{color:#ffd58a;border-color:rgba(242,184,75,.24)}
   .zoomwrap{
     display:flex;
     gap:10px;
@@ -2822,6 +2838,8 @@ function noteInspectorRows(notes){
   return '<div class="inspectorList">' + notes.slice(0, 8).map(function(note){
     var meta = [];
     if (note.bucket) meta.push(note.bucket);
+    if (note.kind && note.kind !== 'note') meta.push(note.kindLabel || note.kind);
+    if (note.status && note.status !== 'open') meta.push(note.statusLabel || note.status);
     if (note.childCount) meta.push(note.childCount + ' child' + (note.childCount === 1 ? '' : 'ren'));
     if (note.linkCount) meta.push(note.linkCount + ' link' + (note.linkCount === 1 ? '' : 's'));
     if (note.taskRefs && note.taskRefs.length) meta.push(note.taskRefs.length + ' task' + (note.taskRefs.length === 1 ? '' : 's'));
@@ -2908,6 +2926,34 @@ function wireNoteInspectorBucket(notes){
     }
   });
 }
+function noteInspectorSemanticInput(id, notes, options, field, mixedLabel){
+  notes = Array.isArray(notes) ? notes : (notes ? [notes] : []);
+  options = Array.isArray(options) ? options : [];
+  var values = uniqueStrings(notes.map(function(note){ return note && note[field]; }).filter(Boolean));
+  var current = values.length === 1 ? values[0] : '';
+  return '<select id="'+id+'" class="inspectorInput">' +
+    (current ? '' : '<option value="" selected disabled>'+escapeHtml(mixedLabel || 'Mixed')+'</option>') +
+    options.map(function(option){
+      return '<option value="'+escapeHtml(option.value || '')+'"'+(option.value === current ? ' selected' : '')+'>'+escapeHtml(option.label || option.value || '')+'</option>';
+    }).join('') +
+    '</select>';
+}
+function wireNoteInspectorSemantics(notes){
+  notes = Array.isArray(notes) ? notes : (notes ? [notes] : []);
+  var ids = notes.map(function(note){ return note && note.id; }).filter(Boolean);
+  var api = window.TaskCanvasNotes || null;
+  if (!ids.length || !api) return;
+  var kindSelect = document.getElementById('inspectorNoteKind');
+  var statusSelect = document.getElementById('inspectorNoteStatus');
+  if (kindSelect && typeof api.setNoteKind === 'function') kindSelect.addEventListener('change', function(){
+    ids.forEach(function(id){ api.setNoteKind(id, kindSelect.value); });
+    queueInspectorRender(0);
+  });
+  if (statusSelect && typeof api.setNoteStatus === 'function') statusSelect.addEventListener('change', function(){
+    ids.forEach(function(id){ api.setNoteStatus(id, statusSelect.value); });
+    queueInspectorRender(0);
+  });
+}
 function noteInspectorColorSwatches(notes, palette){
   notes = Array.isArray(notes) ? notes : [];
   palette = Array.isArray(palette) && palette.length ? palette : [];
@@ -2954,9 +3000,17 @@ function renderNoteInspector(snapshot){
     inspectorBody.innerHTML =
       '<div class="inspectorGroup">' +
         '<div class="inspectorChips">' +
-          '<span class="inspectorChip info">'+escapeHtml(link.type || 'manual')+'</span>' +
+          '<span class="inspectorChip info">'+escapeHtml(link.typeLabel || link.type || 'Related to')+'</span>' +
           '<span class="inspectorChip">Directional link</span>' +
         '</div>' +
+      '</div>' +
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorLabel">Relationship</div>' +
+        '<select id="inspectorNoteLinkType" class="inspectorInput">' +
+          (link.relationOptions || []).map(function(option){
+            return '<option value="'+escapeHtml(option.value || '')+'"'+(option.value === link.type ? ' selected' : '')+'>'+escapeHtml(option.label || option.value || '')+'</option>';
+          }).join('') +
+        '</select>' +
       '</div>' +
       '<div class="inspectorGroup">' +
         '<div class="inspectorLabel">Endpoints</div>' +
@@ -2965,10 +3019,17 @@ function renderNoteInspector(snapshot){
           '<div class="inspectorListItem"><strong>To '+escapeHtml(link.toLabel || '')+'</strong><div class="inspectorItemMeta">'+escapeHtml(noteInspectorText(link.toText, 'New note'))+'</div></div>' +
         '</div>' +
       '</div>';
+    var linkTypeSelect = document.getElementById('inspectorNoteLinkType');
+    if (linkTypeSelect && api && typeof api.setLinkType === 'function') linkTypeSelect.addEventListener('change', function(){
+      api.setLinkType(link.key, linkTypeSelect.value);
+      queueInspectorRender(0);
+    });
     return true;
   }
   if (!snapshot || snapshot.kind !== 'note' || !selectedNotes.length) return false;
   var buckets = uniqueStrings(selectedNotes.map(function(n){ return n.bucket || '(no bucket)'; }));
+  var kinds = uniqueStrings(selectedNotes.map(function(n){ return n.kindLabel || n.kind || 'Plain'; }));
+  var statuses = uniqueStrings(selectedNotes.map(function(n){ return n.statusLabel || n.status || 'Open'; }));
   var links = selectedNotes.reduce(function(total, n){ return total + (n.linkCount || 0); }, 0);
   var tasks = selectedNotes.reduce(function(total, n){ return total + ((n.taskRefs || []).length); }, 0);
   var children = selectedNotes.reduce(function(total, n){ return total + (n.childCount || 0); }, 0);
@@ -2994,6 +3055,8 @@ function renderNoteInspector(snapshot){
     '<div class="inspectorGroup">' +
       '<div class="inspectorChips">' +
         buckets.map(function(bucket){ return '<span class="inspectorChip info">'+escapeHtml(bucket)+'</span>'; }).join('') +
+        kinds.map(function(kind){ return '<span class="inspectorChip">'+escapeHtml(kind)+'</span>'; }).join('') +
+        statuses.map(function(status){ return '<span class="inspectorChip '+(status === 'Resolved' ? 'success' : (status === 'Parked' ? 'warn' : ''))+'">'+escapeHtml(status)+'</span>'; }).join('') +
         (children ? '<span class="inspectorChip">'+children+' child'+(children === 1 ? '' : 'ren')+'</span>' : '') +
         (primary && primary.collapsed ? '<span class="inspectorChip warn">Collapsed</span>' : '') +
       '</div>' +
@@ -3007,6 +3070,14 @@ function renderNoteInspector(snapshot){
       (selectedNotes.length === 1
         ? noteInspectorBucketInput(primary, snapshot.buckets || [])
         : noteInspectorBulkBucketInput(selectedNotes, snapshot.buckets || [])) +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">Thinking role</div>' +
+      noteInspectorSemanticInput('inspectorNoteKind', selectedNotes, snapshot.kindOptions || [], 'kind', 'Mixed roles') +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">Status</div>' +
+      noteInspectorSemanticInput('inspectorNoteStatus', selectedNotes, snapshot.statusOptions || [], 'status', 'Mixed statuses') +
     '</div>' +
     '<div class="inspectorGroup">' +
       '<div class="inspectorLabel">'+(selectedNotes.length === 1 ? 'Color' : 'Set note color')+'</div>' +
@@ -3023,6 +3094,7 @@ function renderNoteInspector(snapshot){
       noteInspectorTaskRows(primary ? primary.taskRefs : []) +
     '</div>';
   wireNoteInspectorBucket(selectedNotes);
+  wireNoteInspectorSemantics(selectedNotes);
   wireNoteInspectorColors(selectedNotes);
   if (selectedNotes.length === 1){
     wireNoteInspectorEditor(primary);
@@ -3736,9 +3808,23 @@ function appendViewerNote(outlineEl, item){
   row.innerHTML =
     '<div class="viewerNoteCode"></div>' +
     '<div class="viewerNoteText"></div>' +
+    '<div class="viewerNoteSemantics"></div>' +
     '<div class="viewerNoteBucket"></div>';
   row.querySelector('.viewerNoteCode').textContent=item.label || '';
   row.querySelector('.viewerNoteText').textContent=item.content || 'New note';
+  var semantics = row.querySelector('.viewerNoteSemantics');
+  if (item.kind && item.kind !== 'note'){
+    var kind = document.createElement('span');
+    kind.className = 'viewerNoteSemantic';
+    kind.textContent = item.kindLabel || item.kind;
+    semantics.appendChild(kind);
+  }
+  if (item.status && item.status !== 'open'){
+    var status = document.createElement('span');
+    status.className = 'viewerNoteSemantic ' + item.status;
+    status.textContent = item.statusLabel || item.status;
+    semantics.appendChild(status);
+  }
   row.querySelector('.viewerNoteBucket').textContent=item.bucket || '(no bucket)';
   outlineEl.appendChild(row);
   if (item.collapsed) return;

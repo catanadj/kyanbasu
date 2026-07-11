@@ -163,11 +163,28 @@
     );
   }
   function addNoteLink(from, to, type){
-    type = type || 'manual';
+    type = NoteCore.normalizeRelation(type);
     var validation = validateLink(from, to, type, links, null, null);
     if (!validation.ok){ noteFeedback(validation.reason); return false; }
     links.push({from:from, to:to, type:type});
     return true;
+  }
+  function setLinkType(key, type){
+    key = String(key || '');
+    type = NoteCore.normalizeRelation(type);
+    for (var i=0; i<links.length; i++){
+      var link = links[i];
+      if (noteLinkKey(link) !== key) continue;
+      if (NoteCore.normalizeRelation(link.type) === type) return true;
+      var validation = validateLink(link.from, link.to, type, links, key, null);
+      if (!validation.ok){ noteFeedback(validation.reason); return false; }
+      link.type = type;
+      selectedLinkKey = noteLinkKey(link);
+      renderAll();
+      saveSoon();
+      return true;
+    }
+    return false;
   }
   function sanitizeLinks(rawLinks, validIds){
     return NoteCore.sanitizeLinks(rawLinks, validIds);
@@ -425,6 +442,28 @@
     }
     if (bucketPalette.indexOf(color) === -1 && !hexToRgb(color)) return false;
     n.color = color;
+    renderAll();
+    saveSoon();
+    return true;
+  }
+  function noteKind(note){ return NoteCore.normalizeKind(note && note.kind); }
+  function noteStatus(note){ return NoteCore.normalizeStatus(note && note.status); }
+  function setNoteKind(id, kind){
+    var n = noteById(id);
+    if (!n) return false;
+    kind = NoteCore.normalizeKind(kind);
+    if (n.kind === kind) return true;
+    n.kind = kind;
+    renderAll();
+    saveSoon();
+    return true;
+  }
+  function setNoteStatus(id, status){
+    var n = noteById(id);
+    if (!n) return false;
+    status = NoteCore.normalizeStatus(status);
+    if (n.status === status) return true;
+    n.status = status;
     renderAll();
     saveSoon();
     return true;
@@ -1531,7 +1570,17 @@
   function createNote(x, y, title, body){
     var bucket = arguments.length > 4 ? arguments[4] : null;
     var opts = arguments.length > 5 ? arguments[5] : null;
-    var n = {id: uid(), x: toInt(x, 160), y: toInt(y, 160), content: noteText(title, body), bucket: bucketText(bucket), collapsed: false, taskRefs: []};
+    var n = normalizeNote({
+      id: uid(),
+      x: toInt(x, 160),
+      y: toInt(y, 160),
+      content: noteText(title, body),
+      bucket: bucketText(bucket),
+      kind: opts && opts.kind,
+      status: opts && opts.status,
+      collapsed: false,
+      taskRefs: []
+    });
     notes.push(n);
     renderNote(n);
     if (opts && opts.preservePosition){
@@ -1557,7 +1606,7 @@
       el.className = 'tcNoteNode';
       el.setAttribute('data-note-id', n.id);
       el.innerHTML =
-        '<div class="tcNoteHead"><div class="tcNoteMeta"><span class="tcNoteCode" title="Note"></span><button type="button" class="tcNoteBucketLabel" title="Edit bucket"></button><button type="button" class="tcNoteTaskBadge" title="No linked tasks" hidden></button></div><div class="tcNoteActions"><button type="button" data-note-collapse title="Collapse branch">v</button><button type="button" data-note-child title="Add child note">+</button><button type="button" data-note-delete title="Delete selected notes">x</button></div></div>' +
+        '<div class="tcNoteHead"><div class="tcNoteMeta"><span class="tcNoteCode" title="Note"></span><span class="tcNoteKindBadge" hidden></span><button type="button" class="tcNoteBucketLabel" title="Edit bucket"></button><span class="tcNoteStatusBadge" hidden></span><button type="button" class="tcNoteTaskBadge" title="No linked tasks" hidden></button></div><div class="tcNoteActions"><button type="button" data-note-collapse title="Collapse branch">v</button><button type="button" data-note-child title="Add child note">+</button><button type="button" data-note-delete title="Delete selected notes">x</button></div></div>' +
         '<div class="tcNoteText" contenteditable="true"></div>';
       st.appendChild(el);
       wireNote(el);
@@ -1570,7 +1619,23 @@
     el.style.left = toInt(n.x, 160) + 'px';
     el.style.top = toInt(n.y, 160) + 'px';
     el.classList.toggle('collapsed', !!n.collapsed);
+    el.classList.toggle('statusResolved', noteStatus(n) === 'resolved');
+    el.classList.toggle('statusParked', noteStatus(n) === 'parked');
     el.setAttribute('data-bucket', noteBucket(n));
+    el.setAttribute('data-note-kind', noteKind(n));
+    el.setAttribute('data-note-status', noteStatus(n));
+    var kindBadge = qs('.tcNoteKindBadge', el);
+    if (kindBadge){
+      kindBadge.hidden = noteKind(n) === 'note';
+      kindBadge.textContent = NoteCore.kindLabel(noteKind(n));
+      kindBadge.title = 'Thinking role: ' + NoteCore.kindLabel(noteKind(n));
+    }
+    var statusBadge = qs('.tcNoteStatusBadge', el);
+    if (statusBadge){
+      statusBadge.hidden = noteStatus(n) === 'open';
+      statusBadge.textContent = noteStatus(n) === 'resolved' ? '\u2713' : '\u2016';
+      statusBadge.title = 'Status: ' + NoteCore.statusLabel(noteStatus(n));
+    }
     var bucketLabel = qs('.tcNoteBucketLabel', el);
     if (bucketLabel){
       bucketLabel.textContent = noteBucket(n);
@@ -1727,6 +1792,10 @@
         label:labels[id] || '',
         content:n && n.content || '',
         bucket:noteBucket(n),
+        kind:noteKind(n),
+        kindLabel:NoteCore.kindLabel(noteKind(n)),
+        status:noteStatus(n),
+        statusLabel:NoteCore.statusLabel(noteStatus(n)),
         color:noteColor(n),
         rawColor:n && n.color || '',
         collapsed:!!(n && n.collapsed),
@@ -1747,7 +1816,9 @@
           key:noteLinkKey(link),
           from:link.from,
           to:link.to,
-          type:link.type || 'manual',
+          type:NoteCore.normalizeRelation(link.type),
+          typeLabel:NoteCore.relationLabel(link.type, false),
+          relationOptions:NoteCore.relationOptions(true),
           fromLabel:labels[link.from] || '',
           toLabel:labels[link.to] || '',
           fromText:(noteById(link.from) && noteById(link.from).content) || '',
@@ -1764,6 +1835,8 @@
       selectedNotes:picked,
       buckets:bucketNames(),
       palette:bucketPalette.slice(),
+      kindOptions:NoteCore.kindOptions(),
+      statusOptions:NoteCore.statusOptions(),
       labels:labels
     };
   }
@@ -1869,13 +1942,14 @@
     linkMode = false;
     syncButtons();
   }
-  function linkSelectedNotes(){
+  function linkSelectedNotes(type){
     var ids = selectedIds();
     if (ids.length !== 2) return false;
+    type = NoteCore.normalizeRelation(type);
     var to = selectedNoteId && selectedNoteIds[selectedNoteId] ? selectedNoteId : ids[1];
     var from = ids[0] === to ? ids[1] : ids[0];
-    if (!addNoteLink(from, to, 'manual')) return false;
-    selectedLinkKey = noteLinkKey({from: from, to: to, type: 'manual'});
+    if (!addNoteLink(from, to, type)) return false;
+    selectedLinkKey = noteLinkKey({from: from, to: to, type: type});
     selectedNoteId = null;
     selectedNoteIds = {};
     syncSelection();
@@ -2214,6 +2288,7 @@
     if (link){
       panel.hidden = false;
       panel.appendChild(linkInspectorHeader('Selected link'));
+      panel.appendChild(linkTypeSelect(link, true));
       panel.appendChild(linkInspectorRow(link, link.from, 'From'));
       panel.appendChild(linkInspectorRow(link, link.to, 'To'));
       return;
@@ -2221,6 +2296,9 @@
     if (ids.length === 2){
       panel.hidden = false;
       panel.appendChild(linkInspectorHeader('2 notes selected'));
+      var typeSelect = linkTypeSelect({type:'manual'}, false);
+      typeSelect.classList.add('tcNoteLinkCreateType');
+      panel.appendChild(typeSelect);
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'tcNoteLinkPrimary';
@@ -2229,7 +2307,7 @@
       btn.disabled = linkExists(ids[0] === selectedNoteId ? ids[1] : ids[0], selectedNoteId || ids[1]);
       btn.addEventListener('click', function(ev){
         ev.preventDefault();
-        linkSelectedNotes();
+        linkSelectedNotes(typeSelect.value);
       });
       panel.appendChild(btn);
       ids.forEach(function(id){
@@ -2248,9 +2326,30 @@
     panel.appendChild(linkInspectorHeader('Note links'));
     rows.forEach(function(l){
       var otherId = l.from === id ? l.to : l.from;
-      var role = l.from === id ? 'To' : 'From';
+      var role = NoteCore.relationLabel(l.type, l.from !== id);
       panel.appendChild(linkInspectorRow(l, otherId, role));
     });
+  }
+  function linkTypeSelect(link, includeStructural){
+    var select = document.createElement('select');
+    select.className = 'tcNoteLinkTypeSelect';
+    select.title = 'Relationship type';
+    select.setAttribute('aria-label', 'Relationship type');
+    var current = NoteCore.normalizeRelation(link && link.type);
+    NoteCore.relationOptions(!!includeStructural).forEach(function(option){
+      var item = document.createElement('option');
+      item.value = option.value;
+      item.textContent = option.label;
+      item.selected = option.value === current;
+      select.appendChild(item);
+    });
+    if (link && link.from && link.to){
+      var key = noteLinkKey(link);
+      select.addEventListener('change', function(){
+        if (!setLinkType(key, select.value)) select.value = NoteCore.normalizeRelation(link.type);
+      });
+    }
+    return select;
   }
   function linkInspectorHeader(text){
     var head = document.createElement('div');
@@ -2307,7 +2406,8 @@
     bar.className = 'tcNoteLinkToolbar';
     bar.style.left = Math.round((p1.x + p2.x) / 2) + 'px';
     bar.style.top = Math.round((p1.y + p2.y) / 2) + 'px';
-    bar.innerHTML = '<button type="button" title="Unlink selected notes">Unlink</button>';
+    bar.innerHTML = '<span class="tcNoteLinkToolbarType"></span><button type="button" title="Unlink selected notes">Unlink</button>';
+    qs('.tcNoteLinkToolbarType', bar).textContent = NoteCore.relationLabel(link.type, false);
     qs('button', bar).addEventListener('click', function(ev){
       ev.preventDefault();
       ev.stopPropagation();
@@ -2357,6 +2457,10 @@
       path.setAttribute('data-to', l.to);
       path.setAttribute('data-type', l.type || 'manual');
       path.setAttribute('data-link-key', key);
+      path.setAttribute('aria-label', NoteCore.relationLabel(l.type, false));
+      var title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      title.textContent = NoteCore.relationLabel(l.type, false);
+      path.appendChild(title);
       path.addEventListener('click', function(ev){
         ev.preventDefault();
         ev.stopPropagation();
@@ -2684,15 +2788,15 @@
     });
     return {
       kind: 'taskcanvas.notes',
-      version: 1,
+      version: 3,
       exportedAt: new Date().toISOString(),
       notes: notes.map(function(n){
-        var row = {id:n.id, x:toInt(n.x, 160), y:toInt(n.y, 160), content:n.content || 'New note', bucket:noteBucket(n), collapsed:!!n.collapsed, taskRefs:noteTaskRefs(n).slice()};
+        var row = {id:n.id, x:toInt(n.x, 160), y:toInt(n.y, 160), content:n.content || 'New note', bucket:noteBucket(n), kind:noteKind(n), status:noteStatus(n), collapsed:!!n.collapsed, taskRefs:noteTaskRefs(n).slice()};
         if (n.color) row.color = n.color;
         return row;
       }),
       links: links.map(function(l){
-        return {from:l.from, to:l.to, type:l.type || 'manual'};
+        return {from:l.from, to:l.to, type:NoteCore.normalizeRelation(l.type)};
       }),
       buckets: bucketData
     };
@@ -2847,12 +2951,18 @@
     linkSelectedNotes: linkSelectedNotes,
     selectLink: selectLink,
     deleteSelectedLink: deleteSelectedLink,
+    setLinkType: setLinkType,
+    relationTypes: function(includeStructural){ return NoteCore.relationOptions(!!includeStructural); },
     reflowMindMap: reflowMindMap,
     compactMindMap: compactMindMap,
     toggleCollapse: toggleCollapse,
     setBucket: setBucket,
     setBucketColor: setBucketColor,
     setNoteColor: setNoteColor,
+    setNoteKind: setNoteKind,
+    setNoteStatus: setNoteStatus,
+    noteKinds: function(){ return NoteCore.kindOptions(); },
+    noteStatuses: function(){ return NoteCore.statusOptions(); },
     bucketPalette: function(){ return bucketPalette.slice(); },
     setContent: setNoteContent,
     selectNote: selectNote,

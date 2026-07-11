@@ -823,6 +823,9 @@ window.addEventListener('load', function(){
             {id:'legacy', title:'Old title', body:'Old body'},
             {}
           ).content,
+          legacyKind: window.TaskCanvasNotesCore.normalizeNote({id:'legacy-kind', content:'Legacy'}, {}).kind,
+          legacyStatus: window.TaskCanvasNotesCore.normalizeNote({id:'legacy-status', content:'Legacy'}, {}).status,
+          unknownRelation: window.TaskCanvasNotesCore.normalizeRelation('not-a-relation'),
           firstContent: window.TaskCanvasNotes.notes()[0] && window.TaskCanvasNotes.notes()[0].content,
           hasTitleKey: window.TaskCanvasNotes.notes().some(function(n){ return Object.prototype.hasOwnProperty.call(n, 'title'); }),
           console: (document.getElementById('consoleText') || {}).value || "",
@@ -857,15 +860,95 @@ window.addEventListener('load', function(){
         self.assertEqual(result["links"], 1)
         self.assertEqual(result["apiNotes"], 2)
         self.assertEqual(result["apiLinks"], 1)
-        self.assertEqual(result["coreVersion"], 1)
+        self.assertEqual(result["coreVersion"], 3)
         self.assertTrue(result["rejectsSelfChild"])
         self.assertEqual(result["legacyContent"], "Old title\nOld body")
+        self.assertEqual(result["legacyKind"], "note")
+        self.assertEqual(result["legacyStatus"], "open")
+        self.assertEqual(result["unknownRelation"], "manual")
         self.assertEqual(result["firstContent"], "Plan\nBreak work down")
         self.assertFalse(result["hasTitleKey"])
         self.assertEqual(result["console"], "")
         self.assertGreaterEqual(result["savedKeys"], 1)
         self.assertTrue(result["storageKey"].startswith("taskcanvas:workspace:v1:"))
         self.assertGreaterEqual(result["snapshotCount"], 1)
+
+    def test_canvas_notes_roles_and_statuses_render_edit_search_and_export(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTE_SEMANTICS_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var note = window.TaskCanvasNotes.createNote(260, 220, 'What is blocking delivery?', '', 'Planning');
+      window.TaskCanvasNotes.setNoteKind(note.id, 'question');
+      window.TaskCanvasNotes.setNoteStatus(note.id, 'resolved');
+      window.TaskCanvasNotes.selectNote(note.id);
+      setTimeout(function(){
+        var kindSelect = document.getElementById('inspectorNoteKind');
+        var statusSelect = document.getElementById('inspectorNoteStatus');
+        var before = {
+          kind:kindSelect && kindSelect.value,
+          status:statusSelect && statusSelect.value,
+          questionSearch:window.TaskCanvasNotes.searchNotes('question'),
+          resolvedSearch:window.TaskCanvasNotes.searchNotes('resolved')
+        };
+        kindSelect.value = 'decision';
+        kindSelect.dispatchEvent(new Event('change', {bubbles:true}));
+        window.TaskCanvasNotes.setNoteStatus(note.id, 'parked');
+        setTimeout(function(){
+          var card = document.querySelector('.tcNoteNode[data-note-id="'+note.id+'"]');
+          var exported = window.TaskCanvasNotes.exportData();
+          document.getElementById('tabViewer').click();
+          setTimeout(function(){
+            var viewerSemantics = Array.prototype.slice.call(document.querySelectorAll('#viewerStage .viewerNoteSemantic')).map(function(el){ return el.textContent; });
+            var out = {
+              before:before,
+              kind:window.TaskCanvasNotes.notes()[0].kind,
+              status:window.TaskCanvasNotes.notes()[0].status,
+              cardKind:(card.querySelector('.tcNoteKindBadge') || {}).textContent || '',
+              cardStatus:(card.querySelector('.tcNoteStatusBadge') || {}).title || '',
+              exportedVersion:exported.version,
+              exportedKind:exported.notes[0].kind,
+              exportedStatus:exported.notes[0].status,
+              viewerSemantics:viewerSemantics
+            };
+            var pre = document.createElement('pre');
+            pre.id = 'e2e-out';
+            pre.textContent = JSON.stringify(out);
+            document.body.appendChild(pre);
+          }, 120);
+        }, 120);
+      }, 120);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["before"]["kind"], "question")
+        self.assertEqual(result["before"]["status"], "resolved")
+        self.assertEqual(len(result["before"]["questionSearch"]), 1)
+        self.assertEqual(len(result["before"]["resolvedSearch"]), 1)
+        self.assertEqual(result["kind"], "decision")
+        self.assertEqual(result["status"], "parked")
+        self.assertEqual(result["cardKind"], "Decision")
+        self.assertEqual(result["cardStatus"], "Status: Parked")
+        self.assertEqual(result["exportedVersion"], 3)
+        self.assertEqual(result["exportedKind"], "decision")
+        self.assertEqual(result["exportedStatus"], "parked")
+        self.assertEqual(result["viewerSemantics"], ["Decision", "Parked"])
 
     def test_canvas_notes_selects_and_unlinks_canvas_link(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
@@ -1081,6 +1164,93 @@ window.addEventListener('load', function(){
         self.assertEqual(result["endpoints"], 2, msg=json.dumps(result))
         self.assertEqual(result["previewPaths"], 0, msg=json.dumps(result))
         self.assertEqual(result["console"], "", msg=json.dumps(result))
+
+    def test_canvas_notes_creates_edits_searches_and_exports_semantic_links(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_SEMANTIC_LINK_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var source = window.TaskCanvasNotes.createNote(220, 240, 'Profiling evidence', '');
+      var target = window.TaskCanvasNotes.createNote(620, 240, 'Disable idle observers', '');
+      window.TaskCanvasNotes.selectNote(source.id);
+      window.TaskCanvasNotes.selectNote(target.id, true);
+      setTimeout(function(){
+        var createType = document.querySelector('.tcNoteLinkCreateType');
+        var createOptions = Array.prototype.slice.call(createType.options).map(function(option){ return option.value; });
+        createType.value = 'supports';
+        document.querySelector('.tcNoteLinkPrimary').click();
+        setTimeout(function(){
+          var beforeLink = window.TaskCanvasNotes.links()[0];
+          var baseSelect = document.getElementById('inspectorNoteLinkType');
+          var before = {
+            type:beforeLink && beforeLink.type,
+            createOptions:createOptions,
+            floatingType:(document.querySelector('#tcNoteLinkInspector .tcNoteLinkTypeSelect') || {}).value || '',
+            inspectorType:baseSelect && baseSelect.value,
+            supportsSearch:window.TaskCanvasNotes.searchNotes('supports'),
+            supportedBySearch:window.TaskCanvasNotes.searchNotes('supported by'),
+            pathType:(document.querySelector('#tcNoteLinksLayer .tcNoteLink') || {}).getAttribute('data-type') || ''
+          };
+          baseSelect.value = 'challenges';
+          baseSelect.dispatchEvent(new Event('change', {bubbles:true}));
+          setTimeout(function(){
+            var link = window.TaskCanvasNotes.links()[0];
+            var path = document.querySelector('#tcNoteLinksLayer .tcNoteLink');
+            var exported = window.TaskCanvasNotes.exportData();
+            var out = {
+              before:before,
+              type:link && link.type,
+              pathType:path && path.getAttribute('data-type'),
+              pathTitle:(path && path.querySelector('title') || {}).textContent || '',
+              animationName:path ? getComputedStyle(path).animationName : '',
+              toolbarType:(document.querySelector('.tcNoteLinkToolbarType') || {}).textContent || '',
+              exportedVersion:exported.version,
+              exportedType:exported.links[0] && exported.links[0].type,
+              relationLabel:window.TaskCanvasNotesCore.relationLabel('challenges', false),
+              inverseLabel:window.TaskCanvasNotesCore.relationLabel('challenges', true)
+            };
+            var pre = document.createElement('pre');
+            pre.id = 'e2e-out';
+            pre.textContent = JSON.stringify(out);
+            document.body.appendChild(pre);
+          }, 140);
+        }, 140);
+      }, 120);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["before"]["type"], "supports")
+        self.assertNotIn("child", result["before"]["createOptions"])
+        self.assertEqual(result["before"]["floatingType"], "supports")
+        self.assertEqual(result["before"]["inspectorType"], "supports")
+        self.assertEqual(len(result["before"]["supportsSearch"]), 1)
+        self.assertEqual(len(result["before"]["supportedBySearch"]), 1)
+        self.assertEqual(result["before"]["pathType"], "supports")
+        self.assertEqual(result["type"], "challenges")
+        self.assertEqual(result["pathType"], "challenges")
+        self.assertEqual(result["pathTitle"], "Challenges")
+        self.assertEqual(result["animationName"], "none")
+        self.assertEqual(result["toolbarType"], "Challenges")
+        self.assertEqual(result["exportedVersion"], 3)
+        self.assertEqual(result["exportedType"], "challenges")
+        self.assertEqual(result["relationLabel"], "Challenges")
+        self.assertEqual(result["inverseLabel"], "Challenged by")
 
     def test_canvas_notes_link_inspector_manages_selected_note_links(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
@@ -1350,7 +1520,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["resultNotes"], 2)
         self.assertEqual(result["resultLinks"], 1)
         self.assertEqual(result["exportedKind"], "taskcanvas.notes")
-        self.assertEqual(result["exportedVersion"], 1)
+        self.assertEqual(result["exportedVersion"], 3)
         self.assertEqual(result["exportedNotes"], 2)
         self.assertEqual(result["exportedLinks"], 1)
         self.assertEqual(result["firstContent"], "Imported root\nLegacy body")
