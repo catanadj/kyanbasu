@@ -50,6 +50,44 @@
     return inverse ? 'Related from' : 'Related to';
   }
 
+  function splitQuery(query){
+    query = String(query || '').trim();
+    var tokens = [];
+    var current = '';
+    var quote = '';
+    for (var i=0; i<query.length; i++){
+      var char = query.charAt(i);
+      if (quote){
+        if (char === quote) quote = '';
+        else current += char;
+      } else if (char === '"' || char === "'") quote = char;
+      else if (/\s/.test(char)){
+        if (current){ tokens.push(current); current = ''; }
+      } else current += char;
+    }
+    if (current) tokens.push(current);
+    return tokens;
+  }
+
+  function parseQuery(query){
+    return splitQuery(query).map(function(token){
+      var negated = token.charAt(0) === '-';
+      if (negated) token = token.slice(1);
+      var splitAt = token.indexOf(':');
+      if (splitAt <= 0) return {field:'text', value:token.toLowerCase(), negated:negated};
+      return {
+        field:token.slice(0, splitAt).toLowerCase(),
+        value:token.slice(splitAt + 1).toLowerCase(),
+        negated:negated
+      };
+    }).filter(function(term){ return !!term.value; });
+  }
+
+  function optionExists(value, options){
+    for (var i=0; i<options.length; i++) if (options[i].value === value) return true;
+    return false;
+  }
+
   function toInt(value, fallback){
     var parsed = parseInt(value, 10);
     return isFinite(parsed) ? parsed : fallback;
@@ -262,8 +300,10 @@
   function search(notes, links, query){
     notes = Array.isArray(notes) ? notes : [];
     links = Array.isArray(links) ? links : [];
-    query = String(query || '').trim().toLowerCase();
+    query = String(query || '').trim();
     if (!query) return [];
+    var terms = parseQuery(query);
+    if (!terms.length) return [];
     var labels = computeLabels(notes, links);
     function linkTerms(note){
       var terms = [];
@@ -286,11 +326,36 @@
         linkTerms(note)
       ].join(' ').toLowerCase();
     }
-    return notes.filter(function(note){ return haystack(note).indexOf(query) !== -1; }).sort(function(a, b){
+    function linksFor(note){ return links.filter(function(link){ return link && (link.from === note.id || link.to === note.id); }); }
+    function matches(note, term){
+      var field = term.field;
+      var value = term.value;
+      var related = linksFor(note);
+      var childLinks = related.filter(function(link){ return link.type === 'child'; });
+      var matched = false;
+      if (field === 'kind' || field === 'type') matched = optionExists(value, NOTE_KINDS) && normalizeKind(note.kind) === value;
+      else if (field === 'status') matched = optionExists(value, NOTE_STATUSES) && normalizeStatus(note.status) === value;
+      else if (field === 'bucket') matched = bucketText(note.bucket).toLowerCase() === value;
+      else if (field === 'id') matched = String(labels[note.id] || '').toLowerCase() === value;
+      else if (field === 'relation') matched = optionExists(value, NOTE_RELATIONS) && related.some(function(link){ return normalizeRelation(link.type) === value; });
+      else if (field === 'has'){
+        if (value === 'links') matched = related.length > 0;
+        else if (value === 'tasks') matched = Array.isArray(note.taskRefs) && note.taskRefs.length > 0;
+        else if (value === 'children') matched = childLinks.some(function(link){ return link.from === note.id; });
+        else if (value === 'parent') matched = childLinks.some(function(link){ return link.to === note.id; });
+      } else if (field === 'is'){
+        if (value === 'orphan') matched = related.length === 0;
+        else if (value === 'root') matched = !childLinks.some(function(link){ return link.to === note.id; });
+        else if (value === 'leaf') matched = !childLinks.some(function(link){ return link.from === note.id; });
+      } else matched = haystack(note).indexOf((field === 'text' ? '' : field + ':') + value) !== -1;
+      return term.negated ? !matched : matched;
+    }
+    return notes.filter(function(note){ return terms.every(function(term){ return matches(note, term); }); }).sort(function(a, b){
       var al = labels[a.id] || '';
       var bl = labels[b.id] || '';
-      var ac = haystack(a).indexOf(query);
-      var bc = haystack(b).indexOf(query);
+      var freeTerm = terms.filter(function(term){ return term.field === 'text' && !term.negated; })[0];
+      var ac = freeTerm ? haystack(a).indexOf(freeTerm.value) : 0;
+      var bc = freeTerm ? haystack(b).indexOf(freeTerm.value) : 0;
       if (ac !== bc) return ac - bc;
       if (al !== bl) return al.localeCompare(bl);
       return String(a.id).localeCompare(String(b.id));
@@ -316,6 +381,7 @@
         return {value:option.value, label:option.label, inverseLabel:option.inverseLabel, structural:option.structural};
       });
     },
+    parseQuery: parseQuery,
     linkKey: linkKey,
     validateLink: validateLink,
     sanitizeLinks: sanitizeLinks,

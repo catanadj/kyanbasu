@@ -3777,7 +3777,7 @@ function viewerSectionBottom(section){
   if (!section) return 40;
   return (parseInt(section.style.top || '0', 10) || 0) + (section.offsetHeight || 0);
 }
-function addViewerNoteSortControls(section, mode, focusState){
+function addViewerNoteSortControls(section, mode, focusState, lensState){
   if (!section) return;
   var actions=document.createElement('div');
   actions.className='viewerSectionActions';
@@ -3800,6 +3800,16 @@ function addViewerNoteSortControls(section, mode, focusState){
       if (window.TaskCanvasNotes && typeof window.TaskCanvasNotes.clearFocus === 'function') window.TaskCanvasNotes.clearFocus();
     });
     actions.appendChild(clear);
+  }
+  if (lensState && lensState.kind === 'lens'){
+    var clearLens=document.createElement('button');
+    clearLens.type='button';
+    clearLens.className='viewerSortBtn';
+    clearLens.textContent='Clear lens';
+    clearLens.addEventListener('click', function(){
+      if (window.TaskCanvasNotes && typeof window.TaskCanvasNotes.clearLens === 'function') window.TaskCanvasNotes.clearLens();
+    });
+    actions.appendChild(clearLens);
   }
   var head = section.querySelector('.viewerSectionHead');
   if (head && head.nextSibling) section.insertBefore(actions, head.nextSibling);
@@ -3971,14 +3981,16 @@ function renderViewer(){
     outline = window.TaskCanvasNotes.outline();
   }
   var noteFocus = window.TaskCanvasNotes && typeof window.TaskCanvasNotes.focusState === 'function' ? window.TaskCanvasNotes.focusState() : {kind:'none'};
+  var noteLens = window.TaskCanvasNotes && typeof window.TaskCanvasNotes.lensState === 'function' ? window.TaskCanvasNotes.lensState() : {kind:'none'};
   var sortMode = viewerNotesSortMode();
   outline = sortedViewerOutline(outline, sortMode);
   var tasksSection=viewerSection("Tasks", depTasks.length + " dependent", 40);
   renderViewerTasks(tasksSection, depTasks);
   var notesTop = viewerSectionBottom(tasksSection) + 44;
   var notesTitle = noteFocus && noteFocus.kind !== 'none' ? "Notes · " + (noteFocus.kind === 'branch' ? 'Branch ' : 'Bucket ') + noteFocus.label : "Notes";
+  if (noteLens && noteLens.kind === 'lens') notesTitle += " · " + noteLens.label;
   var notesSection=viewerSection(notesTitle, outline.length + " root" + (outline.length === 1 ? "" : "s"), notesTop);
-  addViewerNoteSortControls(notesSection, sortMode, noteFocus);
+  addViewerNoteSortControls(notesSection, sortMode, noteFocus, noteLens);
   renderViewerNotes(notesSection, outline);
 }
 

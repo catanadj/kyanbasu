@@ -4664,6 +4664,90 @@ window.addEventListener('load', function(){
         self.assertEqual(result["selected"], [result["childId"]], msg=json.dumps(result))
         self.assertTrue(result["resultsVisible"], msg=json.dumps(result))
 
+    def test_canvas_notes_structured_queries_and_thinking_lenses(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_LENS_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var openQuestion = TaskCanvasNotes.createNote(140, 180, 'What blocks launch?', '', 'Deep Work', {skipAutoLayout:true, kind:'question'});
+      var resolvedQuestion = TaskCanvasNotes.createNote(380, 180, 'Who owns launch?', '', 'Deep Work', {skipAutoLayout:true, kind:'question', status:'resolved'});
+      var assumption = TaskCanvasNotes.createNote(620, 180, 'Users need export', '', 'Research', {skipAutoLayout:true, kind:'assumption'});
+      var action = TaskCanvasNotes.createNote(860, 180, 'Draft rollout', '', 'Delivery', {skipAutoLayout:true, kind:'action'});
+      var decision = TaskCanvasNotes.createNote(1100, 180, 'Use phased rollout', '', 'Delivery', {skipAutoLayout:true, kind:'decision'});
+      var queries = {
+        openQuestions: TaskCanvasNotes.searchNotes('kind:question status:open'),
+        quotedBucket: TaskCanvasNotes.searchNotes('bucket:"Deep Work"'),
+        unresolved: TaskCanvasNotes.searchNotes('kind:question -status:resolved'),
+        textAndKind: TaskCanvasNotes.searchNotes('launch kind:question'),
+        orphans: TaskCanvasNotes.searchNotes('is:orphan'),
+        withoutTasks: TaskCanvasNotes.searchNotes('-has:tasks')
+      };
+      document.getElementById('noteLensBtn').click();
+      var menuOptions = document.querySelectorAll('#noteLensMenu .tcNoteLensOption').length;
+      TaskCanvasNotes.applyLens('open-questions');
+      renderViewer();
+      var lensVisible = Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){ return el.style.display !== 'none'; }).map(function(el){ return el.getAttribute('data-note-id'); });
+      var viewerRows = Array.prototype.slice.call(document.querySelectorAll('#viewerStage .viewerNote')).map(function(el){ return el.getAttribute('data-note-id'); });
+      var viewerTitle = document.querySelector('#viewerStage .viewerSection:last-of-type .viewerSectionTitle');
+      TaskCanvasNotes.applyLens('actions');
+      var actionBeforeLink = TaskCanvasNotes.lensState();
+      TaskCanvasNotes.linkNoteToTask(action.id, {uuid:'task-1', short:'task-1', desc:'Draft rollout'});
+      var actionAfterLink = TaskCanvasNotes.lensState();
+      TaskCanvasNotes.clearLens();
+      var visibleAfterClear = Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){ return el.style.display !== 'none'; }).length;
+      var out = {
+        ids:{openQuestion:openQuestion.id, resolvedQuestion:resolvedQuestion.id, action:action.id},
+        queries:queries,
+        menuOptions:menuOptions,
+        lensVisible:lensVisible,
+        viewerRows:viewerRows,
+        viewerTitle:viewerTitle && viewerTitle.textContent,
+        actionBeforeLink:actionBeforeLink,
+        actionAfterLink:actionAfterLink,
+        visibleAfterClear:visibleAfterClear,
+        totalNotes:TaskCanvasNotes.notes().length,
+        parsed:TaskCanvasNotes.parseSearchQuery('kind:question -status:resolved bucket:"Deep Work"')
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out';
+      pre.textContent = JSON.stringify(out);
+      document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        ids = result["ids"]
+        self.assertEqual(result["queries"]["openQuestions"], [ids["openQuestion"]], msg=json.dumps(result))
+        self.assertEqual(set(result["queries"]["quotedBucket"]), {ids["openQuestion"], ids["resolvedQuestion"]}, msg=json.dumps(result))
+        self.assertEqual(result["queries"]["unresolved"], [ids["openQuestion"]], msg=json.dumps(result))
+        self.assertEqual(set(result["queries"]["textAndKind"]), {ids["openQuestion"], ids["resolvedQuestion"]}, msg=json.dumps(result))
+        self.assertEqual(len(result["queries"]["orphans"]), result["totalNotes"], msg=json.dumps(result))
+        self.assertEqual(len(result["queries"]["withoutTasks"]), result["totalNotes"], msg=json.dumps(result))
+        self.assertEqual(result["menuOptions"], 6, msg=json.dumps(result))
+        self.assertEqual(result["lensVisible"], [ids["openQuestion"]], msg=json.dumps(result))
+        self.assertEqual(result["viewerRows"], [ids["openQuestion"]], msg=json.dumps(result))
+        self.assertIn("Open questions", result["viewerTitle"], msg=json.dumps(result))
+        self.assertEqual(result["actionBeforeLink"]["ids"], [ids["action"]], msg=json.dumps(result))
+        self.assertEqual(result["actionAfterLink"]["ids"], [], msg=json.dumps(result))
+        self.assertEqual(result["visibleAfterClear"], result["totalNotes"], msg=json.dumps(result))
+        self.assertEqual([term["field"] for term in result["parsed"]], ["kind", "status", "bucket"], msg=json.dumps(result))
+        self.assertTrue(result["parsed"][1]["negated"], msg=json.dumps(result))
+
     def test_canvas_notes_links_selected_note_to_existing_task(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({

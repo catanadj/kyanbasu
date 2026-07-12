@@ -22,6 +22,15 @@
   var noteSearchQuery = '';
   var noteSearchMatches = [];
   var noteFocus = null;
+  var noteLens = null;
+  var noteLensDefinitions = [
+    {id:'open-questions', label:'Open questions', query:'kind:question status:open'},
+    {id:'decisions', label:'Decisions', query:'kind:decision'},
+    {id:'assumptions', label:'Unresolved assumptions', query:'kind:assumption status:open'},
+    {id:'actions', label:'Action candidates', query:'kind:action status:open -has:tasks'},
+    {id:'orphans', label:'Orphan notes', query:'is:orphan'},
+    {id:'without-tasks', label:'Notes without tasks', query:'-has:tasks'}
+  ];
   var pendingRepairFeedback = null;
   var NoteCore = window.TaskCanvasNotesCore;
   var NoteStorage = window.TaskCanvasStorage;
@@ -170,6 +179,17 @@
   function noteAllowedByFocus(id){
     return !noteFocus || !!focusedNoteIds()[id];
   }
+  function noteAllowedByLens(id){
+    return !noteLens || !!noteLens.ids[id];
+  }
+  function visibleNoteIds(){
+    var ids = Object.create(null);
+    var focused = noteFocus ? focusedNoteIds() : null;
+    notes.forEach(function(note){
+      if ((!focused || focused[note.id]) && noteAllowedByLens(note.id)) ids[note.id] = true;
+    });
+    return ids;
+  }
   function noteFocusSnapshot(){
     if (!noteFocus) return {kind:'none', count:notes.length, ids:notes.map(function(note){ return note.id; })};
     var ids = Object.keys(focusedNoteIds());
@@ -296,8 +316,8 @@
     return NoteCore.outline(notes, links);
   }
   function focusedNoteOutline(){
-    if (!noteFocus) return noteOutline();
-    var allowed = focusedNoteIds();
+    if (!noteFocus && !noteLens) return noteOutline();
+    var allowed = visibleNoteIds();
     var labels = computeNoteLabels();
     var focusedNotes = notes.filter(function(note){ return !!allowed[note.id]; });
     var focusedLinks = links.filter(function(link){ return !!allowed[link.from] && !!allowed[link.to]; });
@@ -324,6 +344,69 @@
   function searchNotes(query){
     return NoteCore.search(notes, links, query);
   }
+  function noteLensDefinition(id){
+    for (var i=0; i<noteLensDefinitions.length; i++) if (noteLensDefinitions[i].id === id) return noteLensDefinitions[i];
+    return null;
+  }
+  function syncNoteLensButton(){
+    var button = document.getElementById('noteLensBtn');
+    if (!button) return;
+    button.classList.toggle('active', !!noteLens);
+    button.textContent = noteLens ? 'Lens · ' + noteLens.label : 'Lenses';
+    button.title = noteLens ? 'Active lens: ' + noteLens.label : 'Choose a thinking lens';
+  }
+  function renderNoteLensMenu(){
+    var menu = document.getElementById('noteLensMenu');
+    if (!menu) return;
+    menu.innerHTML = '';
+    if (noteLens){
+      var clear = document.createElement('button');
+      clear.type = 'button';
+      clear.className = 'tcNoteLensClear';
+      clear.textContent = 'Clear lens';
+      clear.addEventListener('click', function(){ clearNoteLens(); });
+      menu.appendChild(clear);
+    }
+    noteLensDefinitions.forEach(function(definition){
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'tcNoteLensOption' + (noteLens && noteLens.id === definition.id ? ' active' : '');
+      button.innerHTML = '<span></span><strong></strong>';
+      qs('span', button).textContent = definition.label;
+      qs('strong', button).textContent = searchNotes(definition.query).length;
+      button.addEventListener('click', function(){ applyNoteLens(definition.id); });
+      menu.appendChild(button);
+    });
+  }
+  function applyNoteLens(id){
+    var definition = noteLensDefinition(id);
+    if (!definition) return false;
+    noteLens = {id:definition.id, label:definition.label, query:definition.query, ids:Object.create(null)};
+    var input = document.getElementById('noteSearchInput');
+    if (input) input.value = definition.query;
+    var menu = document.getElementById('noteLensMenu');
+    if (menu) menu.hidden = true;
+    renderAll();
+    refreshViewerOutline();
+    syncNoteLensButton();
+    return true;
+  }
+  function clearNoteLens(preserveQuery){
+    if (!noteLens) return false;
+    noteLens = null;
+    var input = document.getElementById('noteSearchInput');
+    if (input && !preserveQuery) input.value = '';
+    var menu = document.getElementById('noteLensMenu');
+    if (menu) menu.hidden = true;
+    renderAll();
+    refreshViewerOutline();
+    syncNoteLensButton();
+    return true;
+  }
+  function noteLensSnapshot(){
+    if (!noteLens) return {kind:'none', count:notes.length, ids:notes.map(function(note){ return note.id; })};
+    return {kind:'lens', id:noteLens.id, label:noteLens.label, query:noteLens.query, count:Object.keys(noteLens.ids).length, ids:Object.keys(noteLens.ids)};
+  }
   function syncNoteSearchHighlights(){
     var ids = Object.create(null);
     noteSearchMatches.forEach(function(n){ ids[n.id] = true; });
@@ -335,7 +418,7 @@
     var box = document.getElementById('noteSearchResults');
     if (!box) return;
     box.innerHTML = '';
-    if (!noteSearchQuery){
+    if (!noteSearchQuery || noteLens){
       box.hidden = true;
       return;
     }
@@ -367,6 +450,10 @@
     var input = document.getElementById('noteSearchInput');
     noteSearchQuery = input ? input.value.trim() : noteSearchQuery;
     noteSearchMatches = searchNotes(noteSearchQuery);
+    if (noteLens){
+      noteLens.ids = Object.create(null);
+      noteSearchMatches.forEach(function(note){ noteLens.ids[note.id] = true; });
+    }
     syncNoteSearchHighlights();
     renderNoteSearchResults();
     return noteSearchMatches.slice();
@@ -659,7 +746,9 @@
     var key = taskRefKey(ref);
     for (var i=0;i<refs.length;i++) if (taskRefKey(refs[i]) === key) return false;
     refs.push(ref);
-    syncNoteTaskBadges();
+    if (noteLens) renderAll();
+    else syncNoteTaskBadges();
+    refreshViewerOutline();
     saveSoon();
     return true;
   }
@@ -672,7 +761,9 @@
     if (next.length === refs.length) return false;
     n.taskRefs = next;
     closeNoteTaskPopover();
-    syncNoteTaskBadges();
+    if (noteLens) renderAll();
+    else syncNoteTaskBadges();
+    refreshViewerOutline();
     saveSoon();
     return true;
   }
@@ -1565,8 +1656,9 @@
     createLinkedTasksBtn.title = 'Stage task add commands and link generated task refs to selected notes';
     var searchWrap = document.createElement('div');
     searchWrap.id = 'noteSearchWrap';
-    searchWrap.innerHTML = '<input id="noteSearchInput" class="tcInput" type="search" autocomplete="off" placeholder="Search notes"><div id="noteSearchResults" hidden></div>';
+    searchWrap.innerHTML = '<input id="noteSearchInput" class="tcInput" type="search" autocomplete="off" placeholder="Search or filter notes"><button id="noteLensBtn" type="button" title="Choose a thinking lens">Lenses</button><div id="noteLensMenu" hidden></div><div id="noteSearchResults" hidden></div>';
     var searchInput = qs('#noteSearchInput', searchWrap);
+    var lensBtn = qs('#noteLensBtn', searchWrap);
     var importInput = document.createElement('input');
     importInput.id = 'noteImportInput';
     importInput.type = 'file';
@@ -1591,7 +1683,31 @@
     dataGroup.appendChild(exportAllBtn);
     dataGroup.appendChild(saveStatus);
     dataGroup.appendChild(importInput);
-    searchInput.addEventListener('input', updateNoteSearch);
+    searchInput.addEventListener('input', function(){
+      if (noteLens){
+        noteLens = null;
+        syncNoteLensButton();
+        renderAll();
+        refreshViewerOutline();
+      } else {
+        updateNoteSearch();
+      }
+    });
+    lensBtn.addEventListener('click', function(ev){
+      ev.preventDefault();
+      ev.stopPropagation();
+      var menu = document.getElementById('noteLensMenu');
+      var results = document.getElementById('noteSearchResults');
+      if (!menu) return;
+      renderNoteLensMenu();
+      menu.hidden = !menu.hidden;
+      if (results) results.hidden = true;
+    });
+    document.addEventListener('click', function(ev){
+      var menu = document.getElementById('noteLensMenu');
+      if (!menu || menu.hidden || (ev.target && ev.target.closest && ev.target.closest('#noteSearchWrap'))) return;
+      menu.hidden = true;
+    });
     searchInput.addEventListener('keydown', function(ev){
       if (ev.key === 'Enter'){
         if (noteSearchMatches[0]){
@@ -1599,6 +1715,7 @@
           focusSearchResult(noteSearchMatches[0].id);
         }
       } else if (ev.key === 'Escape'){
+        if (noteLens){ clearNoteLens(); return; }
         searchInput.value = '';
         updateNoteSearch();
       }
@@ -2131,7 +2248,7 @@
   }
   function isNoteVisible(id){
     var n = noteById(id);
-    return !!n && noteAllowedByFocus(id) && !hiddenNoteIds()[id] && !bucketCollapsed(noteBucket(n));
+    return !!n && noteAllowedByFocus(id) && noteAllowedByLens(id) && !hiddenNoteIds()[id] && !bucketCollapsed(noteBucket(n));
   }
   function applyVisibility(){
     var hidden = hiddenNoteIds();
@@ -2140,7 +2257,8 @@
       var n = noteById(el.getAttribute('data-note-id'));
       var hiddenByBucket = n ? bucketCollapsed(noteBucket(n)) : false;
       var hiddenByFocus = focused && !focused[el.getAttribute('data-note-id')];
-      el.style.display = (hidden[el.getAttribute('data-note-id')] || hiddenByBucket || hiddenByFocus) ? 'none' : '';
+      var hiddenByLens = !noteAllowedByLens(el.getAttribute('data-note-id'));
+      el.style.display = (hidden[el.getAttribute('data-note-id')] || hiddenByBucket || hiddenByFocus || hiddenByLens) ? 'none' : '';
     });
     notes.forEach(syncCollapseButton);
   }
@@ -2160,7 +2278,7 @@
     if (!layer) return;
     installBucketDragging();
     layer.innerHTML = '';
-    if (noteFocus && noteFocus.kind === 'branch') return;
+    if (noteLens || (noteFocus && noteFocus.kind === 'branch')) return;
     if (!noteFocus && !bucketDrag && !noteDragActive) separateBucketLayouts();
     bucketNames().forEach(function(bucket){
       if (noteFocus && noteFocus.kind === 'bucket' && bucketText(bucket) !== noteFocus.value) return;
@@ -2794,6 +2912,7 @@
     renderBuckets();
     renderLinks();
     renderNoteFocusBar();
+    syncNoteLensButton();
   }
   function installCanvasClick(){
     var st = stage(); if (!st || st.__notesClick) return;
@@ -2980,6 +3099,7 @@
     notes = nextNotes;
     links = nextLinks;
     noteFocus = null;
+    noteLens = null;
     bucketUiState = Object.create(null);
     bucketLayoutState = Object.create(null);
     bucketFollowState = Object.create(null);
@@ -3110,6 +3230,10 @@
     focusBucket: focusNoteBucket,
     clearFocus: clearNoteFocus,
     focusState: noteFocusSnapshot,
+    applyLens: applyNoteLens,
+    clearLens: clearNoteLens,
+    lensState: noteLensSnapshot,
+    lenses: function(){ return noteLensDefinitions.map(function(definition){ return {id:definition.id, label:definition.label, query:definition.query}; }); },
     reflowMindMap: reflowMindMap,
     compactMindMap: compactMindMap,
     toggleCollapse: toggleCollapse,
@@ -3134,6 +3258,7 @@
     links: function(){ return links.slice(); },
     noteLabels: function(){ return syncNoteLabels(); },
     searchNotes: function(query){ return searchNotes(query).map(function(n){ return n.id; }); },
+    parseSearchQuery: function(query){ return NoteCore.parseQuery(query); },
     makeSpaceForRects: makeSpaceForRects,
     focusSearchResult: focusSearchResult,
     linkNoteToTask: linkNoteToTask,
