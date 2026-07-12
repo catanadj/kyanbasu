@@ -21,6 +21,7 @@
   var bucketColorState = Object.create(null);
   var noteSearchQuery = '';
   var noteSearchMatches = [];
+  var noteFocus = null;
   var pendingRepairFeedback = null;
   var NoteCore = window.TaskCanvasNotesCore;
   var NoteStorage = window.TaskCanvasStorage;
@@ -116,8 +117,10 @@
         changed = true;
       }
     });
+    if (noteFocus && noteFocus.kind === 'bucket' && noteFocus.value === oldBucket) noteFocus.value = nextBucket;
     if (changed){
       renderAll();
+      refreshViewerOutline();
       saveBucketState();
       saveBucketLayoutState();
       saveBucketFollowState();
@@ -145,6 +148,102 @@
   }
   function childLinksFrom(id){
     return links.filter(function(l){ return l && l.type === 'child' && l.from === id && noteById(l.to); });
+  }
+  function focusedNoteIds(){
+    var ids = Object.create(null);
+    if (!noteFocus) return ids;
+    if (noteFocus.kind === 'bucket'){
+      notes.forEach(function(note){ if (noteBucket(note) === noteFocus.value) ids[note.id] = true; });
+      return ids;
+    }
+    if (noteFocus.kind === 'branch'){
+      var stack = [noteFocus.value];
+      while (stack.length){
+        var id = stack.pop();
+        if (ids[id] || !noteById(id)) continue;
+        ids[id] = true;
+        childLinksFrom(id).forEach(function(link){ stack.push(link.to); });
+      }
+    }
+    return ids;
+  }
+  function noteAllowedByFocus(id){
+    return !noteFocus || !!focusedNoteIds()[id];
+  }
+  function noteFocusSnapshot(){
+    if (!noteFocus) return {kind:'none', count:notes.length, ids:notes.map(function(note){ return note.id; })};
+    var ids = Object.keys(focusedNoteIds());
+    var labels = computeNoteLabels();
+    return {
+      kind:noteFocus.kind,
+      value:noteFocus.value,
+      label:noteFocus.kind === 'branch' ? (labels[noteFocus.value] || 'Branch') : noteFocus.value,
+      count:ids.length,
+      ids:ids
+    };
+  }
+  function ensureNoteFocusBar(){
+    var bar = document.getElementById('tcNoteFocusBar');
+    if (bar) return bar;
+    var wrap = document.getElementById('builderWrap');
+    if (!wrap) return null;
+    bar = document.createElement('div');
+    bar.id = 'tcNoteFocusBar';
+    bar.className = 'tcNoteFocusBar';
+    bar.innerHTML = '<span class="tcNoteFocusLabel"></span><button type="button">Show all</button>';
+    qs('button', bar).addEventListener('click', function(){ clearNoteFocus(); });
+    wrap.appendChild(bar);
+    return bar;
+  }
+  function renderNoteFocusBar(){
+    var bar = ensureNoteFocusBar();
+    if (!bar) return;
+    if (!noteFocus){ bar.hidden = true; return; }
+    var state = noteFocusSnapshot();
+    bar.hidden = false;
+    qs('.tcNoteFocusLabel', bar).textContent = (state.kind === 'branch' ? 'Branch ' : 'Bucket ') + state.label + ' · ' + state.count + ' note' + (state.count === 1 ? '' : 's');
+  }
+  function refreshViewerOutline(){
+    try{ if (typeof window.renderViewer === 'function') window.renderViewer(); else if (typeof renderViewer === 'function') renderViewer(); }catch(_){}
+  }
+  function focusNoteBranch(id){
+    var target = noteById(id);
+    if (!target) return false;
+    target.collapsed = false;
+    var cursor = id;
+    var guard = 0;
+    while (guard++ < 100){
+      var parent = parentLinkFor(cursor);
+      if (!parent) break;
+      var parentNote = noteById(parent.from);
+      if (parentNote) parentNote.collapsed = false;
+      cursor = parent.from;
+    }
+    bucketUiState[noteBucket(target)] = false;
+    noteFocus = {kind:'branch', value:id};
+    renderAll();
+    selectNote(id);
+    refreshViewerOutline();
+    saveSoon();
+    return true;
+  }
+  function focusNoteBucket(bucket){
+    bucket = bucketText(bucket);
+    if (!notes.some(function(note){ return noteBucket(note) === bucket; })) return false;
+    bucketUiState[bucket] = false;
+    noteFocus = {kind:'bucket', value:bucket};
+    renderAll();
+    refreshViewerOutline();
+    saveSoon();
+    return true;
+  }
+  function clearNoteFocus(skipRender){
+    if (!noteFocus) return false;
+    noteFocus = null;
+    if (!skipRender) renderAll();
+    else renderNoteFocusBar();
+    refreshViewerOutline();
+    return true;
   }
   function hasChildParent(id){
     return links.some(function(l){ return l && l.type === 'child' && l.to === id && noteById(l.from); });
@@ -181,6 +280,7 @@
       link.type = type;
       selectedLinkKey = noteLinkKey(link);
       renderAll();
+      refreshViewerOutline();
       saveSoon();
       return true;
     }
@@ -194,6 +294,21 @@
   }
   function noteOutline(){
     return NoteCore.outline(notes, links);
+  }
+  function focusedNoteOutline(){
+    if (!noteFocus) return noteOutline();
+    var allowed = focusedNoteIds();
+    var labels = computeNoteLabels();
+    var focusedNotes = notes.filter(function(note){ return !!allowed[note.id]; });
+    var focusedLinks = links.filter(function(link){ return !!allowed[link.from] && !!allowed[link.to]; });
+    var outline = NoteCore.outline(focusedNotes, focusedLinks);
+    function restoreLabels(item, depth){
+      item.label = labels[item.id] || item.label || '';
+      item.depth = depth || 0;
+      (item.children || []).forEach(function(child){ restoreLabels(child, (depth || 0) + 1); });
+    }
+    outline.forEach(function(item){ restoreLabels(item, 0); });
+    return outline;
   }
   function syncNoteLabels(){
     var labels = computeNoteLabels();
@@ -259,6 +374,7 @@
   function revealNote(id){
     var n = noteById(id);
     if (!n) return false;
+    if (!noteAllowedByFocus(id)) clearNoteFocus(true);
     var cursor = id;
     var guard = 0;
     while (guard++ < 100){
@@ -455,6 +571,7 @@
     if (n.kind === kind) return true;
     n.kind = kind;
     renderAll();
+    refreshViewerOutline();
     saveSoon();
     return true;
   }
@@ -465,6 +582,7 @@
     if (n.status === status) return true;
     n.status = status;
     renderAll();
+    refreshViewerOutline();
     saveSoon();
     return true;
   }
@@ -1862,8 +1980,10 @@
       count:ids.length,
       primary:primary,
       label:ids.length === 1 ? ((labels[primary] || 'Note') + ' selected') : (ids.length + ' notes selected'),
+      bucket:noteBucket(note),
       hasChildren:!!childLinksFrom(primary).length,
-      collapsed:!!(note && note.collapsed)
+      collapsed:!!(note && note.collapsed),
+      focus:noteFocusSnapshot()
     });
   }
   function selectNote(id, additive){
@@ -1903,6 +2023,9 @@
   }
   function syncSelection(){
     qsa('.tcNoteNode').forEach(function(el){
+      el.classList.toggle('selected', !!selectedNoteIds[el.getAttribute('data-note-id')]);
+    });
+    qsa('.viewerNote').forEach(function(el){
       el.classList.toggle('selected', !!selectedNoteIds[el.getAttribute('data-note-id')]);
     });
     renderLinkInspector();
@@ -1969,6 +2092,7 @@
     ids.forEach(function(id){ if (noteById(id)) doomed[id] = true; });
     var doomedIds = Object.keys(doomed);
     if (!doomedIds.length) return;
+    if (noteFocus && noteFocus.kind === 'branch' && doomed[noteFocus.value]) clearNoteFocus(true);
     notes = notes.filter(function(n){ return !doomed[n.id]; });
     links = links.filter(function(l){ return !doomed[l.from] && !doomed[l.to]; });
     if (selectedLinkKey && !links.some(function(l){ return noteLinkKey(l) === selectedLinkKey; })) selectedLinkKey = null;
@@ -1980,6 +2104,7 @@
     });
     syncSelection();
     renderLinks();
+    refreshViewerOutline();
     saveSoon();
   }
   function editBucket(id){
@@ -2006,14 +2131,16 @@
   }
   function isNoteVisible(id){
     var n = noteById(id);
-    return !!n && !hiddenNoteIds()[id] && !bucketCollapsed(noteBucket(n));
+    return !!n && noteAllowedByFocus(id) && !hiddenNoteIds()[id] && !bucketCollapsed(noteBucket(n));
   }
   function applyVisibility(){
     var hidden = hiddenNoteIds();
+    var focused = noteFocus ? focusedNoteIds() : null;
     qsa('.tcNoteNode').forEach(function(el){
       var n = noteById(el.getAttribute('data-note-id'));
       var hiddenByBucket = n ? bucketCollapsed(noteBucket(n)) : false;
-      el.style.display = (hidden[el.getAttribute('data-note-id')] || hiddenByBucket) ? 'none' : '';
+      var hiddenByFocus = focused && !focused[el.getAttribute('data-note-id')];
+      el.style.display = (hidden[el.getAttribute('data-note-id')] || hiddenByBucket || hiddenByFocus) ? 'none' : '';
     });
     notes.forEach(syncCollapseButton);
   }
@@ -2032,9 +2159,11 @@
     var layer = ensureBucketLayer();
     if (!layer) return;
     installBucketDragging();
-    if (!bucketDrag && !noteDragActive) separateBucketLayouts();
     layer.innerHTML = '';
+    if (noteFocus && noteFocus.kind === 'branch') return;
+    if (!noteFocus && !bucketDrag && !noteDragActive) separateBucketLayouts();
     bucketNames().forEach(function(bucket){
+      if (noteFocus && noteFocus.kind === 'bucket' && bucketText(bucket) !== noteFocus.value) return;
       var rect = bucketVisualRect(bucket);
       if (!rect) return;
       var box = document.createElement('div');
@@ -2100,6 +2229,7 @@
     if (!n || childLinksFrom(id).length === 0) return;
     n.collapsed = !n.collapsed;
     renderAll();
+    refreshViewerOutline();
     saveSoon();
   }
   function ensureLinkLayer(){
@@ -2494,8 +2624,13 @@
       renderBuckets();
       renderLinks();
     }
+    if (noteFocus){
+      if (!noteAllowedByFocus(child.id)) clearNoteFocus(true);
+      renderAll();
+    }
     selectNote(child.id);
     focusNoteText(child.id);
+    refreshViewerOutline();
     saveSoon();
     return child;
   }
@@ -2512,8 +2647,13 @@
       syncNoteLabels();
       renderBuckets();
       renderLinks();
+      if (noteFocus){
+        if (!noteAllowedByFocus(sibling.id)) clearNoteFocus(true);
+        renderAll();
+      }
       selectNote(sibling.id);
       focusNoteText(sibling.id);
+      refreshViewerOutline();
       saveSoon();
       return sibling;
     }
@@ -2522,8 +2662,13 @@
     syncNoteLabels();
     renderBuckets();
     renderLinks();
+    if (noteFocus){
+      if (!noteAllowedByFocus(sibling.id)) clearNoteFocus(true);
+      renderAll();
+    }
     selectNote(sibling.id);
     focusNoteText(sibling.id);
+    refreshViewerOutline();
     saveSoon();
     return sibling;
   }
@@ -2648,6 +2793,7 @@
     resolveNoteOverlaps();
     renderBuckets();
     renderLinks();
+    renderNoteFocusBar();
   }
   function installCanvasClick(){
     var st = stage(); if (!st || st.__notesClick) return;
@@ -2755,6 +2901,11 @@
       if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
       if (ev.target && ev.target.closest && ev.target.closest('input, textarea, select')) return;
       if (ev.target && ev.target.closest && ev.target.closest('[contenteditable="true"]') && !ev.target.closest('.tcNoteText')) return;
+      if (ev.key === 'Escape' && noteFocus){
+        ev.preventDefault();
+        clearNoteFocus();
+        return;
+      }
       if ((ev.key === 'Delete' || ev.key === 'Backspace') && selectedLinkKey){
         ev.preventDefault();
         deleteSelectedLink();
@@ -2828,6 +2979,7 @@
     var nextLinks = sanitized.links;
     notes = nextNotes;
     links = nextLinks;
+    noteFocus = null;
     bucketUiState = Object.create(null);
     bucketLayoutState = Object.create(null);
     bucketFollowState = Object.create(null);
@@ -2908,6 +3060,7 @@
     if (!n) return false;
     n.bucket = bucketText(bucket);
     renderAll();
+    refreshViewerOutline();
     saveSoon();
     return true;
   }
@@ -2953,6 +3106,10 @@
     deleteSelectedLink: deleteSelectedLink,
     setLinkType: setLinkType,
     relationTypes: function(includeStructural){ return NoteCore.relationOptions(!!includeStructural); },
+    focusBranch: focusNoteBranch,
+    focusBucket: focusNoteBucket,
+    clearFocus: clearNoteFocus,
+    focusState: noteFocusSnapshot,
     reflowMindMap: reflowMindMap,
     compactMindMap: compactMindMap,
     toggleCollapse: toggleCollapse,
@@ -2973,6 +3130,7 @@
     notes: function(){ return notes.slice(); },
     noteSpaceRects: noteSpaceRects,
     outline: noteOutline,
+    visibleOutline: focusedNoteOutline,
     links: function(){ return links.slice(); },
     noteLabels: function(){ return syncNoteLabels(); },
     searchNotes: function(query){ return searchNotes(query).map(function(n){ return n.id; }); },

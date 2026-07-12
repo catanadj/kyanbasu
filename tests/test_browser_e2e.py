@@ -2410,6 +2410,164 @@ window.addEventListener('load', function(){
         self.assertTrue(result["projectMoved"], msg=json.dumps(result))
         self.assertTrue(result["clear"], msg=json.dumps(result))
 
+    def test_canvas_notes_focuses_branch_and_bucket_across_builder_and_viewer(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTE_FOCUS_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var root = window.TaskCanvasNotes.createNote(180, 220, 'Root idea', '', 'Planning', {skipAutoLayout:true});
+      var child = window.TaskCanvasNotes.createChildNote(root.id, 'Child idea', '');
+      window.TaskCanvasNotes.createChildNote(child.id, 'Nested idea', '');
+      window.TaskCanvasNotes.createNote(820, 220, 'Other planning root', '', 'Planning', {skipAutoLayout:true});
+      window.TaskCanvasNotes.createNote(820, 480, 'Delivery root', '', 'Delivery', {skipAutoLayout:true});
+      window.TaskCanvasNotes.toggleCollapse(root.id);
+      window.TaskCanvasNotes.focusBranch(root.id);
+      var branchVisible = Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){ return el.style.display !== 'none'; }).length;
+      var branchState = window.TaskCanvasNotes.focusState();
+      var branchOutline = window.TaskCanvasNotes.visibleOutline();
+      var focusBar = (document.getElementById('tcNoteFocusBar') || {}).textContent || '';
+      document.getElementById('tabViewer').click();
+      setTimeout(function(){
+        var viewerTitle = (document.querySelectorAll('#viewerStage .viewerSectionTitle')[1] || {}).textContent || '';
+        var viewerRows = document.querySelectorAll('#viewerStage .viewerNote').length;
+        var showAll = Array.prototype.slice.call(document.querySelectorAll('#viewerStage .viewerSortBtn')).filter(function(btn){ return btn.textContent === 'Show all'; })[0];
+        showAll.click();
+        setTimeout(function(){
+          var allRows = document.querySelectorAll('#viewerStage .viewerNote').length;
+          document.getElementById('tabBuilder').click();
+          window.TaskCanvasNotes.focusBucket('Planning');
+          var bucketVisible = Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){ return el.style.display !== 'none'; }).length;
+          var bucketBoxes = document.querySelectorAll('#tcNoteBucketsLayer .tcNoteBucket').length;
+          var bucketState = window.TaskCanvasNotes.focusState();
+          document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
+          setTimeout(function(){
+            var out = {
+              branchVisible:branchVisible,
+              branchState:branchState,
+              branchRoots:branchOutline.map(function(item){ return item.id; }),
+              focusBar:focusBar,
+              viewerTitle:viewerTitle,
+              viewerRows:viewerRows,
+              allRows:allRows,
+              bucketVisible:bucketVisible,
+              bucketBoxes:bucketBoxes,
+              bucketState:bucketState,
+              afterEscape:window.TaskCanvasNotes.focusState().kind,
+              allVisible:Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){ return el.style.display !== 'none'; }).length
+            };
+            var pre = document.createElement('pre');
+            pre.id = 'e2e-out';
+            pre.textContent = JSON.stringify(out);
+            document.body.appendChild(pre);
+          }, 100);
+        }, 100);
+      }, 140);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["branchVisible"], 3, msg=json.dumps(result))
+        self.assertEqual(result["branchState"]["kind"], "branch", msg=json.dumps(result))
+        self.assertEqual(result["branchState"]["count"], 3, msg=json.dumps(result))
+        self.assertEqual(len(result["branchRoots"]), 1, msg=json.dumps(result))
+        self.assertIn("Branch A1", result["focusBar"], msg=json.dumps(result))
+        self.assertIn("Notes · Branch A1", result["viewerTitle"], msg=json.dumps(result))
+        self.assertEqual(result["viewerRows"], 3, msg=json.dumps(result))
+        self.assertEqual(result["allRows"], 5, msg=json.dumps(result))
+        self.assertEqual(result["bucketVisible"], 4, msg=json.dumps(result))
+        self.assertEqual(result["bucketBoxes"], 1, msg=json.dumps(result))
+        self.assertEqual(result["bucketState"]["kind"], "bucket", msg=json.dumps(result))
+        self.assertEqual(result["afterEscape"], "none", msg=json.dumps(result))
+        self.assertEqual(result["allVisible"], 5, msg=json.dumps(result))
+
+    def test_viewer_note_outliner_edits_and_creates_siblings_and_children(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_EDITABLE_NOTE_OUTLINER_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var root = window.TaskCanvasNotes.createNote(180, 240, 'Initial thought', '', 'Planning');
+      document.getElementById('tabViewer').click();
+      setTimeout(function(){
+        var rootRow = document.querySelector('#viewerStage .viewerNote[data-note-id="'+root.id+'"]');
+        var editor = rootRow.querySelector('.viewerNoteText');
+        editor.focus();
+        editor.textContent = 'Edited thought';
+        editor.dispatchEvent(new Event('input', {bubbles:true}));
+        editor.dispatchEvent(new KeyboardEvent('keydown', {key:'Tab', bubbles:true, cancelable:true}));
+        setTimeout(function(){
+          var selectedId = window.TaskCanvasNotes.primaryNote();
+          var childEditor = document.querySelector('#viewerStage .viewerNote[data-note-id="'+selectedId+'"] .viewerNoteText');
+          childEditor.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true, cancelable:true}));
+          setTimeout(function(){
+            var outline = window.TaskCanvasNotes.outline();
+            var rootAfter = outline.filter(function(item){ return item.id === root.id; })[0];
+            var selectedRowsBefore = document.querySelectorAll('#viewerStage .viewerNote.selected').length;
+            var inspectorKindBefore = !!document.getElementById('inspectorNoteKind');
+            var toggle = document.querySelector('#viewerStage .viewerNote[data-note-id="'+root.id+'"] .viewerNoteToggle');
+            toggle.click();
+            setTimeout(function(){
+              var collapsedRows = document.querySelectorAll('#viewerStage .viewerNote').length;
+              var out = {
+                content:window.TaskCanvasNotes.notes().filter(function(note){ return note.id === root.id; })[0].content,
+                notes:window.TaskCanvasNotes.notes().length,
+                childCount:rootAfter && rootAfter.children.length,
+                childDepths:(rootAfter && rootAfter.children || []).map(function(item){ return item.depth; }),
+                collapsedRows:collapsedRows,
+                selectedRows:selectedRowsBefore,
+                contentEditable:editor.getAttribute('contenteditable'),
+                inspectorKind:inspectorKindBefore
+              };
+              var pre = document.createElement('pre');
+              pre.id = 'e2e-out';
+              pre.textContent = JSON.stringify(out);
+              document.body.appendChild(pre);
+            }, 100);
+          }, 120);
+        }, 120);
+      }, 140);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["content"], "Edited thought", msg=json.dumps(result))
+        self.assertEqual(result["notes"], 3, msg=json.dumps(result))
+        self.assertEqual(result["childCount"], 2, msg=json.dumps(result))
+        self.assertEqual(result["childDepths"], [1, 1], msg=json.dumps(result))
+        self.assertEqual(result["collapsedRows"], 1, msg=json.dumps(result))
+        self.assertEqual(result["selectedRows"], 1, msg=json.dumps(result))
+        self.assertEqual(result["contentEditable"], "true", msg=json.dumps(result))
+        self.assertTrue(result["inspectorKind"], msg=json.dumps(result))
+
     def test_viewer_renders_task_section_and_note_outline(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({

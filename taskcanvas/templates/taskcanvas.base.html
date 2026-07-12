@@ -1091,13 +1091,17 @@
   }
   .viewerNote{
     display:grid;
-    grid-template-columns:auto minmax(0, 1fr) auto auto;
+    grid-template-columns:auto auto minmax(0, 1fr) auto auto;
     gap:10px;
     align-items:start;
     padding:9px 10px;
     border:1px solid rgba(164,185,214,.12);
     border-radius:12px;
     background:rgba(255,255,255,.025);
+  }
+  .viewerNote.selected{
+    border-color:rgba(97,208,255,.45);
+    box-shadow:0 0 0 2px rgba(97,208,255,.10);
   }
   .viewerNote + .viewerNote{margin-top:7px}
   .viewerNoteCode{
@@ -1112,6 +1116,29 @@
     line-height:1.35;
     word-break:break-word;
   }
+  .viewerNoteText[contenteditable="true"]{
+    min-height:20px;
+    padding:1px 3px;
+    border-radius:4px;
+    cursor:text;
+    outline:none;
+  }
+  .viewerNoteText[contenteditable="true"]:focus{
+    background:rgba(97,208,255,.08);
+    box-shadow:0 0 0 1px rgba(97,208,255,.28);
+  }
+  .viewerNoteToggle{
+    width:18px;
+    height:18px;
+    padding:0;
+    border:0;
+    background:transparent;
+    color:var(--muted);
+    cursor:pointer;
+    font-size:11px;
+    line-height:18px;
+  }
+  .viewerNoteToggle:disabled{opacity:.22;cursor:default}
   .viewerNoteBucket{
     color:var(--muted);
     font-size:11px;
@@ -3364,10 +3391,13 @@ function renderContextSelectionBar(){
     actions.push(['delete', 'Delete', true]);
   } else if (state.kind === 'note'){
     if (state.count === 1){
+      actions.push(['note-focus-branch', 'Focus branch']);
+      actions.push(['note-focus-bucket', 'Focus bucket']);
       actions.push(['note-child', 'Child']);
       actions.push(['note-sibling', 'Sibling']);
       if (state.hasChildren) actions.push(['note-collapse', state.collapsed ? 'Expand' : 'Collapse']);
     }
+    if (state.focus && state.focus.kind && state.focus.kind !== 'none') actions.push(['note-focus-clear', 'Show all']);
     if (state.count === 2) actions.push(['note-link', 'Link']);
     actions.push(['note-task', state.count === 1 ? 'Create task' : 'Create tasks']);
     actions.push(['note-delete', 'Delete', true]);
@@ -3406,6 +3436,9 @@ if (contextSelectionActions) contextSelectionActions.addEventListener('click', f
   var state = contextSelectionState || {};
   if (action === 'note-child') api.createChildNote(state.primary);
   else if (action === 'note-sibling') api.createSiblingNote(state.primary);
+  else if (action === 'note-focus-branch') api.focusBranch(state.primary);
+  else if (action === 'note-focus-bucket') api.focusBucket(state.bucket);
+  else if (action === 'note-focus-clear') api.clearFocus();
   else if (action === 'note-collapse') api.toggleCollapse(state.primary);
   else if (action === 'note-link') api.linkSelectedNotes();
   else if (action === 'note-task') api.stageSelectedNotesAsTasks();
@@ -3744,7 +3777,7 @@ function viewerSectionBottom(section){
   if (!section) return 40;
   return (parseInt(section.style.top || '0', 10) || 0) + (section.offsetHeight || 0);
 }
-function addViewerNoteSortControls(section, mode){
+function addViewerNoteSortControls(section, mode, focusState){
   if (!section) return;
   var actions=document.createElement('div');
   actions.className='viewerSectionActions';
@@ -3758,6 +3791,16 @@ function addViewerNoteSortControls(section, mode){
     btn.addEventListener('click', function(){ setViewerNotesSortMode(pair[0]); });
     actions.appendChild(btn);
   });
+  if (focusState && focusState.kind && focusState.kind !== 'none'){
+    var clear=document.createElement('button');
+    clear.type='button';
+    clear.className='viewerSortBtn';
+    clear.textContent='Show all';
+    clear.addEventListener('click', function(){
+      if (window.TaskCanvasNotes && typeof window.TaskCanvasNotes.clearFocus === 'function') window.TaskCanvasNotes.clearFocus();
+    });
+    actions.appendChild(clear);
+  }
   var head = section.querySelector('.viewerSectionHead');
   if (head && head.nextSibling) section.insertBefore(actions, head.nextSibling);
   else section.appendChild(actions);
@@ -3805,13 +3848,59 @@ function appendViewerNote(outlineEl, item){
   row.className="viewerNote";
   row.style.marginLeft=Math.min(180, (item.depth || 0) * 24) + "px";
   row.setAttribute('data-note-id', item.id || '');
+  try{
+    if (window.TaskCanvasNotes && typeof window.TaskCanvasNotes.selectedNotes === 'function' && window.TaskCanvasNotes.selectedNotes().indexOf(item.id) !== -1) row.classList.add('selected');
+  }catch(_){}
   row.innerHTML =
+    '<button type="button" class="viewerNoteToggle" title="Collapse branch"></button>' +
     '<div class="viewerNoteCode"></div>' +
-    '<div class="viewerNoteText"></div>' +
+    '<div class="viewerNoteText" contenteditable="true" spellcheck="true"></div>' +
     '<div class="viewerNoteSemantics"></div>' +
     '<div class="viewerNoteBucket"></div>';
   row.querySelector('.viewerNoteCode').textContent=item.label || '';
-  row.querySelector('.viewerNoteText').textContent=item.content || 'New note';
+  var textEl = row.querySelector('.viewerNoteText');
+  textEl.textContent=item.content || 'New note';
+  var toggle = row.querySelector('.viewerNoteToggle');
+  var hasChildren = !!(item.children && item.children.length);
+  toggle.disabled = !hasChildren;
+  toggle.textContent = item.collapsed ? '>' : 'v';
+  toggle.title = item.collapsed ? 'Expand branch' : 'Collapse branch';
+  toggle.addEventListener('click', function(ev){
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (window.TaskCanvasNotes && typeof window.TaskCanvasNotes.toggleCollapse === 'function'){
+      window.TaskCanvasNotes.toggleCollapse(item.id);
+      renderViewer();
+    }
+  });
+  textEl.addEventListener('focus', function(){
+    if (window.TaskCanvasNotes && typeof window.TaskCanvasNotes.selectNote === 'function') window.TaskCanvasNotes.selectNote(item.id);
+  });
+  textEl.addEventListener('input', function(){
+    if (window.TaskCanvasNotes && typeof window.TaskCanvasNotes.setContent === 'function') window.TaskCanvasNotes.setContent(item.id, textEl.textContent);
+  });
+  textEl.addEventListener('keydown', function(ev){
+    if (ev.key === 'Escape'){
+      ev.preventDefault();
+      textEl.blur();
+      return;
+    }
+    if (ev.key === 'Enter' && !ev.shiftKey){
+      ev.preventDefault();
+      var sibling = window.TaskCanvasNotes && window.TaskCanvasNotes.createSiblingNote(item.id, 'New branch', '');
+      renderViewer();
+      if (sibling) focusViewerNoteEditor(sibling.id);
+    } else if (ev.key === 'Tab' && !ev.shiftKey){
+      ev.preventDefault();
+      var child = window.TaskCanvasNotes && window.TaskCanvasNotes.createChildNote(item.id, 'New branch', '');
+      renderViewer();
+      if (child) focusViewerNoteEditor(child.id);
+    }
+  });
+  row.addEventListener('click', function(ev){
+    if (ev.target.closest('.viewerNoteText, .viewerNoteToggle')) return;
+    if (window.TaskCanvasNotes && typeof window.TaskCanvasNotes.selectNote === 'function') window.TaskCanvasNotes.selectNote(item.id, !!(ev.shiftKey || ev.ctrlKey || ev.metaKey));
+  });
   var semantics = row.querySelector('.viewerNoteSemantics');
   if (item.kind && item.kind !== 'note'){
     var kind = document.createElement('span');
@@ -3829,6 +3918,20 @@ function appendViewerNote(outlineEl, item){
   outlineEl.appendChild(row);
   if (item.collapsed) return;
   (item.children || []).forEach(function(child){ appendViewerNote(outlineEl, child); });
+}
+function focusViewerNoteEditor(id){
+  setTimeout(function(){
+    var editor=document.querySelector('#viewerStage .viewerNote[data-note-id="'+String(id || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"')+'"] .viewerNoteText');
+    if (!editor) return;
+    editor.focus();
+    try{
+      var range=document.createRange();
+      range.selectNodeContents(editor);
+      var selection=window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }catch(_){}
+  }, 0);
 }
 function renderViewerNotes(section, outline){
   if (!outline.length){
@@ -3862,16 +3965,20 @@ function renderViewer(){
     if (isDependentShort(t.short)) depTasks.push(t);
   }
   var outline = [];
-  if (window.TaskCanvasNotes && typeof window.TaskCanvasNotes.outline === "function"){
+  if (window.TaskCanvasNotes && typeof window.TaskCanvasNotes.visibleOutline === "function"){
+    outline = window.TaskCanvasNotes.visibleOutline();
+  } else if (window.TaskCanvasNotes && typeof window.TaskCanvasNotes.outline === "function"){
     outline = window.TaskCanvasNotes.outline();
   }
+  var noteFocus = window.TaskCanvasNotes && typeof window.TaskCanvasNotes.focusState === 'function' ? window.TaskCanvasNotes.focusState() : {kind:'none'};
   var sortMode = viewerNotesSortMode();
   outline = sortedViewerOutline(outline, sortMode);
   var tasksSection=viewerSection("Tasks", depTasks.length + " dependent", 40);
   renderViewerTasks(tasksSection, depTasks);
   var notesTop = viewerSectionBottom(tasksSection) + 44;
-  var notesSection=viewerSection("Notes", outline.length + " root" + (outline.length === 1 ? "" : "s"), notesTop);
-  addViewerNoteSortControls(notesSection, sortMode);
+  var notesTitle = noteFocus && noteFocus.kind !== 'none' ? "Notes · " + (noteFocus.kind === 'branch' ? 'Branch ' : 'Bucket ') + noteFocus.label : "Notes";
+  var notesSection=viewerSection(notesTitle, outline.length + " root" + (outline.length === 1 ? "" : "s"), notesTop);
+  addViewerNoteSortControls(notesSection, sortMode, noteFocus);
   renderViewerNotes(notesSection, outline);
 }
 
