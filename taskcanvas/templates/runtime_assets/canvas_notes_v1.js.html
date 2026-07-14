@@ -23,6 +23,7 @@
   var noteSearchMatches = [];
   var noteFocus = null;
   var noteLens = null;
+  var noteReview = null;
   var noteLensDefinitions = [
     {id:'open-questions', label:'Open questions', query:'kind:question status:open'},
     {id:'decisions', label:'Decisions', query:'kind:decision'},
@@ -456,6 +457,16 @@
       }
       menu.appendChild(row);
     });
+    var review = document.createElement('button');
+    review.type = 'button';
+    review.className = 'tcNoteLensReview';
+    review.textContent = 'Review visible notes';
+    review.disabled = !reviewCandidateIds().length;
+    review.addEventListener('click', function(){
+      menu.hidden = true;
+      startNoteReview();
+    });
+    menu.appendChild(review);
     var input = document.getElementById('noteSearchInput');
     var currentQuery = input ? input.value.trim() : '';
     var save = document.createElement('button');
@@ -500,6 +511,155 @@
   function noteLensSnapshot(){
     if (!noteLens) return {kind:'none', count:notes.length, ids:notes.map(function(note){ return note.id; })};
     return {kind:'lens', id:noteLens.id, label:noteLens.label, query:noteLens.query, count:Object.keys(noteLens.ids).length, ids:Object.keys(noteLens.ids)};
+  }
+  function reviewCandidateIds(){
+    var allowed = visibleNoteIds();
+    var labels = computeNoteLabels();
+    return notes.filter(function(note){ return !!allowed[note.id]; }).sort(function(a, b){
+      return String(labels[a.id] || '').localeCompare(String(labels[b.id] || '')) || String(a.id).localeCompare(String(b.id));
+    }).map(function(note){ return note.id; });
+  }
+  function reviewContextLabel(){
+    if (noteLens) return noteLens.label;
+    if (noteFocus){
+      var focus = noteFocusSnapshot();
+      return (focus.kind === 'branch' ? 'Branch ' : 'Bucket ') + focus.label;
+    }
+    return 'All notes';
+  }
+  function ensureNoteReviewPanel(){
+    var panel = document.getElementById('tcNoteReviewPanel');
+    if (panel) return panel;
+    var wrap = document.getElementById('builderWrap');
+    if (!wrap) return null;
+    panel = document.createElement('section');
+    panel.id = 'tcNoteReviewPanel';
+    panel.className = 'tcNoteReviewPanel';
+    panel.hidden = true;
+    wrap.appendChild(panel);
+    if (!document.__noteReviewKeys){
+      document.__noteReviewKeys = true;
+      document.addEventListener('keydown', function(ev){
+        if (!noteReview || ev.defaultPrevented || ev.target && ev.target.closest && ev.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+        if (ev.key === 'ArrowLeft'){ ev.preventDefault(); moveNoteReview(-1); }
+        else if (ev.key === 'ArrowRight'){ ev.preventDefault(); moveNoteReview(1); }
+        else if (ev.key === 'Escape'){ ev.preventDefault(); stopNoteReview(); }
+      });
+    }
+    return panel;
+  }
+  function noteReviewSnapshot(){
+    if (!noteReview) return {active:false, count:0, index:-1, currentId:null};
+    return {
+      active:true,
+      count:noteReview.ids.length,
+      index:noteReview.index,
+      currentId:noteReview.ids[noteReview.index] || null,
+      context:reviewContextLabel()
+    };
+  }
+  function syncNoteReviewQueue(){
+    if (!noteReview) return;
+    var oldId = noteReview.ids[noteReview.index] || null;
+    var oldIndex = noteReview.index;
+    noteReview.ids = reviewCandidateIds();
+    var retained = oldId ? noteReview.ids.indexOf(oldId) : -1;
+    noteReview.index = retained >= 0 ? retained : Math.max(0, Math.min(oldIndex, noteReview.ids.length - 1));
+    if (!noteReview.ids.length){ stopNoteReview(); return; }
+    renderNoteReviewPanel();
+  }
+  function startNoteReview(){
+    var ids = reviewCandidateIds();
+    if (!ids.length){ noteFeedback('No notes are available in this view.'); return false; }
+    var selectedIndex = selectedNoteId ? ids.indexOf(selectedNoteId) : -1;
+    noteReview = {ids:ids, index:selectedIndex >= 0 ? selectedIndex : 0};
+    renderNoteReviewPanel();
+    focusReviewNote();
+    return true;
+  }
+  function stopNoteReview(){
+    if (!noteReview) return false;
+    noteReview = null;
+    var panel = document.getElementById('tcNoteReviewPanel');
+    if (panel) panel.hidden = true;
+    return true;
+  }
+  function focusReviewNote(){
+    if (!noteReview) return false;
+    var id = noteReview.ids[noteReview.index];
+    if (!id) return false;
+    focusSearchResult(id);
+    renderNoteReviewPanel();
+    return true;
+  }
+  function moveNoteReview(delta){
+    if (!noteReview || !noteReview.ids.length) return false;
+    var next = Math.max(0, Math.min(noteReview.ids.length - 1, noteReview.index + (delta < 0 ? -1 : 1)));
+    if (next === noteReview.index) return false;
+    noteReview.index = next;
+    return focusReviewNote();
+  }
+  function advanceNoteReviewIfCurrent(id){
+    if (!noteReview || noteReview.ids[noteReview.index] !== id) return;
+    moveNoteReview(1);
+  }
+  function renderNoteReviewPanel(){
+    var panel = ensureNoteReviewPanel();
+    if (!panel) return;
+    if (!noteReview){ panel.hidden = true; return; }
+    var id = noteReview.ids[noteReview.index];
+    var note = noteById(id);
+    if (!note){ syncNoteReviewQueue(); return; }
+    var labels = computeNoteLabels();
+    var refs = noteTaskRefs(note);
+    panel.hidden = false;
+    panel.innerHTML =
+      '<div class="tcNoteReviewHead"><div><strong>Review</strong><span class="tcNoteReviewContext"></span></div><button type="button" class="tcNoteReviewClose" title="Close review">Close</button></div>' +
+      '<div class="tcNoteReviewProgress"><span></span><div><i></i></div></div>' +
+      '<div class="tcNoteReviewMeta"><b></b><span class="kind"></span><span class="status"></span><span class="bucket"></span></div>' +
+      '<textarea class="tcNoteReviewContent" spellcheck="true"></textarea>' +
+      '<div class="tcNoteReviewActions"><button type="button" data-review-status="open">Open</button><button type="button" data-review-status="resolved">Resolve</button><button type="button" data-review-status="parked">Park</button><button type="button" data-review-kind="action">Make action</button><button type="button" data-review-task>Stage task</button></div>' +
+      '<div class="tcNoteReviewNav"><button type="button" data-review-move="-1" title="Previous note">Previous</button><span></span><button type="button" data-review-move="1" title="Next note">Next</button></div>';
+    qs('.tcNoteReviewContext', panel).textContent = reviewContextLabel();
+    qs('.tcNoteReviewProgress span', panel).textContent = (noteReview.index + 1) + ' of ' + noteReview.ids.length;
+    qs('.tcNoteReviewProgress i', panel).style.width = Math.round(((noteReview.index + 1) / noteReview.ids.length) * 100) + '%';
+    qs('.tcNoteReviewMeta b', panel).textContent = labels[id] || 'Note';
+    qs('.tcNoteReviewMeta .kind', panel).textContent = NoteCore.kindLabel(noteKind(note));
+    qs('.tcNoteReviewMeta .status', panel).textContent = NoteCore.statusLabel(noteStatus(note));
+    qs('.tcNoteReviewMeta .bucket', panel).textContent = noteBucket(note);
+    var content = qs('.tcNoteReviewContent', panel);
+    content.value = note.content || '';
+    content.addEventListener('input', function(){ setNoteContent(id, content.value); });
+    content.addEventListener('change', function(){
+      if (noteLens){ renderAll(); refreshViewerOutline(); }
+    });
+    qs('.tcNoteReviewClose', panel).addEventListener('click', stopNoteReview);
+    qsa('[data-review-status]', panel).forEach(function(button){
+      button.classList.toggle('active', button.getAttribute('data-review-status') === noteStatus(note));
+      button.addEventListener('click', function(){
+        var currentId = id;
+        setNoteStatus(currentId, button.getAttribute('data-review-status'));
+        advanceNoteReviewIfCurrent(currentId);
+      });
+    });
+    qs('[data-review-kind]', panel).addEventListener('click', function(){
+      var currentId = id;
+      setNoteKind(currentId, 'action');
+      advanceNoteReviewIfCurrent(currentId);
+    });
+    qs('[data-review-task]', panel).textContent = refs.length ? 'Task linked' : 'Stage task';
+    qs('[data-review-task]', panel).disabled = !!refs.length;
+    qs('[data-review-task]', panel).addEventListener('click', function(){
+      selectNote(id);
+      createLinkedTasksFromSelectedNotes();
+      syncNoteReviewQueue();
+    });
+    qsa('[data-review-move]', panel).forEach(function(button){
+      var direction = parseInt(button.getAttribute('data-review-move'), 10);
+      button.disabled = direction < 0 ? noteReview.index === 0 : noteReview.index === noteReview.ids.length - 1;
+      button.addEventListener('click', function(){ moveNoteReview(direction); });
+    });
+    qs('.tcNoteReviewNav span', panel).textContent = refs.length + ' linked task' + (refs.length === 1 ? '' : 's');
   }
   function syncNoteSearchHighlights(){
     var ids = Object.create(null);
@@ -2315,6 +2475,7 @@
     });
     syncSelection();
     renderLinks();
+    syncNoteReviewQueue();
     refreshViewerOutline();
     saveSoon();
   }
@@ -3007,6 +3168,7 @@
     renderLinks();
     renderNoteFocusBar();
     syncNoteLensButton();
+    syncNoteReviewQueue();
   }
   function installCanvasClick(){
     var st = stage(); if (!st || st.__notesClick) return;
@@ -3194,6 +3356,7 @@
     links = nextLinks;
     noteFocus = null;
     noteLens = null;
+    noteReview = null;
     bucketUiState = Object.create(null);
     bucketLayoutState = Object.create(null);
     bucketFollowState = Object.create(null);
@@ -3332,6 +3495,11 @@
     saveLens: saveCustomLens,
     renameLens: renameCustomLens,
     deleteLens: deleteCustomLens,
+    startReview: startNoteReview,
+    stopReview: stopNoteReview,
+    nextReview: function(){ return moveNoteReview(1); },
+    previousReview: function(){ return moveNoteReview(-1); },
+    reviewState: noteReviewSnapshot,
     reflowMindMap: reflowMindMap,
     compactMindMap: compactMindMap,
     toggleCollapse: toggleCollapse,

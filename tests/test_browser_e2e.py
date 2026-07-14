@@ -4817,6 +4817,89 @@ window.addEventListener('load', function(){
         self.assertEqual(len(result["definitions"]), 6, msg=json.dumps(result))
         self.assertEqual(result["visible"], 2, msg=json.dumps(result))
 
+    def test_canvas_notes_review_session_tracks_active_lens_and_actions(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_REVIEW_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var first = TaskCanvasNotes.createNote(180, 220, 'First question', '', 'Research', {skipAutoLayout:true, kind:'question'});
+      var second = TaskCanvasNotes.createNote(460, 220, 'Second question', '', 'Research', {skipAutoLayout:true, kind:'question'});
+      var third = TaskCanvasNotes.createNote(740, 220, 'Background evidence', '', 'Research', {skipAutoLayout:true, kind:'evidence'});
+      TaskCanvasNotes.applyLens('open-questions');
+      var started = TaskCanvasNotes.startReview();
+      var initial = TaskCanvasNotes.reviewState();
+      var initialPanel = !document.getElementById('tcNoteReviewPanel').hidden;
+      document.querySelector('#tcNoteReviewPanel [data-review-status="resolved"]').click();
+      var afterResolve = TaskCanvasNotes.reviewState();
+      var firstStatus = TaskCanvasNotes.notes().filter(function(note){ return note.id === first.id; })[0].status;
+      document.querySelector('#tcNoteReviewPanel [data-review-kind="action"]').click();
+      var afterActions = TaskCanvasNotes.reviewState();
+      var secondKind = TaskCanvasNotes.notes().filter(function(note){ return note.id === second.id; })[0].kind;
+      var panelClosed = document.getElementById('tcNoteReviewPanel').hidden;
+      TaskCanvasNotes.clearLens();
+      TaskCanvasNotes.startReview();
+      TaskCanvasNotes.nextReview();
+      var afterNext = TaskCanvasNotes.reviewState();
+      var editor = document.querySelector('#tcNoteReviewPanel .tcNoteReviewContent');
+      editor.value = 'Edited during review';
+      editor.dispatchEvent(new Event('input', {bubbles:true}));
+      var edited = TaskCanvasNotes.notes().filter(function(note){ return note.id === afterNext.currentId; })[0].content;
+      TaskCanvasNotes.previousReview();
+      var afterPrevious = TaskCanvasNotes.reviewState();
+      TaskCanvasNotes.stopReview();
+      var out = {
+        ids:{first:first.id, second:second.id, third:third.id},
+        started:started,
+        initial:initial,
+        initialPanel:initialPanel,
+        afterResolve:afterResolve,
+        firstStatus:firstStatus,
+        afterActions:afterActions,
+        secondKind:secondKind,
+        panelClosed:panelClosed,
+        afterNext:afterNext,
+        edited:edited,
+        afterPrevious:afterPrevious,
+        stopped:TaskCanvasNotes.reviewState()
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out';
+      pre.textContent = JSON.stringify(out);
+      document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["started"], msg=json.dumps(result))
+        self.assertTrue(result["initialPanel"], msg=json.dumps(result))
+        self.assertEqual(result["initial"]["count"], 2, msg=json.dumps(result))
+        self.assertEqual(result["initial"]["currentId"], result["ids"]["first"], msg=json.dumps(result))
+        self.assertEqual(result["firstStatus"], "resolved", msg=json.dumps(result))
+        self.assertEqual(result["afterResolve"]["count"], 1, msg=json.dumps(result))
+        self.assertEqual(result["afterResolve"]["currentId"], result["ids"]["second"], msg=json.dumps(result))
+        self.assertEqual(result["secondKind"], "action", msg=json.dumps(result))
+        self.assertFalse(result["afterActions"]["active"], msg=json.dumps(result))
+        self.assertTrue(result["panelClosed"], msg=json.dumps(result))
+        self.assertEqual(result["afterNext"]["index"], 1, msg=json.dumps(result))
+        self.assertEqual(result["edited"], "Edited during review", msg=json.dumps(result))
+        self.assertEqual(result["afterPrevious"]["index"], 0, msg=json.dumps(result))
+        self.assertFalse(result["stopped"]["active"], msg=json.dumps(result))
+
     def test_canvas_notes_links_selected_note_to_existing_task(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({
