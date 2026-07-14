@@ -1,11 +1,9 @@
 <style id="PATCH_STAGED_LINE_ANIM_V1">
-/* Static dependency lines. Direction is shown by SVG markers. */
+/* Static dependency lines. Direction uses attached geometric decorations. */
 #builderLinks path.dep-edge.existing,
 #builderLinks line.dep-edge.existing,
 #builderLinks path.link-existing,
 #builderLinks line.link-existing,
-#depExistingEdges path,
-#depExistingEdges line,
 path.dep-edge.staged,
 line.dep-edge.staged,
 path.existing[class*="dep"],
@@ -33,7 +31,7 @@ line.existing[class*="dep"] {
 }
 
 /* Hide dots in staging area */
-#builderStage circle,
+#depPulseOverlay .pulse-dot,
 #builderStage .energy-dot,
 #builderStage .pulse-dot {
   display: none !important;

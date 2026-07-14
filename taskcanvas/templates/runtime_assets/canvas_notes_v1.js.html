@@ -29,6 +29,8 @@
     {id:'decisions', label:'Decisions', query:'kind:decision'},
     {id:'assumptions', label:'Unresolved assumptions', query:'kind:assumption status:open'},
     {id:'actions', label:'Action candidates', query:'kind:action status:open -has:tasks'},
+    {id:'never-reviewed', label:'Never reviewed', query:'reviewed:never'},
+    {id:'stale-open', label:'Stale open notes', query:'is:stale'},
     {id:'orphans', label:'Orphan notes', query:'is:orphan'},
     {id:'without-tasks', label:'Notes without tasks', query:'-has:tasks'}
   ];
@@ -72,12 +74,38 @@
     for (var i=0;i<notes.length;i++) if (notes[i].id === id) return notes[i];
     return null;
   }
+  function touchNote(note){
+    if (note) note.updatedAt = Date.now();
+    return note;
+  }
+  function markNoteReviewed(id, skipRender){
+    var note = noteById(id);
+    if (!note) return false;
+    note.reviewedAt = Date.now();
+    saveSoon();
+    if (!skipRender){
+      renderAll();
+      refreshViewerOutline();
+      notifyInspectorSelectionChanged();
+    }
+    return true;
+  }
+  function ageLabel(timestamp){
+    timestamp = Number(timestamp) || 0;
+    if (!timestamp) return 'Never reviewed';
+    var elapsed = Math.max(0, Date.now() - timestamp);
+    var days = Math.floor(elapsed / 86400000);
+    if (days < 1) return 'Reviewed today';
+    if (days === 1) return 'Reviewed yesterday';
+    return 'Reviewed ' + days + ' days ago';
+  }
   function setNoteContent(id, content){
     var n = noteById(id);
     if (!n) return false;
     var next = String(content || '').trim() || 'New note';
     if (n.content === next) return true;
     n.content = next;
+    touchNote(n);
     var text = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(id)+'"] .tcNoteText');
     if (text && text.textContent !== next) text.textContent = next;
     syncNoteTaskBadges();
@@ -128,6 +156,7 @@
     notes.forEach(function(n){
       if (noteBucket(n) === oldBucket){
         n.bucket = nextBucket;
+        touchNote(n);
         changed = true;
       }
     });
@@ -291,6 +320,8 @@
     var validation = validateLink(from, to, type, links, null, null);
     if (!validation.ok){ noteFeedback(validation.reason); return false; }
     links.push({from:from, to:to, type:type});
+    touchNote(noteById(from));
+    touchNote(noteById(to));
     return true;
   }
   function setLinkType(key, type){
@@ -303,6 +334,8 @@
       var validation = validateLink(link.from, link.to, type, links, key, null);
       if (!validation.ok){ noteFeedback(validation.reason); return false; }
       link.type = type;
+      touchNote(noteById(link.from));
+      touchNote(noteById(link.to));
       selectedLinkKey = noteLinkKey(link);
       renderAll();
       refreshViewerOutline();
@@ -616,9 +649,9 @@
     panel.innerHTML =
       '<div class="tcNoteReviewHead"><div><strong>Review</strong><span class="tcNoteReviewContext"></span></div><button type="button" class="tcNoteReviewClose" title="Close review">Close</button></div>' +
       '<div class="tcNoteReviewProgress"><span></span><div><i></i></div></div>' +
-      '<div class="tcNoteReviewMeta"><b></b><span class="kind"></span><span class="status"></span><span class="bucket"></span></div>' +
+      '<div class="tcNoteReviewMeta"><b></b><span class="kind"></span><span class="status"></span><span class="bucket"></span></div><div class="tcNoteReviewAge"></div>' +
       '<textarea class="tcNoteReviewContent" spellcheck="true"></textarea>' +
-      '<div class="tcNoteReviewActions"><button type="button" data-review-status="open">Open</button><button type="button" data-review-status="resolved">Resolve</button><button type="button" data-review-status="parked">Park</button><button type="button" data-review-kind="action">Make action</button><button type="button" data-review-task>Stage task</button></div>' +
+      '<div class="tcNoteReviewActions"><button type="button" data-review-reviewed>Mark reviewed</button><button type="button" data-review-status="open">Open</button><button type="button" data-review-status="resolved">Resolve</button><button type="button" data-review-status="parked">Park</button><button type="button" data-review-kind="action">Make action</button><button type="button" data-review-task>Stage task</button></div>' +
       '<div class="tcNoteReviewNav"><button type="button" data-review-move="-1" title="Previous note">Previous</button><span></span><button type="button" data-review-move="1" title="Next note">Next</button></div>';
     qs('.tcNoteReviewContext', panel).textContent = reviewContextLabel();
     qs('.tcNoteReviewProgress span', panel).textContent = (noteReview.index + 1) + ' of ' + noteReview.ids.length;
@@ -627,29 +660,40 @@
     qs('.tcNoteReviewMeta .kind', panel).textContent = NoteCore.kindLabel(noteKind(note));
     qs('.tcNoteReviewMeta .status', panel).textContent = NoteCore.statusLabel(noteStatus(note));
     qs('.tcNoteReviewMeta .bucket', panel).textContent = noteBucket(note);
+    qs('.tcNoteReviewAge', panel).textContent = ageLabel(note.reviewedAt);
     var content = qs('.tcNoteReviewContent', panel);
     content.value = note.content || '';
     content.addEventListener('input', function(){ setNoteContent(id, content.value); });
     content.addEventListener('change', function(){
+      markNoteReviewed(id, true);
       if (noteLens){ renderAll(); refreshViewerOutline(); }
+      else renderNoteReviewPanel();
     });
     qs('.tcNoteReviewClose', panel).addEventListener('click', stopNoteReview);
+    qs('[data-review-reviewed]', panel).addEventListener('click', function(){
+      var currentId = id;
+      markNoteReviewed(currentId);
+      advanceNoteReviewIfCurrent(currentId);
+    });
     qsa('[data-review-status]', panel).forEach(function(button){
       button.classList.toggle('active', button.getAttribute('data-review-status') === noteStatus(note));
       button.addEventListener('click', function(){
         var currentId = id;
+        markNoteReviewed(currentId, true);
         setNoteStatus(currentId, button.getAttribute('data-review-status'));
         advanceNoteReviewIfCurrent(currentId);
       });
     });
     qs('[data-review-kind]', panel).addEventListener('click', function(){
       var currentId = id;
+      markNoteReviewed(currentId, true);
       setNoteKind(currentId, 'action');
       advanceNoteReviewIfCurrent(currentId);
     });
     qs('[data-review-task]', panel).textContent = refs.length ? 'Task linked' : 'Stage task';
     qs('[data-review-task]', panel).disabled = !!refs.length;
     qs('[data-review-task]', panel).addEventListener('click', function(){
+      markNoteReviewed(id, true);
       selectNote(id);
       createLinkedTasksFromSelectedNotes();
       syncNoteReviewQueue();
@@ -893,12 +937,14 @@
     color = String(color || '').trim();
     if (!color || color === 'bucket'){
       delete n.color;
+      touchNote(n);
       renderAll();
       saveSoon();
       return true;
     }
     if (bucketPalette.indexOf(color) === -1 && !hexToRgb(color)) return false;
     n.color = color;
+    touchNote(n);
     renderAll();
     saveSoon();
     return true;
@@ -911,6 +957,7 @@
     kind = NoteCore.normalizeKind(kind);
     if (n.kind === kind) return true;
     n.kind = kind;
+    touchNote(n);
     renderAll();
     refreshViewerOutline();
     saveSoon();
@@ -922,6 +969,7 @@
     status = NoteCore.normalizeStatus(status);
     if (n.status === status) return true;
     n.status = status;
+    touchNote(n);
     renderAll();
     refreshViewerOutline();
     saveSoon();
@@ -1000,6 +1048,7 @@
     var key = taskRefKey(ref);
     for (var i=0;i<refs.length;i++) if (taskRefKey(refs[i]) === key) return false;
     refs.push(ref);
+    touchNote(n);
     if (noteLens) renderAll();
     else syncNoteTaskBadges();
     refreshViewerOutline();
@@ -1014,6 +1063,7 @@
     var next = refs.filter(function(ref){ return taskRefKey(ref) !== taskKey; });
     if (next.length === refs.length) return false;
     n.taskRefs = next;
+    touchNote(n);
     closeNoteTaskPopover();
     if (noteLens) renderAll();
     else syncNoteTaskBadges();
@@ -2244,6 +2294,7 @@
         var bucket = bucketAtStagePoint(centerX, centerY);
         if (bucket && bucket !== noteBucket(n)){
           n.bucket = bucket;
+          touchNote(n);
           bucketChanged = true;
         }
       });
@@ -2291,6 +2342,9 @@
         childCount:childLinksFrom(id).length,
         linkCount:relatedLinks.length,
         taskRefs:noteTaskRefs(n).slice(),
+        createdAt:Number(n && n.createdAt) || 0,
+        updatedAt:Number(n && n.updatedAt) || 0,
+        reviewedAt:Number(n && n.reviewedAt) || 0,
         x:toInt(n && n.x, 0),
         y:toInt(n && n.y, 0)
       };
@@ -2485,6 +2539,7 @@
     var next = window.prompt ? window.prompt('Bucket name:', noteBucket(n)) : null;
     if (next === null) return false;
     n.bucket = bucketText(next);
+    touchNote(n);
     renderAll();
     saveSoon();
     return true;
@@ -2742,9 +2797,11 @@
   }
   function deleteSelectedLink(){
     if (!selectedLinkKey) return false;
+    var removed = links.filter(function(l){ return noteLinkKey(l) === selectedLinkKey; })[0] || null;
     var before = links.length;
     links = links.filter(function(l){ return noteLinkKey(l) !== selectedLinkKey; });
     if (links.length === before) return false;
+    if (removed){ touchNote(noteById(removed.from)); touchNote(noteById(removed.to)); }
     selectedLinkKey = null;
     syncNoteLabels();
     renderLinks();
@@ -2951,7 +3008,12 @@
       if (!a || !b) return;
       if (!isNoteVisible(l.from) || !isNoteVisible(l.to)) return;
       var key = noteLinkKey(l);
-      var p1 = centerPoint(a), p2 = centerPoint(b);
+      var direction = window.TaskCanvasEdgeDirection;
+      var points = direction && direction.connectionPoints ? direction.connectionPoints(
+        {x:toInt(a.style.left, 0), y:toInt(a.style.top, 0), w:a.offsetWidth || 220, h:a.offsetHeight || 92},
+        {x:toInt(b.style.left, 0), y:toInt(b.style.top, 0), w:b.offsetWidth || 220, h:b.offsetHeight || 92}
+      ) : null;
+      var p1 = points ? points.source : centerPoint(a), p2 = points ? points.target : centerPoint(b);
       var d = linkPathData(p1, p2);
       var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('class', 'tcNoteLink' + (selectedLinkKey === key ? ' selected' : ''));
@@ -2970,6 +3032,7 @@
         selectLink(key);
       });
       layer.appendChild(path);
+      if (direction && direction.decorate) direction.decorate(layer, path, {prefix:'tcNote', type:l.type || 'manual', key:key});
       if (selectedLinkKey === key){
         hasSelected = true;
         renderLinkToolbar(l, p1, p2);
@@ -3314,10 +3377,10 @@
     });
     return {
       kind: 'taskcanvas.notes',
-      version: 3,
+      version: 4,
       exportedAt: new Date().toISOString(),
       notes: notes.map(function(n){
-        var row = {id:n.id, x:toInt(n.x, 160), y:toInt(n.y, 160), content:n.content || 'New note', bucket:noteBucket(n), kind:noteKind(n), status:noteStatus(n), collapsed:!!n.collapsed, taskRefs:noteTaskRefs(n).slice()};
+        var row = {id:n.id, x:toInt(n.x, 160), y:toInt(n.y, 160), content:n.content || 'New note', bucket:noteBucket(n), kind:noteKind(n), status:noteStatus(n), collapsed:!!n.collapsed, taskRefs:noteTaskRefs(n).slice(), createdAt:Number(n.createdAt) || 0, updatedAt:Number(n.updatedAt) || 0, reviewedAt:Number(n.reviewedAt) || 0};
         if (n.color) row.color = n.color;
         return row;
       }),
@@ -3436,6 +3499,7 @@
     var n = noteById(id);
     if (!n) return false;
     n.bucket = bucketText(bucket);
+    touchNote(n);
     renderAll();
     refreshViewerOutline();
     saveSoon();
@@ -3495,6 +3559,7 @@
     saveLens: saveCustomLens,
     renameLens: renameCustomLens,
     deleteLens: deleteCustomLens,
+    markReviewed: markNoteReviewed,
     startReview: startNoteReview,
     stopReview: stopNoteReview,
     nextReview: function(){ return moveNoteReview(1); },

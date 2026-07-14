@@ -52,14 +52,10 @@
   }
 
   function recomputeAll(){
-    var root = linksRoot();
-    var sel = [
-      '#builderLinks path[data-from][data-to]',
-      '#builderLinks line[data-from][data-to]',
-      'svg path[data-from][data-to]',
-      'svg line[data-from][data-to]'
-    ].join(',');
-    root.querySelectorAll(sel).forEach(recomputeEdge);
+    if (window.__taskCanvasEdgeRedraw) return;
+    window.__taskCanvasEdgeRedraw = true;
+    try{ if (typeof window.drawLinks === 'function') window.drawLinks(); }
+    finally{ window.__taskCanvasEdgeRedraw = false; }
   }
 
   var raf = 0, queued = false;
@@ -69,17 +65,6 @@
     if (raf) cancelAnimationFrame(raf);
     raf = requestAnimationFrame(function(){ queued = false; recomputeAll(); });
   }
-
-  // Hook your common render/link functions
-  ;['drawLinks','renderStagedOverlay','renderDepsOverlay','__depsOverlayRender',
-    'updateLinks','redrawLinks'].forEach(function(name){
-    var fn = window[name];
-    if (typeof fn === 'function' && !fn.__followEdgesWrap){
-      var orig = fn;
-      window[name] = function(){ var rv = orig.apply(this, arguments); scheduleRecompute(); return rv; };
-      window[name].__followEdgesWrap = true;
-    }
-  });
 
   // Observe node position changes only; class churn should not redraw edges.
   try{

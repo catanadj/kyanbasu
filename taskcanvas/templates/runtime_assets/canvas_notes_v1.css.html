@@ -487,6 +487,29 @@
     stroke-width: 4;
     filter: drop-shadow(0 0 5px rgba(97,208,255,.45));
   }
+  #builderLinks .tcNoteDirectionSource {
+    fill: rgba(242,177,74,.94);
+    stroke: rgba(7,13,22,.94);
+    stroke-width: 1.4;
+  }
+  #builderLinks .tcNoteDirectionArrow,
+  #builderLinks .tcNoteDirectionChevron {
+    stroke: rgba(242,177,74,.96);
+    stroke-width: 2.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  #builderLinks .tcNoteDirectionChevron { stroke-width: 2.2; opacity: .92; }
+  #builderLinks .tcNoteDirectionSource[data-type="supports"] { fill: rgba(77,210,137,.94); }
+  #builderLinks .tcNoteDirectionArrow[data-type="supports"], #builderLinks .tcNoteDirectionChevron[data-type="supports"] { stroke: rgba(77,210,137,.96); }
+  #builderLinks .tcNoteDirectionSource[data-type="challenges"] { fill: rgba(255,116,130,.94); }
+  #builderLinks .tcNoteDirectionArrow[data-type="challenges"], #builderLinks .tcNoteDirectionChevron[data-type="challenges"] { stroke: rgba(255,116,130,.96); }
+  #builderLinks .tcNoteDirectionSource[data-type="answers"] { fill: rgba(97,208,255,.96); }
+  #builderLinks .tcNoteDirectionArrow[data-type="answers"], #builderLinks .tcNoteDirectionChevron[data-type="answers"] { stroke: rgba(97,208,255,.98); }
+  #builderLinks .tcNoteDirectionSource[data-type="causes"] { fill: rgba(246,169,84,.96); }
+  #builderLinks .tcNoteDirectionArrow[data-type="causes"], #builderLinks .tcNoteDirectionChevron[data-type="causes"] { stroke: rgba(246,169,84,.98); }
+  #builderLinks .tcNoteDirectionSource[data-type="leads_to"] { fill: rgba(170,139,255,.96); }
+  #builderLinks .tcNoteDirectionArrow[data-type="leads_to"], #builderLinks .tcNoteDirectionChevron[data-type="leads_to"] { stroke: rgba(170,139,255,.98); }
   #builderLinks path.tcNoteLinkPreview {
     stroke: rgba(97,208,255,.9);
     stroke-width: 2.8;
@@ -809,6 +832,7 @@
   .tcNoteReviewMeta b { color: #bdeeff; font-size: 12px; }
   .tcNoteReviewMeta span { overflow: hidden; padding: 3px 5px; border: 1px solid rgba(255,255,255,.10); border-radius: 5px; text-overflow: ellipsis; white-space: nowrap; }
   .tcNoteReviewMeta .bucket { margin-left: auto; max-width: 120px; }
+  .tcNoteReviewAge { margin: -2px 0 8px; color: rgba(244,234,215,.52); font-size: 10px; }
   .tcNoteReviewContent {
     box-sizing: border-box;
     width: 100%;

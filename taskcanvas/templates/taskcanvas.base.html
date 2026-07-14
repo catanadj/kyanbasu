@@ -1289,6 +1289,9 @@
   #builderLinks path.dep-edge{stroke-linecap:round}
   #builderLinks path.dep-edge.existing{stroke:#9ecbff;stroke-width:2.4;stroke-dasharray:none}
   #builderLinks path.dep-edge.staged{stroke:#7aa2f7;stroke-width:2.6;stroke-dasharray:8 7}
+  #builderLinks .depDirectionSource{fill:#86c5f4;stroke:rgba(7,13,22,.92);stroke-width:1.4;pointer-events:none}
+  #builderLinks .depDirectionArrow{stroke:#e2f3ff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+  #builderLinks .depDirectionChevron{stroke:#b9e2ff;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
   .tcModalOverlay{
     position:fixed;
     inset:0;
@@ -2846,6 +2849,15 @@ function noteInspectorText(text, fallback){
   if (!text) return fallback || 'New note';
   return text.length > 96 ? text.slice(0, 93) + '...' : text;
 }
+function noteInspectorAge(timestamp, emptyText){
+  timestamp = Number(timestamp) || 0;
+  if (!timestamp) return emptyText || 'Never';
+  var elapsed = Math.max(0, Date.now() - timestamp);
+  var days = Math.floor(elapsed / 86400000);
+  if (days < 1) return 'Today';
+  if (days === 1) return 'Yesterday';
+  return days + ' days ago';
+}
 function noteInspectorTaskRows(refs){
   refs = Array.isArray(refs) ? refs : [];
   if (!refs.length) return '<div class="inspectorEmpty"><div>No linked tasks.</div></div>';
@@ -3116,6 +3128,13 @@ function renderNoteInspector(snapshot){
           '<textarea id="inspectorNoteContent" class="inspectorField" spellcheck="true">'+escapeHtml(primary.content || '')+'</textarea>' +
         '</div>'
       : '') +
+    (selectedNotes.length === 1
+      ? '<div class="inspectorGroup">' +
+          '<div class="inspectorLabel">Review history</div>' +
+          '<dl class="inspectorKV"><dt>Created</dt><dd>'+escapeHtml(noteInspectorAge(primary.createdAt, 'Unknown'))+'</dd><dt>Updated</dt><dd>'+escapeHtml(noteInspectorAge(primary.updatedAt, 'Unknown'))+'</dd><dt>Reviewed</dt><dd>'+escapeHtml(noteInspectorAge(primary.reviewedAt, 'Never reviewed'))+'</dd></dl>' +
+          '<button id="inspectorNoteReviewed" class="inspectorInput" type="button">Mark reviewed</button>' +
+        '</div>'
+      : '') +
     '<div class="inspectorGroup">' +
       '<div class="inspectorLabel">Linked tasks</div>' +
       noteInspectorTaskRows(primary ? primary.taskRefs : []) +
@@ -3125,6 +3144,11 @@ function renderNoteInspector(snapshot){
   wireNoteInspectorColors(selectedNotes);
   if (selectedNotes.length === 1){
     wireNoteInspectorEditor(primary);
+    var reviewedButton = document.getElementById('inspectorNoteReviewed');
+    if (reviewedButton && api && typeof api.markReviewed === 'function') reviewedButton.addEventListener('click', function(){
+      api.markReviewed(primary.id);
+      queueInspectorRender(0);
+    });
   }
   return true;
 }

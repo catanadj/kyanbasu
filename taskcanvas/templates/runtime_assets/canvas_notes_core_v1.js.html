@@ -93,6 +93,19 @@
     return isFinite(parsed) ? parsed : fallback;
   }
 
+  function timestamp(value, fallback){
+    if (typeof value === 'string' && value.trim() && !/^\d+$/.test(value.trim())) value = Date.parse(value);
+    var parsed = Number(value);
+    return isFinite(parsed) && parsed > 0 ? Math.round(parsed) : fallback;
+  }
+
+  function durationMs(value){
+    var match = String(value || '').trim().toLowerCase().match(/^(\d+)(h|d|w)$/);
+    if (!match) return 0;
+    var factor = match[2] === 'h' ? 3600000 : (match[2] === 'w' ? 604800000 : 86400000);
+    return parseInt(match[1], 10) * factor;
+  }
+
   function bucketText(bucket){
     var text = String(bucket || '').trim();
     return text || '(no bucket)';
@@ -121,6 +134,7 @@
   function normalizeNote(note, options){
     note = note || {};
     options = options || {};
+    var now = timestamp(options.now, Date.now());
     if (!note.id) note.id = options.uid ? options.uid() : '';
     if (!note.content) note.content = noteText(note.title, note.body);
     delete note.title;
@@ -134,6 +148,9 @@
     if (!note.color || (options.isValidColor && !options.isValidColor(note.color))) delete note.color;
     note.collapsed = !!note.collapsed;
     note.taskRefs = Array.isArray(note.taskRefs) ? note.taskRefs.map(normalizeTaskRef).filter(Boolean) : [];
+    note.createdAt = timestamp(note.createdAt, now);
+    note.updatedAt = timestamp(note.updatedAt, note.createdAt);
+    note.reviewedAt = timestamp(note.reviewedAt, 0);
     return note;
   }
 
@@ -303,6 +320,7 @@
     query = String(query || '').trim();
     if (!query) return [];
     var terms = parseQuery(query);
+    var now = Date.now();
     if (!terms.length) return [];
     var labels = computeLabels(notes, links);
     function linkTerms(note){
@@ -338,6 +356,16 @@
       else if (field === 'bucket') matched = bucketText(note.bucket).toLowerCase() === value;
       else if (field === 'id') matched = String(labels[note.id] || '').toLowerCase() === value;
       else if (field === 'relation') matched = optionExists(value, NOTE_RELATIONS) && related.some(function(link){ return normalizeRelation(link.type) === value; });
+      else if (field === 'reviewed'){
+        if (value === 'never') matched = !timestamp(note.reviewedAt, 0);
+        else {
+          var reviewedDuration = durationMs(value);
+          matched = !!reviewedDuration && timestamp(note.reviewedAt, 0) >= now - reviewedDuration;
+        }
+      } else if (field === 'updated'){
+        var updatedDuration = durationMs(value);
+        matched = !!updatedDuration && timestamp(note.updatedAt, timestamp(note.createdAt, 0)) >= now - updatedDuration;
+      }
       else if (field === 'has'){
         if (value === 'links') matched = related.length > 0;
         else if (value === 'tasks') matched = Array.isArray(note.taskRefs) && note.taskRefs.length > 0;
@@ -347,6 +375,10 @@
         if (value === 'orphan') matched = related.length === 0;
         else if (value === 'root') matched = !childLinks.some(function(link){ return link.to === note.id; });
         else if (value === 'leaf') matched = !childLinks.some(function(link){ return link.from === note.id; });
+        else if (value === 'stale'){
+          var activityAt = timestamp(note.reviewedAt, 0) || timestamp(note.updatedAt, timestamp(note.createdAt, now));
+          matched = normalizeStatus(note.status) === 'open' && activityAt <= now - 30 * 86400000;
+        }
       } else matched = haystack(note).indexOf((field === 'text' ? '' : field + ':') + value) !== -1;
       return term.negated ? !matched : matched;
     }
@@ -363,7 +395,7 @@
   }
 
   window.TaskCanvasNotesCore = {
-    version: 3,
+    version: 4,
     bucketText: bucketText,
     noteText: noteText,
     normalizeTaskRef: normalizeTaskRef,

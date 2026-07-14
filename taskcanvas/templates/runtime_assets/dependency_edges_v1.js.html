@@ -6,6 +6,85 @@
   function $(s,r){ return (r||document).querySelector(s); }
   function qsa(s,r){ return (r||document).querySelectorAll(s); }
 
+  function boundaryPoint(rect, toward){
+    var cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;
+    var dx = toward.x - cx, dy = toward.y - cy;
+    if (!dx && !dy) return {x:cx, y:cy};
+    var scaleX = dx ? (rect.w / 2) / Math.abs(dx) : Infinity;
+    var scaleY = dy ? (rect.h / 2) / Math.abs(dy) : Infinity;
+    var scale = Math.min(scaleX, scaleY);
+    return {x:cx + dx * scale, y:cy + dy * scale};
+  }
+  function connectionPoints(sourceRect, targetRect){
+    var sourceCenter = {x:sourceRect.x + sourceRect.w / 2, y:sourceRect.y + sourceRect.h / 2};
+    var targetCenter = {x:targetRect.x + targetRect.w / 2, y:targetRect.y + targetRect.h / 2};
+    var dx = targetCenter.x - sourceCenter.x, dy = targetCenter.y - sourceCenter.y;
+    var length = Math.sqrt(dx * dx + dy * dy) || 1;
+    var ux = dx / length, uy = dy / length;
+    var source = boundaryPoint(sourceRect, targetCenter);
+    var target = boundaryPoint(targetRect, sourceCenter);
+    return {
+      source:{x:source.x + ux * 5, y:source.y + uy * 5},
+      target:{x:target.x - ux * 9, y:target.y - uy * 9}
+    };
+  }
+  function pathPoint(path, distance){
+    try{ return path.getPointAtLength(Math.max(0, distance)); }catch(_){ return null; }
+  }
+  function directionPath(tip, back, wing){
+    var dx = tip.x - back.x, dy = tip.y - back.y;
+    var length = Math.sqrt(dx * dx + dy * dy) || 1;
+    var ux = dx / length, uy = dy / length, nx = -uy, ny = ux;
+    return 'M ' + (tip.x - ux * wing + nx * wing * .55) + ' ' + (tip.y - uy * wing + ny * wing * .55) +
+      ' L ' + tip.x + ' ' + tip.y +
+      ' L ' + (tip.x - ux * wing - nx * wing * .55) + ' ' + (tip.y - uy * wing - ny * wing * .55);
+  }
+  function decorateDirection(group, path, options){
+    options = options || {};
+    if (!group || !path || !path.getTotalLength) return [];
+    var length;
+    try{ length = path.getTotalLength(); }catch(_){ return []; }
+    if (!isFinite(length) || length < 20) return [];
+    var namespace = 'http://www.w3.org/2000/svg';
+    var prefix = options.prefix || 'dep';
+    var start = pathPoint(path, 0);
+    var end = pathPoint(path, length), endBack = pathPoint(path, Math.max(0, length - 7));
+    var source = document.createElementNS(namespace, 'circle');
+    source.setAttribute('class', prefix + 'DirectionSource');
+    source.setAttribute('cx', start.x);
+    source.setAttribute('cy', start.y);
+    source.setAttribute('r', options.sourceRadius || 3.2);
+    source.setAttribute('pointer-events', 'none');
+    group.appendChild(source);
+    var arrow = document.createElementNS(namespace, 'path');
+    arrow.setAttribute('class', prefix + 'DirectionArrow');
+    arrow.setAttribute('d', directionPath(end, endBack, options.arrowSize || 10));
+    arrow.setAttribute('fill', 'none');
+    arrow.setAttribute('pointer-events', 'none');
+    group.appendChild(arrow);
+    var output = [source, arrow];
+    if (length >= 40){
+      var at = length * .6;
+      var mid = pathPoint(path, at), midBack = pathPoint(path, Math.max(0, at - 7));
+      var chevron = document.createElementNS(namespace, 'path');
+      chevron.setAttribute('class', prefix + 'DirectionChevron');
+      chevron.setAttribute('d', directionPath(mid, midBack, options.chevronSize || 7));
+      chevron.setAttribute('fill', 'none');
+      chevron.setAttribute('pointer-events', 'none');
+      group.appendChild(chevron);
+      output.push(chevron);
+    }
+    output.forEach(function(el){
+      if (options.type) el.setAttribute('data-type', options.type);
+      if (options.key) el.setAttribute('data-edge-key', options.key);
+    });
+    return output;
+  }
+  window.TaskCanvasEdgeDirection = {
+    connectionPoints:connectionPoints,
+    decorate:decorateDirection
+  };
+
   function gatherEdgesShorts(){
     var edges=[], i, e, s, t, deps;
     try{
@@ -247,22 +326,34 @@
     var r = el.getBoundingClientRect();
     return svgPointFromScreen(svg, r.left + r.width/2, r.top);
   }
+  function taskRect(short){
+    var el = document.querySelector('#builderStage [data-short="'+String(short || '').replace(/"/g, '\\"')+'"]');
+    var svg = $('#builderLinks');
+    if (!el || !svg) return null;
+    var r = el.getBoundingClientRect();
+    var topLeft = svgPointFromScreen(svg, r.left, r.top);
+    var bottomRight = svgPointFromScreen(svg, r.right, r.bottom);
+    return {x:topLeft.x, y:topLeft.y, w:bottomRight.x - topLeft.x, h:bottomRight.y - topLeft.y};
+  }
 
   function makePath(p,c){
-    var gap = Math.max(24, Math.min(80, Math.abs(c.x - p.x) * 0.4));
-    return "M "+p.x+" "+p.y+" C "+(p.x - gap)+" "+p.y+", "+c.x+" "+(c.y - gap)+", "+c.x+" "+c.y;
+    var dx = c.x - p.x;
+    var bend = Math.max(28, Math.min(110, Math.abs(dx) * .45));
+    var direction = dx >= 0 ? 1 : -1;
+    return "M "+p.x+" "+p.y+" C "+(p.x + direction * bend)+" "+p.y+", "+(c.x - direction * bend)+" "+c.y+", "+c.x+" "+c.y;
   }
 
   function renderExistingEdges(){
     var svg = $('#builderLinks'); if(!svg) return;
-    ensureMarker();
     var g = ensureExistingGroup(); if(!g) return;
     while (g.firstChild) g.removeChild(g.firstChild);
 
     var ex = window.EXIST_EDGES || [];
     for (var i=0;i<ex.length;i++){
       var e = ex[i]; if (!e || !e.from || !e.to) continue;
-      var a = anchorParentLeft(e.from), b = anchorChildTop(e.to);
+      var blockerRect = taskRect(e.to), dependentRect = taskRect(e.from);
+      var points = blockerRect && dependentRect ? connectionPoints(blockerRect, dependentRect) : null;
+      var a = points && points.source, b = points && points.target;
       if (!a || !b || !isFinite(a.x) || !isFinite(a.y) || !isFinite(b.x) || !isFinite(b.y)) continue;
       var path = document.createElementNS('http://www.w3.org/2000/svg','path');
       path.setAttribute('class','dep-edge existing link-existing');
@@ -270,10 +361,12 @@
       path.setAttribute('d', makePath(a,b));
       ensureEdgeGradient(svg, 'depGradExisting' + i, a, b, 'existing');
       path.style.stroke = 'url(#depGradExisting' + i + ')';
-      path.setAttribute('marker-end','url(#depArrow)');
       path.setAttribute('data-from', String(e.from));
       path.setAttribute('data-to', String(e.to));
+      path.setAttribute('data-direction-from', String(e.to));
+      path.setAttribute('data-direction-to', String(e.from));
       g.appendChild(path);
+      decorateDirection(g, path, {prefix:'dep', key:String(e.from)+'::'+String(e.to)});
     }
   }
   function renderDirectionHints(){
@@ -288,27 +381,9 @@
       try{ renderExistingEdges(); }catch(_){}
       try{ renderDirectionHints(); }catch(_){}
       try{ if (typeof refreshDepHandleLetters === 'function') refreshDepHandleLetters(); }catch(_){}
-      setTimeout(rebuildPulses, 0);
     };
     window.__dependencyEdgesDrawHooked = true;
   }
-
-  document.addEventListener('keydown', function(e){
-    if ((e.key==='p'||e.key==='P') && !e.ctrlKey && !e.metaKey && !e.altKey){
-      anim.enabled = !anim.enabled;
-      var g = document.getElementById('depPulseOverlay');
-      if (g) g.style.display = anim.enabled ? '' : 'none';
-      if (anim.enabled){
-        rebuildPulses();
-        if (!anim.raf){ anim.lastTs=0; anim.raf=requestAnimationFrame(step); }
-      } else {
-        if (anim.raf) cancelAnimationFrame(anim.raf);
-        anim.raf = null;
-        anim.items.length = 0;
-        if (g) while(g.firstChild) g.removeChild(g.firstChild);
-      }
-    }
-  });
 
   window.addEventListener('resize', function(){
     try{ if (typeof drawLinks === 'function') drawLinks(); }catch(_){}

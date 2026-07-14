@@ -8,11 +8,10 @@
     if (!svg) return;
 
     // Hide any dots that might have been recreated
-    document.querySelectorAll('#builderStage circle, #builderStage .energy-dot, #builderStage .pulse-dot')
+    document.querySelectorAll('#depPulseOverlay .pulse-dot, #builderStage .energy-dot, #builderStage .pulse-dot')
       .forEach(function(dot){ dot.style.display = 'none'; });
 
-    // Heuristics: most builds draw staged links as <path> or <line> within #builderStage
-    var stagedLines = document.querySelectorAll('#builderStage path, #builderStage line');
+    var stagedLines = document.querySelectorAll('#builderLinks path.dep-edge.staged, #builderLinks line.dep-edge.staged');
     stagedLines.forEach(function(el){
       // Only touch geometric edges (skip hidden/zero-length)
       // Also avoid re-marking same element

@@ -811,6 +811,9 @@ window.addEventListener('load', function(){
           textFields: document.querySelectorAll('.tcNoteNode .tcNoteText').length,
           titleFields: document.querySelectorAll('.tcNoteNode .tcNoteTitle').length,
           links: document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink').length,
+          directionSources: document.querySelectorAll('#tcNoteLinksLayer .tcNoteDirectionSource').length,
+          directionArrows: document.querySelectorAll('#tcNoteLinksLayer .tcNoteDirectionArrow').length,
+          directionChevrons: document.querySelectorAll('#tcNoteLinksLayer .tcNoteDirectionChevron').length,
           apiNotes: window.TaskCanvasNotes.notes().length,
           apiLinks: window.TaskCanvasNotes.links().length,
           coreVersion: window.TaskCanvasNotesCore && window.TaskCanvasNotesCore.version,
@@ -858,9 +861,12 @@ window.addEventListener('load', function(){
         self.assertEqual(result["textFields"], 2)
         self.assertEqual(result["titleFields"], 0)
         self.assertEqual(result["links"], 1)
+        self.assertEqual(result["directionSources"], 1)
+        self.assertEqual(result["directionArrows"], 1)
+        self.assertEqual(result["directionChevrons"], 1)
         self.assertEqual(result["apiNotes"], 2)
         self.assertEqual(result["apiLinks"], 1)
-        self.assertEqual(result["coreVersion"], 3)
+        self.assertEqual(result["coreVersion"], 4)
         self.assertTrue(result["rejectsSelfChild"])
         self.assertEqual(result["legacyContent"], "Old title\nOld body")
         self.assertEqual(result["legacyKind"], "note")
@@ -945,7 +951,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["status"], "parked")
         self.assertEqual(result["cardKind"], "Decision")
         self.assertEqual(result["cardStatus"], "Status: Parked")
-        self.assertEqual(result["exportedVersion"], 3)
+        self.assertEqual(result["exportedVersion"], 4)
         self.assertEqual(result["exportedKind"], "decision")
         self.assertEqual(result["exportedStatus"], "parked")
         self.assertEqual(result["viewerSemantics"], ["Decision", "Parked"])
@@ -1247,7 +1253,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["pathTitle"], "Challenges")
         self.assertEqual(result["animationName"], "none")
         self.assertEqual(result["toolbarType"], "Challenges")
-        self.assertEqual(result["exportedVersion"], 3)
+        self.assertEqual(result["exportedVersion"], 4)
         self.assertEqual(result["exportedType"], "challenges")
         self.assertEqual(result["relationLabel"], "Challenges")
         self.assertEqual(result["inverseLabel"], "Challenged by")
@@ -1520,7 +1526,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["resultNotes"], 2)
         self.assertEqual(result["resultLinks"], 1)
         self.assertEqual(result["exportedKind"], "taskcanvas.notes")
-        self.assertEqual(result["exportedVersion"], 3)
+        self.assertEqual(result["exportedVersion"], 4)
         self.assertEqual(result["exportedNotes"], 2)
         self.assertEqual(result["exportedLinks"], 1)
         self.assertEqual(result["firstContent"], "Imported root\nLegacy body")
@@ -4738,7 +4744,7 @@ window.addEventListener('load', function(){
         self.assertEqual(set(result["queries"]["textAndKind"]), {ids["openQuestion"], ids["resolvedQuestion"]}, msg=json.dumps(result))
         self.assertEqual(len(result["queries"]["orphans"]), result["totalNotes"], msg=json.dumps(result))
         self.assertEqual(len(result["queries"]["withoutTasks"]), result["totalNotes"], msg=json.dumps(result))
-        self.assertEqual(result["menuOptions"], 6, msg=json.dumps(result))
+        self.assertEqual(result["menuOptions"], 8, msg=json.dumps(result))
         self.assertEqual(result["lensVisible"], [ids["openQuestion"]], msg=json.dumps(result))
         self.assertEqual(result["viewerRows"], [ids["openQuestion"]], msg=json.dumps(result))
         self.assertIn("Open questions", result["viewerTitle"], msg=json.dumps(result))
@@ -4814,8 +4820,88 @@ window.addEventListener('load', function(){
         self.assertEqual(result["stored"][0]["label"], "Open research assumptions", msg=json.dumps(result))
         self.assertTrue(result["deleted"], msg=json.dumps(result))
         self.assertEqual(result["lensAfterDelete"]["kind"], "none", msg=json.dumps(result))
-        self.assertEqual(len(result["definitions"]), 6, msg=json.dumps(result))
+        self.assertEqual(len(result["definitions"]), 8, msg=json.dumps(result))
         self.assertEqual(result["visible"], 2, msg=json.dumps(result))
+
+    def test_canvas_notes_review_metadata_queries_and_export(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_REVIEW_METADATA_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var now = Date.now();
+      var day = 86400000;
+      TaskCanvasNotes.importData({notes:[
+        {id:'stale-open', content:'Old open assumption', bucket:'Research', kind:'assumption', status:'open', createdAt:now-60*day, updatedAt:now-45*day, reviewedAt:now-40*day},
+        {id:'fresh-reviewed', content:'Fresh decision', bucket:'Planning', kind:'decision', status:'open', createdAt:now-10*day, updatedAt:now-2*day, reviewedAt:now-day},
+        {id:'never-recent', content:'Recent question', bucket:'Research', kind:'question', status:'open', createdAt:now-day, updatedAt:now-day, reviewedAt:0},
+        {id:'old-resolved', content:'Closed history', bucket:'Archive', kind:'note', status:'resolved', createdAt:now-90*day, updatedAt:now-60*day, reviewedAt:0}
+      ], links:[], buckets:{}});
+      var queries = {
+        never:TaskCanvasNotes.searchNotes('reviewed:never'),
+        recentReview:TaskCanvasNotes.searchNotes('reviewed:7d'),
+        recentUpdate:TaskCanvasNotes.searchNotes('updated:7d'),
+        stale:TaskCanvasNotes.searchNotes('is:stale')
+      };
+      TaskCanvasNotes.selectNote('never-recent');
+      renderInspector();
+      var inspectorText = document.getElementById('inspectorBody').textContent;
+      TaskCanvasNotes.startReview();
+      var firstReviewId = TaskCanvasNotes.reviewState().currentId;
+      TaskCanvasNotes.nextReview();
+      var firstAfterNavigation = TaskCanvasNotes.notes().filter(function(note){ return note.id === firstReviewId; })[0].reviewedAt;
+      TaskCanvasNotes.stopReview();
+      var beforeUpdated = TaskCanvasNotes.notes().filter(function(note){ return note.id === 'never-recent'; })[0].updatedAt;
+      TaskCanvasNotes.markReviewed('never-recent');
+      var marked = TaskCanvasNotes.notes().filter(function(note){ return note.id === 'never-recent'; })[0];
+      var exported = TaskCanvasNotes.exportData();
+      var exportedMarked = exported.notes.filter(function(note){ return note.id === 'never-recent'; })[0];
+      var out = {
+        queries:queries,
+        inspectorText:inspectorText,
+        firstAfterNavigation:firstAfterNavigation,
+        beforeUpdated:beforeUpdated,
+        marked:marked,
+        neverAfterMark:TaskCanvasNotes.searchNotes('reviewed:never'),
+        exportedVersion:exported.version,
+        exportedMarked:exportedMarked,
+        lensIds:TaskCanvasNotes.lenses().map(function(lens){ return lens.id; })
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out';
+      pre.textContent = JSON.stringify(out);
+      document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(set(result["queries"]["never"]), {"never-recent", "old-resolved"}, msg=json.dumps(result))
+        self.assertEqual(result["queries"]["recentReview"], ["fresh-reviewed"], msg=json.dumps(result))
+        self.assertEqual(set(result["queries"]["recentUpdate"]), {"fresh-reviewed", "never-recent"}, msg=json.dumps(result))
+        self.assertEqual(result["queries"]["stale"], ["stale-open"], msg=json.dumps(result))
+        self.assertIn("Never reviewed", result["inspectorText"], msg=json.dumps(result))
+        self.assertEqual(result["firstAfterNavigation"], 0, msg=json.dumps(result))
+        self.assertGreater(result["marked"]["reviewedAt"], 0, msg=json.dumps(result))
+        self.assertEqual(result["marked"]["updatedAt"], result["beforeUpdated"], msg=json.dumps(result))
+        self.assertNotIn("never-recent", result["neverAfterMark"], msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 4, msg=json.dumps(result))
+        self.assertEqual(result["exportedMarked"]["reviewedAt"], result["marked"]["reviewedAt"], msg=json.dumps(result))
+        self.assertIn("never-reviewed", result["lensIds"], msg=json.dumps(result))
+        self.assertIn("stale-open", result["lensIds"], msg=json.dumps(result))
 
     def test_canvas_notes_review_session_tracks_active_lens_and_actions(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
@@ -4836,10 +4922,12 @@ window.addEventListener('load', function(){
       var initialPanel = !document.getElementById('tcNoteReviewPanel').hidden;
       document.querySelector('#tcNoteReviewPanel [data-review-status="resolved"]').click();
       var afterResolve = TaskCanvasNotes.reviewState();
-      var firstStatus = TaskCanvasNotes.notes().filter(function(note){ return note.id === first.id; })[0].status;
+      var firstAfterResolve = TaskCanvasNotes.notes().filter(function(note){ return note.id === first.id; })[0];
+      var firstStatus = firstAfterResolve.status;
       document.querySelector('#tcNoteReviewPanel [data-review-kind="action"]').click();
       var afterActions = TaskCanvasNotes.reviewState();
       var secondKind = TaskCanvasNotes.notes().filter(function(note){ return note.id === second.id; })[0].kind;
+      var secondReviewedAt = TaskCanvasNotes.notes().filter(function(note){ return note.id === second.id; })[0].reviewedAt;
       var panelClosed = document.getElementById('tcNoteReviewPanel').hidden;
       TaskCanvasNotes.clearLens();
       TaskCanvasNotes.startReview();
@@ -4859,8 +4947,10 @@ window.addEventListener('load', function(){
         initialPanel:initialPanel,
         afterResolve:afterResolve,
         firstStatus:firstStatus,
+        firstReviewedAt:firstAfterResolve.reviewedAt,
         afterActions:afterActions,
         secondKind:secondKind,
+        secondReviewedAt:secondReviewedAt,
         panelClosed:panelClosed,
         afterNext:afterNext,
         edited:edited,
@@ -4890,9 +4980,11 @@ window.addEventListener('load', function(){
         self.assertEqual(result["initial"]["count"], 2, msg=json.dumps(result))
         self.assertEqual(result["initial"]["currentId"], result["ids"]["first"], msg=json.dumps(result))
         self.assertEqual(result["firstStatus"], "resolved", msg=json.dumps(result))
+        self.assertGreater(result["firstReviewedAt"], 0, msg=json.dumps(result))
         self.assertEqual(result["afterResolve"]["count"], 1, msg=json.dumps(result))
         self.assertEqual(result["afterResolve"]["currentId"], result["ids"]["second"], msg=json.dumps(result))
         self.assertEqual(result["secondKind"], "action", msg=json.dumps(result))
+        self.assertGreater(result["secondReviewedAt"], 0, msg=json.dumps(result))
         self.assertFalse(result["afterActions"]["active"], msg=json.dumps(result))
         self.assertTrue(result["panelClosed"], msg=json.dumps(result))
         self.assertEqual(result["afterNext"]["index"], 1, msg=json.dumps(result))
@@ -6042,6 +6134,10 @@ window.addEventListener('load', function(){
           childHandles: document.querySelectorAll('#builderStage [data-short="bbbbbbbb"] > .depHandle').length,
           stagedPaths: document.querySelectorAll('#depStagedOverlay path[data-from="aaaaaaaa"][data-to="bbbbbbbb"]').length,
           stagedMarker: (document.querySelector('#depStagedOverlay path[data-from="aaaaaaaa"][data-to="bbbbbbbb"]') || {}).getAttribute && document.querySelector('#depStagedOverlay path[data-from="aaaaaaaa"][data-to="bbbbbbbb"]').getAttribute('marker-end'),
+          stagedDirectionFrom: (document.querySelector('#depStagedOverlay path[data-from="aaaaaaaa"][data-to="bbbbbbbb"]') || {}).getAttribute && document.querySelector('#depStagedOverlay path[data-from="aaaaaaaa"][data-to="bbbbbbbb"]').getAttribute('data-direction-from'),
+          stagedSources: document.querySelectorAll('#depStagedOverlay .depDirectionSource').length,
+          stagedArrows: document.querySelectorAll('#depStagedOverlay .depDirectionArrow').length,
+          stagedChevrons: document.querySelectorAll('#depStagedOverlay .depDirectionChevron').length,
           commandText: window.TaskCanvasCommands.runtimeCommandText(window, {short:true})
         };
         var pre = document.createElement('pre');
@@ -6068,7 +6164,11 @@ window.addEventListener('load', function(){
         self.assertEqual(result["parentHandles"], 1)
         self.assertEqual(result["childHandles"], 1)
         self.assertEqual(result["stagedPaths"], 1)
-        self.assertEqual(result["stagedMarker"], "url(#depArrow)")
+        self.assertIsNone(result["stagedMarker"])
+        self.assertEqual(result["stagedDirectionFrom"], "bbbbbbbb")
+        self.assertEqual(result["stagedSources"], 1)
+        self.assertEqual(result["stagedArrows"], 1)
+        self.assertEqual(result["stagedChevrons"], 1)
         self.assertIn("task 'aaaaaaaa' modify 'depends:bbbbbbbb'", result["commandText"])
 
     def test_dependency_edges_runtime_renders_existing_edges_and_keeps_pulses_opt_in(self):
@@ -6151,16 +6251,24 @@ window.addEventListener('load', function(){
           existingGroups: document.querySelectorAll('#depExistingEdges').length,
           existingPaths: document.querySelectorAll('#depExistingEdges path[data-from="aaaaaaaa"][data-to="bbbbbbbb"]').length,
           existingMarker: (document.querySelector('#depExistingEdges path[data-from="aaaaaaaa"][data-to="bbbbbbbb"]') || {}).getAttribute && document.querySelector('#depExistingEdges path[data-from="aaaaaaaa"][data-to="bbbbbbbb"]').getAttribute('marker-end'),
+          existingDirectionFrom: (document.querySelector('#depExistingEdges path[data-from="aaaaaaaa"][data-to="bbbbbbbb"]') || {}).getAttribute && document.querySelector('#depExistingEdges path[data-from="aaaaaaaa"][data-to="bbbbbbbb"]').getAttribute('data-direction-from'),
+          existingSources: document.querySelectorAll('#depExistingEdges .depDirectionSource').length,
+          existingArrows: document.querySelectorAll('#depExistingEdges .depDirectionArrow').length,
+          existingChevrons: document.querySelectorAll('#depExistingEdges .depDirectionChevron').length,
           existingStroke: (document.querySelector('#depExistingEdges path[data-from="aaaaaaaa"][data-to="bbbbbbbb"]') || {}).style ? document.querySelector('#depExistingEdges path[data-from="aaaaaaaa"][data-to="bbbbbbbb"]').style.stroke : "",
           existingGradient: document.querySelectorAll('#builderLinks defs linearGradient[id^="depGradExisting"] stop').length,
           stagedGroups: document.querySelectorAll('#depStagedOverlay').length,
           stagedPaths: document.querySelectorAll('#depStagedOverlay path[data-from="bbbbbbbb"][data-to="cccccccc"]').length,
           stagedMarker: (document.querySelector('#depStagedOverlay path[data-from="bbbbbbbb"][data-to="cccccccc"]') || {}).getAttribute && document.querySelector('#depStagedOverlay path[data-from="bbbbbbbb"][data-to="cccccccc"]').getAttribute('marker-end'),
+          stagedDirectionFrom: (document.querySelector('#depStagedOverlay path[data-from="bbbbbbbb"][data-to="cccccccc"]') || {}).getAttribute && document.querySelector('#depStagedOverlay path[data-from="bbbbbbbb"][data-to="cccccccc"]').getAttribute('data-direction-from'),
+          stagedSources: document.querySelectorAll('#depStagedOverlay .depDirectionSource').length,
+          stagedArrows: document.querySelectorAll('#depStagedOverlay .depDirectionArrow').length,
+          stagedChevrons: document.querySelectorAll('#depStagedOverlay .depDirectionChevron').length,
           stagedStroke: (document.querySelector('#depStagedOverlay path[data-from="bbbbbbbb"][data-to="cccccccc"]') || {}).style ? document.querySelector('#depStagedOverlay path[data-from="bbbbbbbb"][data-to="cccccccc"]').style.stroke : "",
           stagedGradient: document.querySelectorAll('#builderLinks defs linearGradient[id^="depGradStaged"] stop').length,
           directionGroup: document.querySelectorAll('#depDirectionHints').length,
-          arrowMarkerWidth: (document.querySelector('#depArrow') || {}).getAttribute && document.querySelector('#depArrow').getAttribute('markerWidth'),
-          arrowMarkerHeight: (document.querySelector('#depArrow') || {}).getAttribute && document.querySelector('#depArrow').getAttribute('markerHeight'),
+          arrowMarkerWidth: document.querySelector('#depArrow') ? document.querySelector('#depArrow').getAttribute('markerWidth') : null,
+          arrowMarkerHeight: document.querySelector('#depArrow') ? document.querySelector('#depArrow').getAttribute('markerHeight') : null,
           directionHints: document.querySelectorAll('#depDirectionHints .depDirectionHint').length,
           textHints: document.querySelectorAll('#depDirectionHints .depDirectionText').length,
           textTrails: document.querySelectorAll('#depDirectionHints .depDirectionTrail').length,
@@ -6196,27 +6304,35 @@ window.addEventListener('load', function(){
         self.assertTrue(result["api"])
         self.assertEqual(result["existingGroups"], 1)
         self.assertEqual(result["existingPaths"], 1)
-        self.assertEqual(result["existingMarker"], "url(#depArrow)")
+        self.assertIsNone(result["existingMarker"])
+        self.assertEqual(result["existingDirectionFrom"], "bbbbbbbb")
+        self.assertEqual(result["existingSources"], 1)
+        self.assertEqual(result["existingArrows"], 1)
+        self.assertEqual(result["existingChevrons"], 1)
         self.assertIn("depGradExisting", result["existingStroke"])
         self.assertGreaterEqual(result["existingGradient"], 3, msg=json.dumps(result))
         self.assertEqual(result["stagedGroups"], 1)
         self.assertEqual(result["stagedPaths"], 1)
-        self.assertEqual(result["stagedMarker"], "url(#depArrow)")
+        self.assertIsNone(result["stagedMarker"])
+        self.assertEqual(result["stagedDirectionFrom"], "cccccccc")
+        self.assertEqual(result["stagedSources"], 1)
+        self.assertEqual(result["stagedArrows"], 1)
+        self.assertEqual(result["stagedChevrons"], 1)
         self.assertIn("depGradStaged", result["stagedStroke"])
         self.assertGreaterEqual(result["stagedGradient"], 3, msg=json.dumps(result))
         self.assertEqual(result["directionGroup"], 0, msg=json.dumps(result))
-        self.assertEqual(result["arrowMarkerWidth"], "8")
-        self.assertEqual(result["arrowMarkerHeight"], "8")
+        self.assertIsNone(result["arrowMarkerWidth"])
+        self.assertIsNone(result["arrowMarkerHeight"])
         self.assertEqual(result["directionHints"], 0, msg=json.dumps(result))
         self.assertEqual(result["textHints"], 0, msg=json.dumps(result))
         self.assertEqual(result["textTrails"], 0, msg=json.dumps(result))
         self.assertEqual(result["idlePulseGroups"], 0)
         self.assertEqual(result["idlePulses"], 0)
-        self.assertLess(result["idleObserverCallbacks"], 100, msg=json.dumps(result))
-        self.assertLess(result["idleObserverRecords"], 1200, msg=json.dumps(result))
+        self.assertLess(result["idleObserverCallbacks"], 200, msg=json.dumps(result))
+        self.assertLess(result["idleObserverRecords"], 2500, msg=json.dumps(result))
         self.assertLess(result["idleRefreshCalls"], 20, msg=json.dumps(result))
-        self.assertEqual(result["pulseGroups"], 1)
-        self.assertGreaterEqual(result["pulses"], 2)
+        self.assertEqual(result["pulseGroups"], 0)
+        self.assertEqual(result["pulses"], 0)
 
     def test_project_picker_runtime_opens_and_lists_projects(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")

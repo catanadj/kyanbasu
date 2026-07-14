@@ -9,8 +9,6 @@
       '#builderLinks line.dep-edge.existing',
       '#builderLinks path.link-existing',
       '#builderLinks line.link-existing',
-      '#depExistingEdges path',
-      '#depExistingEdges line',
       'path.dep-edge.staged',
       'line.dep-edge.staged',
       'path.existing[class*="dep"]',
@@ -21,9 +19,6 @@
       r.querySelectorAll(sel).forEach(function(el){
         // Skip if this is in the staging area (preview)
         if (el.closest('#builderStage')) return;
-        
-        // Keep direction visible with a static arrow marker.
-        if (!el.getAttribute('marker-end')) el.setAttribute('marker-end', 'url(#depArrow)');
         
         // Ensure fill is none for proper stroke rendering
         if (el.getAttribute('fill') !== 'none') el.setAttribute('fill','none');
@@ -40,8 +35,8 @@
 
   function ensureStagingArrows(root){
     var r = root || document;
-    r.querySelectorAll('#depStagedOverlay path, #depStagedOverlay line, #builderStage path.staged-energy-edge, #builderStage line.staged-energy-edge').forEach(function(el){
-      if (!el.getAttribute('marker-end')) el.setAttribute('marker-end', 'url(#depArrow)');
+    r.querySelectorAll('#depStagedOverlay path.dep-edge.staged, #depStagedOverlay line.dep-edge.staged').forEach(function(el){
+      el.removeAttribute('marker-end');
     });
   }
 

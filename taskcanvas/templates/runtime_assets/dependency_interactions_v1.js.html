@@ -197,7 +197,6 @@
   function renderStagedOverlay(){
     var svg = linksSvg();
     if (!svg) return;
-    ensureArrowMarker();
     var g = svg.querySelector('#depStagedOverlay');
     if (!g){
       g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -207,7 +206,10 @@
     while (g.firstChild) g.removeChild(g.firstChild);
     ensureStagedAdd().forEach(function(edge, index){
       if (!edge || !edge.from || !edge.to) return;
-      var a = aRight(edge.from), b = aTop(edge.to);
+      var direction = window.TaskCanvasEdgeDirection;
+      var blockerRect = rectByShort(edge.to), dependentRect = rectByShort(edge.from);
+      var points = direction && direction.connectionPoints && blockerRect && dependentRect ? direction.connectionPoints(blockerRect, dependentRect) : null;
+      var a = points ? points.source : aRight(edge.to), b = points ? points.target : aTop(edge.from);
       if (!a || !b) return;
       var p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       p.setAttribute('class', 'dep-edge staged');
@@ -217,10 +219,12 @@
       p.setAttribute('stroke-width', '2');
       p.setAttribute('fill', 'none');
       p.setAttribute('stroke-dasharray', '6 6');
-      p.setAttribute('marker-end', 'url(#depArrow)');
       p.setAttribute('data-from', String(edge.from));
       p.setAttribute('data-to', String(edge.to));
+      p.setAttribute('data-direction-from', String(edge.to));
+      p.setAttribute('data-direction-to', String(edge.from));
       g.appendChild(p);
+      if (direction && direction.decorate) direction.decorate(g, p, {prefix:'dep', key:String(edge.from)+'::'+String(edge.to)});
     });
   }
 
