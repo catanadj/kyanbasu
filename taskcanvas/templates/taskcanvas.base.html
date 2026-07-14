@@ -1148,6 +1148,8 @@
     display:flex;
     align-items:center;
     gap:4px;
+    max-width:240px;
+    overflow:hidden;
     color:var(--muted);
     font-size:10px;
     white-space:nowrap;
@@ -1157,6 +1159,13 @@
     border:1px solid rgba(164,185,214,.16);
     border-radius:5px;
     background:rgba(255,255,255,.04);
+  }
+  .viewerNoteSemantic.annotation{
+    max-width:120px;
+    overflow:hidden;
+    border-color:rgba(97,208,255,.22);
+    color:#bdeeff;
+    text-overflow:ellipsis;
   }
   .viewerNoteSemantic.resolved{color:#9ce8bd;border-color:rgba(47,191,113,.24)}
   .viewerNoteSemantic.parked{color:#ffd58a;border-color:rgba(242,184,75,.24)}
@@ -3973,6 +3982,22 @@ function appendViewerNote(outlineEl, item){
     status.className = 'viewerNoteSemantic ' + item.status;
     status.textContent = item.statusLabel || item.status;
     semantics.appendChild(status);
+  }
+  var annotations = Array.isArray(item.annotations) ? item.annotations : [];
+  annotations.slice(0, 2).forEach(function(annotation){
+    var chip = document.createElement('span');
+    chip.className = 'viewerNoteSemantic annotation ' + (annotation.kind || 'note');
+    var icon = annotation.kind === 'question' ? '?' : (annotation.kind === 'condition' ? '!' : 'i');
+    chip.textContent = icon + ' ' + (annotation.text || 'Annotation');
+    chip.title = (annotation.kindLabel || 'Note') + ' · ' + (annotation.relation || 'Related to') + (annotation.otherLabel ? ' ' + annotation.otherLabel : '') + ': ' + (annotation.text || '');
+    semantics.appendChild(chip);
+  });
+  if (annotations.length > 2){
+    var more = document.createElement('span');
+    more.className = 'viewerNoteSemantic';
+    more.textContent = '+' + (annotations.length - 2);
+    more.title = (annotations.length - 2) + ' more relationship annotation' + (annotations.length - 2 === 1 ? '' : 's');
+    semantics.appendChild(more);
   }
   row.querySelector('.viewerNoteBucket').textContent=item.bucket || '(no bucket)';
   outlineEl.appendChild(row);

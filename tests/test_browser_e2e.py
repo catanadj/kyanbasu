@@ -1491,6 +1491,116 @@ window.addEventListener('load', function(){
         self.assertEqual(result["selected"], "link", msg=json.dumps(result))
         self.assertEqual(result["console"], "")
 
+    def test_canvas_note_link_annotations_are_zoom_aware_and_searchable(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTE_LINK_ANNOTATION_DISCOVERY_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var source = TaskCanvasNotes.createNote(180, 220, 'Deployment evidence', '', 'Research', {skipAutoLayout:true});
+      var target = TaskCanvasNotes.createNote(620, 260, 'Release decision', '', 'Planning', {skipAutoLayout:true});
+      var unrelated = TaskCanvasNotes.createNote(980, 260, 'Meeting notes', '', 'Planning', {skipAutoLayout:true});
+      TaskCanvasNotes.linkNotes(source.id, target.id, 'supports');
+      var link = TaskCanvasNotes.links()[0];
+      var key = [link.from, link.to, link.type].join('::');
+      TaskCanvasNotes.setLinkAnnotation(key, {kind:'question', text:'What deployment risk remains?'});
+      var textMatches = TaskCanvasNotes.searchNotes('deployment risk');
+      var kindMatches = TaskCanvasNotes.searchNotes('annotation:question');
+      var fieldMatches = TaskCanvasNotes.searchNotes('annotation:"deployment risk"');
+      var hasMatches = TaskCanvasNotes.searchNotes('has:annotations');
+      var outline = TaskCanvasNotes.outline();
+      var outlineById = {};
+      function collect(items){
+        (items || []).forEach(function(item){ outlineById[item.id] = item; collect(item.children); });
+      }
+      collect(outline);
+      var zoom = document.getElementById('zoom');
+      zoom.value = '70';
+      zoom.dispatchEvent(new Event('input', {bubbles:true}));
+      var layer = document.getElementById('tcNoteLinksLayer');
+      var triangle = document.querySelector('.tcNoteLinkAnnotationTriangle');
+      var labelBg = document.querySelector('.tcNoteLinkAnnotationLabelBg');
+      var label = document.querySelector('.tcNoteLinkAnnotationLabel');
+      var compact = {
+        detail:layer.getAttribute('data-annotation-detail'),
+        triangle:getComputedStyle(triangle).display,
+        labelBg:getComputedStyle(labelBg).display,
+        label:getComputedStyle(label).display
+      };
+      zoom.value = '100';
+      zoom.dispatchEvent(new Event('input', {bubbles:true}));
+      var full = {
+        detail:layer.getAttribute('data-annotation-detail'),
+        labelBg:getComputedStyle(labelBg).display,
+        label:getComputedStyle(label).display
+      };
+      var input = document.getElementById('noteSearchInput');
+      input.value = 'deployment risk';
+      input.dispatchEvent(new Event('input', {bubbles:true}));
+      if (typeof renderViewer === 'function') renderViewer();
+      setTimeout(function(){
+        var resultContexts = Array.from(document.querySelectorAll('#noteSearchResults .tcNoteSearchAnnotation')).map(function(el){ return el.textContent; });
+        var viewerChips = Array.from(document.querySelectorAll('#viewerStage .viewerNoteSemantic.annotation')).map(function(el){ return el.textContent; });
+        var out = {
+          source:source.id,
+          target:target.id,
+          unrelated:unrelated.id,
+          textMatches:textMatches,
+          kindMatches:kindMatches,
+          fieldMatches:fieldMatches,
+          hasMatches:hasMatches,
+          sourceAnnotations:(outlineById[source.id] && outlineById[source.id].annotations) || [],
+          targetAnnotations:(outlineById[target.id] && outlineById[target.id].annotations) || [],
+          compact:compact,
+          full:full,
+          resultContexts:resultContexts,
+          viewerChips:viewerChips,
+          console:(document.getElementById('consoleText') || {}).value || ''
+        };
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = JSON.stringify(out);
+        document.body.appendChild(pre);
+      }, 100);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        expected_ids = {result["source"], result["target"]}
+        self.assertEqual(set(result["textMatches"]), expected_ids, msg=json.dumps(result))
+        self.assertEqual(set(result["kindMatches"]), expected_ids, msg=json.dumps(result))
+        self.assertEqual(set(result["fieldMatches"]), expected_ids, msg=json.dumps(result))
+        self.assertEqual(set(result["hasMatches"]), expected_ids, msg=json.dumps(result))
+        self.assertNotIn(result["unrelated"], result["textMatches"], msg=json.dumps(result))
+        self.assertEqual(result["sourceAnnotations"][0]["direction"], "outgoing", msg=json.dumps(result))
+        self.assertEqual(result["targetAnnotations"][0]["direction"], "incoming", msg=json.dumps(result))
+        self.assertEqual(result["compact"]["detail"], "compact", msg=json.dumps(result))
+        self.assertNotEqual(result["compact"]["triangle"], "none", msg=json.dumps(result))
+        self.assertEqual(result["compact"]["labelBg"], "none", msg=json.dumps(result))
+        self.assertEqual(result["compact"]["label"], "none", msg=json.dumps(result))
+        self.assertEqual(result["full"]["detail"], "full", msg=json.dumps(result))
+        self.assertNotEqual(result["full"]["labelBg"], "none", msg=json.dumps(result))
+        self.assertNotEqual(result["full"]["label"], "none", msg=json.dumps(result))
+        self.assertEqual(len(result["resultContexts"]), 2, msg=json.dumps(result))
+        self.assertTrue(all("deployment risk" in text.lower() for text in result["resultContexts"]), msg=json.dumps(result))
+        self.assertEqual(len(result["viewerChips"]), 2, msg=json.dumps(result))
+        self.assertTrue(all("deployment risk" in text.lower() for text in result["viewerChips"]), msg=json.dumps(result))
+        self.assertEqual(result["console"], "")
+
     def test_canvas_notes_link_inspector_manages_selected_note_links(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

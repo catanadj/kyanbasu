@@ -357,7 +357,9 @@
       else delete link.annotation;
       touchNote(noteById(link.from));
       touchNote(noteById(link.to));
-      renderLinks();
+      updateNoteSearch();
+      if (noteLens) renderAll();
+      else renderLinks();
       renderLinkInspector();
       notifyInspectorSelectionChanged();
       refreshViewerOutline();
@@ -403,6 +405,26 @@
   }
   function searchNotes(query){
     return NoteCore.search(notes, links, query);
+  }
+  function noteAnnotationsFor(note){
+    return note && NoteCore.annotationsForNote ? NoteCore.annotationsForNote(note.id, notes, links, computeNoteLabels()) : [];
+  }
+  function matchingNoteAnnotation(note, query){
+    var annotations = noteAnnotationsFor(note);
+    if (!annotations.length) return null;
+    var terms = NoteCore.parseQuery(query).filter(function(term){ return !term.negated; });
+    if (!terms.length) return null;
+    for (var i=0; i<annotations.length; i++){
+      var annotation = annotations[i];
+      var text = [annotation.kind, annotation.kindLabel, annotation.text].join(' ').toLowerCase();
+      var matched = terms.some(function(term){
+        if (term.field === 'has' && term.value === 'annotations') return true;
+        if (term.field !== 'text' && term.field !== 'annotation') return false;
+        return text.indexOf(term.value) !== -1;
+      });
+      if (matched) return annotation;
+    }
+    return null;
   }
   function allNoteLensDefinitions(){
     return noteLensDefinitions.concat(customNoteLenses);
@@ -752,13 +774,20 @@
       return;
     }
     noteSearchMatches.slice(0, 8).forEach(function(n){
+      var annotation = matchingNoteAnnotation(n, noteSearchQuery);
       var btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'tcNoteSearchResult';
+      btn.className = 'tcNoteSearchResult' + (annotation ? ' annotationMatch' : '');
       btn.setAttribute('data-note-id', n.id);
-      btn.innerHTML = '<span class="tcNoteSearchCode"></span><span class="tcNoteSearchText"></span>';
+      btn.innerHTML = '<span class="tcNoteSearchCode"></span><span class="tcNoteSearchCopy"><span class="tcNoteSearchText"></span><span class="tcNoteSearchAnnotation" hidden></span></span>';
       qs('.tcNoteSearchCode', btn).textContent = labels[n.id] || '';
       qs('.tcNoteSearchText', btn).textContent = (n.content || 'New note').replace(/\s+/g, ' ').slice(0, 64);
+      if (annotation){
+        var context = qs('.tcNoteSearchAnnotation', btn);
+        context.hidden = false;
+        context.textContent = annotation.kindLabel + (annotation.otherLabel ? ' · ' + annotation.otherLabel : '') + ': ' + annotation.text;
+        context.title = context.textContent;
+      }
       btn.addEventListener('click', function(ev){
         ev.preventDefault();
         focusSearchResult(n.id);
@@ -3278,6 +3307,21 @@
     layer.appendChild(group);
     return group;
   }
+  function syncLinkAnnotationZoom(){
+    var layer = document.getElementById('tcNoteLinksLayer');
+    if (!layer) return;
+    var scale = typeof window.ZSCALE === 'number' ? window.ZSCALE : 1;
+    layer.classList.toggle('compactAnnotations', scale < .8);
+    layer.setAttribute('data-annotation-detail', scale < .8 ? 'compact' : 'full');
+  }
+  function installLinkAnnotationZoom(){
+    var input = document.getElementById('zoom');
+    if (input && !input.__noteAnnotationZoom){
+      input.__noteAnnotationZoom = true;
+      input.addEventListener('input', syncLinkAnnotationZoom);
+    }
+    syncLinkAnnotationZoom();
+  }
   function renderLinks(){
     var layer = ensureLinkLayer();
     if (!layer) return;
@@ -3361,6 +3405,7 @@
       }
     });
     if (selectedLinkKey && !hasSelected) selectedLinkKey = null;
+    syncLinkAnnotationZoom();
     renderLinkInspector();
     publishContextSelection();
   }
@@ -3843,6 +3888,7 @@
     installTaskLinking();
     installLassoSelection();
     installKeyboardShortcuts();
+    installLinkAnnotationZoom();
     wrapDrawLinks();
     try{ renderLinks(); }catch(_){}
     if (pendingRepairFeedback){

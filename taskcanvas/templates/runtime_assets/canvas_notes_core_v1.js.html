@@ -317,6 +317,7 @@
         kindLabel: optionLabel(note.kind, NOTE_KINDS, 'note'),
         status: normalizeStatus(note.status),
         statusLabel: optionLabel(note.status, NOTE_STATUSES, 'open'),
+        annotations: annotationsForNote(note.id, notes, links, labels),
         depth: depth || 0,
         collapsed: !!note.collapsed,
         children: (index.childrenByParent[note.id] || []).map(function(child){
@@ -329,6 +330,29 @@
     }).filter(Boolean);
   }
 
+  function annotationsForNote(noteId, notes, links, labels){
+    notes = Array.isArray(notes) ? notes : [];
+    links = Array.isArray(links) ? links : [];
+    labels = labels || computeLabels(notes, links);
+    return links.map(function(link){
+      if (!link || (link.from !== noteId && link.to !== noteId)) return null;
+      var annotation = normalizeLinkAnnotation(link.annotation);
+      if (!annotation) return null;
+      var outgoing = link.from === noteId;
+      var otherId = outgoing ? link.to : link.from;
+      return {
+        key: linkKey(link),
+        kind: annotation.kind,
+        kindLabel: optionLabel(annotation.kind, LINK_ANNOTATION_KINDS, 'note'),
+        text: annotation.text,
+        direction: outgoing ? 'outgoing' : 'incoming',
+        relation: relationLabel(link.type, !outgoing),
+        otherId: otherId,
+        otherLabel: labels[otherId] || ''
+      };
+    }).filter(Boolean);
+  }
+
   function search(notes, links, query){
     notes = Array.isArray(notes) ? notes : [];
     links = Array.isArray(links) ? links : [];
@@ -338,12 +362,18 @@
     var now = Date.now();
     if (!terms.length) return [];
     var labels = computeLabels(notes, links);
+    function noteAnnotations(note){
+      return annotationsForNote(note.id, notes, links, labels);
+    }
     function linkTerms(note){
       var terms = [];
       links.forEach(function(link){
         if (!link) return;
         if (link.from === note.id) terms.push(relationLabel(link.type, false));
         if (link.to === note.id) terms.push(relationLabel(link.type, true));
+      });
+      noteAnnotations(note).forEach(function(annotation){
+        terms.push(annotation.kind, annotation.kindLabel, annotation.text);
       });
       return terms.join(' ');
     }
@@ -364,6 +394,7 @@
       var field = term.field;
       var value = term.value;
       var related = linksFor(note);
+      var annotations = noteAnnotations(note);
       var childLinks = related.filter(function(link){ return link.type === 'child'; });
       var matched = false;
       if (field === 'kind' || field === 'type') matched = optionExists(value, NOTE_KINDS) && normalizeKind(note.kind) === value;
@@ -371,6 +402,9 @@
       else if (field === 'bucket') matched = bucketText(note.bucket).toLowerCase() === value;
       else if (field === 'id') matched = String(labels[note.id] || '').toLowerCase() === value;
       else if (field === 'relation') matched = optionExists(value, NOTE_RELATIONS) && related.some(function(link){ return normalizeRelation(link.type) === value; });
+      else if (field === 'annotation') matched = annotations.some(function(annotation){
+        return annotation.kind === value || annotation.kindLabel.toLowerCase() === value || annotation.text.toLowerCase().indexOf(value) !== -1;
+      });
       else if (field === 'reviewed'){
         if (value === 'never') matched = !timestamp(note.reviewedAt, 0);
         else {
@@ -383,6 +417,7 @@
       }
       else if (field === 'has'){
         if (value === 'links') matched = related.length > 0;
+        else if (value === 'annotations') matched = annotations.length > 0;
         else if (value === 'tasks') matched = Array.isArray(note.taskRefs) && note.taskRefs.length > 0;
         else if (value === 'children') matched = childLinks.some(function(link){ return link.from === note.id; });
         else if (value === 'parent') matched = childLinks.some(function(link){ return link.to === note.id; });
@@ -424,6 +459,7 @@
     normalizeRelation: normalizeRelation,
     normalizeLinkAnnotation: normalizeLinkAnnotation,
     annotationKinds: function(){ return LINK_ANNOTATION_KINDS.map(function(option){ return {value:option.value, label:option.label}; }); },
+    annotationsForNote: annotationsForNote,
     relationLabel: relationLabel,
     relationOptions: function(includeStructural){
       return NOTE_RELATIONS.filter(function(option){ return includeStructural || !option.structural; }).map(function(option){
