@@ -3352,6 +3352,89 @@ window.addEventListener('load', function(){
         self.assertIn("toolbarGroupCommands", result["consoleParentClass"], msg=json.dumps(result))
         self.assertIn("toolbarGroupCanvas", result["resetParentClass"], msg=json.dumps(result))
 
+    def test_top_toolbar_can_collapse_restore_and_persist(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_TOP_TOOLBAR_COLLAPSE_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var header = document.querySelector('header');
+      var toggle = document.getElementById('toggleHeaderTools');
+      var expandedHeight = header.getBoundingClientRect().height;
+      var initial = {
+        collapsed:document.body.classList.contains('header-tools-collapsed'),
+        expanded:toggle && toggle.getAttribute('aria-expanded'),
+        actions:getComputedStyle(document.querySelector('.shellActionStack')).display
+      };
+      toggle.click();
+      setTimeout(function(){
+        var collapsedHeight = header.getBoundingClientRect().height;
+        var collapsed = {
+          bodyClass:document.body.classList.contains('header-tools-collapsed'),
+          expanded:toggle.getAttribute('aria-expanded'),
+          title:toggle.title,
+          actions:getComputedStyle(document.querySelector('.shellActionStack')).display,
+          canvas:getComputedStyle(document.getElementById('shellLeftControls')).display,
+          meta:getComputedStyle(document.querySelector('.toolbarMeta')).display,
+          modes:getComputedStyle(document.querySelector('.shellModeControls')).display,
+          workbenches:getComputedStyle(document.getElementById('shellWorkbenchControls')).display,
+          saved:localStorage.getItem('taskcanvas:header-tools-collapsed'),
+          heightReduced:collapsedHeight < expandedHeight - 20
+        };
+        document.body.classList.remove('header-tools-collapsed');
+        window.restoreHeaderToolsState();
+        var restoredFromStorage = document.body.classList.contains('header-tools-collapsed');
+        toggle.click();
+        setTimeout(function(){
+          var reopened = {
+            bodyClass:document.body.classList.contains('header-tools-collapsed'),
+            expanded:toggle.getAttribute('aria-expanded'),
+            actions:getComputedStyle(document.querySelector('.shellActionStack')).display,
+            saved:localStorage.getItem('taskcanvas:header-tools-collapsed')
+          };
+          var pre = document.createElement('pre');
+          pre.id = 'e2e-out';
+          pre.textContent = JSON.stringify({initial:initial, collapsed:collapsed, restoredFromStorage:restoredFromStorage, reopened:reopened});
+          document.body.appendChild(pre);
+        }, 40);
+      }, 40);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertFalse(result["initial"]["collapsed"], msg=json.dumps(result))
+        self.assertEqual(result["initial"]["expanded"], "true", msg=json.dumps(result))
+        self.assertNotEqual(result["initial"]["actions"], "none", msg=json.dumps(result))
+        self.assertTrue(result["collapsed"]["bodyClass"], msg=json.dumps(result))
+        self.assertEqual(result["collapsed"]["expanded"], "false", msg=json.dumps(result))
+        self.assertEqual(result["collapsed"]["title"], "Show tools", msg=json.dumps(result))
+        self.assertEqual(result["collapsed"]["actions"], "none", msg=json.dumps(result))
+        self.assertEqual(result["collapsed"]["canvas"], "none", msg=json.dumps(result))
+        self.assertEqual(result["collapsed"]["meta"], "none", msg=json.dumps(result))
+        self.assertNotEqual(result["collapsed"]["modes"], "none", msg=json.dumps(result))
+        self.assertNotEqual(result["collapsed"]["workbenches"], "none", msg=json.dumps(result))
+        self.assertEqual(result["collapsed"]["saved"], "1", msg=json.dumps(result))
+        self.assertTrue(result["collapsed"]["heightReduced"], msg=json.dumps(result))
+        self.assertTrue(result["restoredFromStorage"], msg=json.dumps(result))
+        self.assertFalse(result["reopened"]["bodyClass"], msg=json.dumps(result))
+        self.assertEqual(result["reopened"]["expanded"], "true", msg=json.dumps(result))
+        self.assertNotEqual(result["reopened"]["actions"], "none", msg=json.dumps(result))
+        self.assertEqual(result["reopened"]["saved"], "0", msg=json.dumps(result))
+
     def test_context_selection_bar_handles_note_and_link_actions(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

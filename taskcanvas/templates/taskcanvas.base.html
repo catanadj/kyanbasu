@@ -148,6 +148,44 @@
     gap:8px;
     min-width:0;
   }
+  .shellToolsToggle{
+    flex:0 0 34px;
+    width:34px;
+    height:34px;
+    padding:0;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:rgba(15,24,39,.72);
+    color:var(--muted);
+    cursor:pointer;
+    font-size:16px;
+    font-weight:800;
+    line-height:32px;
+  }
+  .shellToolsToggle:hover,
+  .shellToolsToggle:focus-visible{
+    border-color:rgba(97,208,255,.38);
+    color:var(--fg);
+    outline:none;
+  }
+  body.header-tools-collapsed header{
+    align-items:center;
+    flex-direction:row;
+    padding:9px 14px;
+  }
+  body.header-tools-collapsed .shellIntro{
+    flex-basis:auto;
+    gap:0;
+  }
+  body.header-tools-collapsed .shellIntroTop{flex-wrap:nowrap}
+  body.header-tools-collapsed .shellBrand{min-width:105px}
+  body.header-tools-collapsed .shellActionStack,
+  body.header-tools-collapsed .shellLeftControls,
+  body.header-tools-collapsed .toolbarMeta,
+  body.header-tools-collapsed .shellEyebrow,
+  body.header-tools-collapsed .shellSubtitle{
+    display:none;
+  }
   .shellActions{
     justify-content:flex-end;
     align-items:stretch;
@@ -1505,6 +1543,7 @@
           </div>
           <div id="shellWorkbenchControls" class="shellWorkbenchControls"></div>
         </div>
+        <button id="toggleHeaderTools" class="shellToolsToggle" type="button" title="Hide tools" aria-label="Hide header tools" aria-expanded="true">⌃</button>
       </div>
       <div class="toolbarMeta">
         <span id="count" class="pill">Loaded: 0</span>
@@ -1690,6 +1729,7 @@ var viewerWrap  = document.getElementById('viewerWrap');
 var tabBuilder  = document.getElementById('tabBuilder');
 var tabViewer   = document.getElementById('tabViewer');
 var toggleDrawer= document.getElementById('toggleDrawer');
+var toggleHeaderTools = document.getElementById('toggleHeaderTools');
 var drawerHandle= document.getElementById('drawerHandle');
 var inspectorHandle = document.getElementById('inspectorHandle');
 
@@ -1752,6 +1792,33 @@ function collapseInspector(){ document.body.classList.add('inspector-collapsed')
 function expandInspector(){ document.body.classList.remove('inspector-collapsed'); }
 if (hideInspector) hideInspector.addEventListener('click', collapseInspector);
 if (inspectorHandle) inspectorHandle.addEventListener('click', expandInspector);
+
+var HEADER_TOOLS_STORAGE_KEY = 'taskcanvas:header-tools-collapsed';
+function setHeaderToolsCollapsed(collapsed, persist){
+  collapsed = !!collapsed;
+  document.body.classList.toggle('header-tools-collapsed', collapsed);
+  if (toggleHeaderTools){
+    toggleHeaderTools.textContent = collapsed ? '⌄' : '⌃';
+    toggleHeaderTools.title = collapsed ? 'Show tools' : 'Hide tools';
+    toggleHeaderTools.setAttribute('aria-label', toggleHeaderTools.title);
+    toggleHeaderTools.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  }
+  if (persist !== false){
+    try{ localStorage.setItem(HEADER_TOOLS_STORAGE_KEY, collapsed ? '1' : '0'); }catch(_){}
+  }
+  return collapsed;
+}
+function restoreHeaderToolsState(){
+  var collapsed = false;
+  try{ collapsed = localStorage.getItem(HEADER_TOOLS_STORAGE_KEY) === '1'; }catch(_){}
+  return setHeaderToolsCollapsed(collapsed, false);
+}
+if (toggleHeaderTools) toggleHeaderTools.addEventListener('click', function(){
+  setHeaderToolsCollapsed(!document.body.classList.contains('header-tools-collapsed'));
+});
+window.setHeaderToolsCollapsed = setHeaderToolsCollapsed;
+window.restoreHeaderToolsState = restoreHeaderToolsState;
+restoreHeaderToolsState();
 
 function cloneJSON(v){
   try{ return JSON.parse(JSON.stringify(v)); }catch(_){ return v; }
