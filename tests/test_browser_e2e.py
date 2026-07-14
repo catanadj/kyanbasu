@@ -4748,6 +4748,75 @@ window.addEventListener('load', function(){
         self.assertEqual([term["field"] for term in result["parsed"]], ["kind", "status", "bucket"], msg=json.dumps(result))
         self.assertTrue(result["parsed"][1]["negated"], msg=json.dumps(result))
 
+    def test_canvas_notes_saved_custom_lenses_lifecycle(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_SAVED_LENS_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var matching = TaskCanvasNotes.createNote(180, 220, 'Validate pricing', '', 'Research', {skipAutoLayout:true, kind:'assumption'});
+      TaskCanvasNotes.createNote(460, 220, 'Draft pricing page', '', 'Delivery', {skipAutoLayout:true, kind:'action'});
+      var saved = TaskCanvasNotes.saveLens('Research assumptions', 'bucket:Research kind:assumption status:open');
+      var duplicate = TaskCanvasNotes.saveLens('research assumptions', 'kind:action');
+      var applied = TaskCanvasNotes.applyLens(saved.id);
+      var activeBeforeRename = TaskCanvasNotes.lensState();
+      var renamed = TaskCanvasNotes.renameLens(saved.id, 'Open research assumptions');
+      var activeAfterRename = TaskCanvasNotes.lensState();
+      document.getElementById('noteLensBtn').click();
+      var customRow = document.querySelector('#noteLensMenu .tcNoteLensRow.custom');
+      var menuText = customRow && customRow.textContent;
+      var stored = TaskCanvasStorage.getJSON('note-lenses', []);
+      var deleted = TaskCanvasNotes.deleteLens(saved.id);
+      var out = {
+        saved:saved,
+        duplicate:duplicate,
+        applied:applied,
+        activeBeforeRename:activeBeforeRename,
+        renamed:renamed,
+        activeAfterRename:activeAfterRename,
+        menuText:menuText,
+        stored:stored,
+        deleted:deleted,
+        lensAfterDelete:TaskCanvasNotes.lensState(),
+        definitions:TaskCanvasNotes.lenses(),
+        visible:Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){ return el.style.display !== 'none'; }).length,
+        matchingId:matching.id
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out';
+      pre.textContent = JSON.stringify(out);
+      document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["saved"]["custom"], msg=json.dumps(result))
+        self.assertIsNone(result["duplicate"], msg=json.dumps(result))
+        self.assertTrue(result["applied"], msg=json.dumps(result))
+        self.assertEqual(result["activeBeforeRename"]["ids"], [result["matchingId"]], msg=json.dumps(result))
+        self.assertTrue(result["renamed"], msg=json.dumps(result))
+        self.assertEqual(result["activeAfterRename"]["label"], "Open research assumptions", msg=json.dumps(result))
+        self.assertIn("Open research assumptions", result["menuText"], msg=json.dumps(result))
+        self.assertEqual(result["stored"][0]["label"], "Open research assumptions", msg=json.dumps(result))
+        self.assertTrue(result["deleted"], msg=json.dumps(result))
+        self.assertEqual(result["lensAfterDelete"]["kind"], "none", msg=json.dumps(result))
+        self.assertEqual(len(result["definitions"]), 6, msg=json.dumps(result))
+        self.assertEqual(result["visible"], 2, msg=json.dumps(result))
+
     def test_canvas_notes_links_selected_note_to_existing_task(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({

@@ -31,6 +31,7 @@
     {id:'orphans', label:'Orphan notes', query:'is:orphan'},
     {id:'without-tasks', label:'Notes without tasks', query:'-has:tasks'}
   ];
+  var customNoteLenses = [];
   var pendingRepairFeedback = null;
   var NoteCore = window.TaskCanvasNotesCore;
   var NoteStorage = window.TaskCanvasStorage;
@@ -61,6 +62,9 @@
   }
   function bucketColorKey(){
     return legacyKey() + ':bucket-color';
+  }
+  function lensStorageKey(){
+    return legacyKey() + ':lenses';
   }
   function uid(){ return 'note-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7); }
   function noteById(id){
@@ -344,9 +348,62 @@
   function searchNotes(query){
     return NoteCore.search(notes, links, query);
   }
+  function allNoteLensDefinitions(){
+    return noteLensDefinitions.concat(customNoteLenses);
+  }
   function noteLensDefinition(id){
-    for (var i=0; i<noteLensDefinitions.length; i++) if (noteLensDefinitions[i].id === id) return noteLensDefinitions[i];
+    var definitions = allNoteLensDefinitions();
+    for (var i=0; i<definitions.length; i++) if (definitions[i].id === id) return definitions[i];
     return null;
+  }
+  function normalizeCustomLens(lens){
+    var label = String(lens && lens.label || '').trim().slice(0, 48);
+    var query = String(lens && lens.query || '').trim().slice(0, 240);
+    if (!label || !query || !NoteCore.parseQuery(query).length) return null;
+    return {id:String(lens.id || uid()), label:label, query:query, custom:true};
+  }
+  function loadCustomLenses(){
+    var parsed = NoteStorage.getJSON('note-lenses', [], lensStorageKey());
+    customNoteLenses = Array.isArray(parsed) ? parsed.map(normalizeCustomLens).filter(Boolean) : [];
+  }
+  function saveCustomLenses(){
+    return NoteStorage.setJSON('note-lenses', customNoteLenses.map(function(lens){
+      return {id:lens.id, label:lens.label, query:lens.query};
+    }));
+  }
+  function saveCustomLens(label, query){
+    var lens = normalizeCustomLens({id:uid(), label:label, query:query});
+    if (!lens) return null;
+    var duplicate = allNoteLensDefinitions().some(function(existing){ return existing.label.toLowerCase() === lens.label.toLowerCase(); });
+    if (duplicate) return null;
+    customNoteLenses.push(lens);
+    saveCustomLenses();
+    renderNoteLensMenu();
+    return {id:lens.id, label:lens.label, query:lens.query, custom:true};
+  }
+  function renameCustomLens(id, label){
+    var lens = noteLensDefinition(id);
+    label = String(label || '').trim().slice(0, 48);
+    if (!lens || !lens.custom || !label) return false;
+    var duplicate = allNoteLensDefinitions().some(function(existing){ return existing.id !== id && existing.label.toLowerCase() === label.toLowerCase(); });
+    if (duplicate) return false;
+    lens.label = label;
+    if (noteLens && noteLens.id === id) noteLens.label = label;
+    saveCustomLenses();
+    renderNoteLensMenu();
+    syncNoteLensButton();
+    refreshViewerOutline();
+    return true;
+  }
+  function deleteCustomLens(id){
+    var before = customNoteLenses.length;
+    customNoteLenses = customNoteLenses.filter(function(lens){ return lens.id !== id; });
+    if (customNoteLenses.length === before) return false;
+    var wasActive = noteLens && noteLens.id === id;
+    saveCustomLenses();
+    if (wasActive) clearNoteLens();
+    else renderNoteLensMenu();
+    return true;
   }
   function syncNoteLensButton(){
     var button = document.getElementById('noteLensBtn');
@@ -367,7 +424,9 @@
       clear.addEventListener('click', function(){ clearNoteLens(); });
       menu.appendChild(clear);
     }
-    noteLensDefinitions.forEach(function(definition){
+    allNoteLensDefinitions().forEach(function(definition){
+      var row = document.createElement('div');
+      row.className = 'tcNoteLensRow' + (definition.custom ? ' custom' : '');
       var button = document.createElement('button');
       button.type = 'button';
       button.className = 'tcNoteLensOption' + (noteLens && noteLens.id === definition.id ? ' active' : '');
@@ -375,8 +434,43 @@
       qs('span', button).textContent = definition.label;
       qs('strong', button).textContent = searchNotes(definition.query).length;
       button.addEventListener('click', function(){ applyNoteLens(definition.id); });
-      menu.appendChild(button);
+      row.appendChild(button);
+      if (definition.custom){
+        var rename = document.createElement('button');
+        rename.type = 'button';
+        rename.className = 'tcNoteLensAction';
+        rename.textContent = 'Edit';
+        rename.title = 'Rename saved lens';
+        rename.addEventListener('click', function(){
+          var next = window.prompt ? window.prompt('Lens name:', definition.label) : null;
+          if (next !== null) renameCustomLens(definition.id, next);
+        });
+        var remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'tcNoteLensAction danger';
+        remove.textContent = 'Delete';
+        remove.title = 'Delete saved lens';
+        remove.addEventListener('click', function(){ deleteCustomLens(definition.id); });
+        row.appendChild(rename);
+        row.appendChild(remove);
+      }
+      menu.appendChild(row);
     });
+    var input = document.getElementById('noteSearchInput');
+    var currentQuery = input ? input.value.trim() : '';
+    var save = document.createElement('button');
+    save.type = 'button';
+    save.className = 'tcNoteLensSave';
+    save.textContent = 'Save current filter';
+    save.disabled = !currentQuery || !!noteLens;
+    save.addEventListener('click', function(){
+      var label = window.prompt ? window.prompt('Lens name:', '') : null;
+      if (label === null) return;
+      var saved = saveCustomLens(label, currentQuery);
+      if (saved) applyNoteLens(saved.id);
+      else noteFeedback('Use a unique lens name and a valid filter.');
+    });
+    menu.appendChild(save);
   }
   function applyNoteLens(id){
     var definition = noteLensDefinition(id);
@@ -3191,6 +3285,7 @@
     loadBucketLayoutState();
     loadBucketFollowState();
     loadBucketColorState();
+    loadCustomLenses();
     renderAll();
     installCanvasClick();
     installTaskLinking();
@@ -3233,7 +3328,10 @@
     applyLens: applyNoteLens,
     clearLens: clearNoteLens,
     lensState: noteLensSnapshot,
-    lenses: function(){ return noteLensDefinitions.map(function(definition){ return {id:definition.id, label:definition.label, query:definition.query}; }); },
+    lenses: function(){ return allNoteLensDefinitions().map(function(definition){ return {id:definition.id, label:definition.label, query:definition.query, custom:!!definition.custom}; }); },
+    saveLens: saveCustomLens,
+    renameLens: renameCustomLens,
+    deleteLens: deleteCustomLens,
     reflowMindMap: reflowMindMap,
     compactMindMap: compactMindMap,
     toggleCollapse: toggleCollapse,
