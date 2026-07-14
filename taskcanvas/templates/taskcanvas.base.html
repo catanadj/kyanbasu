@@ -3052,6 +3052,17 @@ function renderNoteInspector(snapshot){
         '</select>' +
       '</div>' +
       '<div class="inspectorGroup">' +
+        '<div class="inspectorLabel">Link annotation</div>' +
+        '<select id="inspectorNoteLinkAnnotationKind" class="inspectorInput">' +
+          (link.annotationKinds || []).map(function(option){
+            var activeKind = link.annotation && link.annotation.kind || 'note';
+            return '<option value="'+escapeHtml(option.value || '')+'"'+(option.value === activeKind ? ' selected' : '')+'>'+escapeHtml(option.label || option.value || '')+'</option>';
+          }).join('') +
+        '</select>' +
+        '<textarea id="inspectorNoteLinkAnnotationText" class="inspectorField" spellcheck="true" placeholder="Add context, a question, or a condition">'+escapeHtml(link.annotation && link.annotation.text || '')+'</textarea>' +
+        '<button id="inspectorNoteLinkAnnotationClear" class="inspectorInput" type="button"'+(link.annotation ? '' : ' disabled')+'>Clear annotation</button>' +
+      '</div>' +
+      '<div class="inspectorGroup">' +
         '<div class="inspectorLabel">Endpoints</div>' +
         '<div class="inspectorList">' +
           '<div class="inspectorListItem"><strong>From '+escapeHtml(link.fromLabel || '')+'</strong><div class="inspectorItemMeta">'+escapeHtml(noteInspectorText(link.fromText, 'New note'))+'</div></div>' +
@@ -3061,6 +3072,20 @@ function renderNoteInspector(snapshot){
     var linkTypeSelect = document.getElementById('inspectorNoteLinkType');
     if (linkTypeSelect && api && typeof api.setLinkType === 'function') linkTypeSelect.addEventListener('change', function(){
       api.setLinkType(link.key, linkTypeSelect.value);
+      queueInspectorRender(0);
+    });
+    var annotationKind = document.getElementById('inspectorNoteLinkAnnotationKind');
+    var annotationText = document.getElementById('inspectorNoteLinkAnnotationText');
+    var annotationClear = document.getElementById('inspectorNoteLinkAnnotationClear');
+    function saveLinkAnnotation(){
+      if (!api || typeof api.setLinkAnnotation !== 'function') return;
+      api.setLinkAnnotation(link.key, {kind:annotationKind && annotationKind.value, text:annotationText && annotationText.value});
+      queueInspectorRender(0);
+    }
+    if (annotationKind) annotationKind.addEventListener('change', function(){ if (annotationText && annotationText.value.trim()) saveLinkAnnotation(); });
+    if (annotationText) annotationText.addEventListener('change', saveLinkAnnotation);
+    if (annotationClear) annotationClear.addEventListener('click', function(){
+      if (api && typeof api.setLinkAnnotation === 'function') api.setLinkAnnotation(link.key, null);
       queueInspectorRender(0);
     });
     return true;
@@ -3727,6 +3752,7 @@ var marquee=null, mStart=null;
 builderStage.addEventListener('mousedown', function(e){
   if (e.button!==0) return;
   if (e.target.closest('.node')) return;
+  if (e.target.closest('.tcNoteLink, .tcNoteLinkHit, .tcNoteLinkAnnotation, .tcNoteLinkAnnotationAdd')) return;
   if (e.target.closest('.projAreaLabel') || e.target.closest('.tagAreaLabel') || e.target.closest('.tagAddBtn')) return;
   clearSelection();
   var rect = builderStage.getBoundingClientRect();

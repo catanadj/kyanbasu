@@ -26,6 +26,11 @@
     {value:'leads_to', label:'Leads to', inverseLabel:'Follows from', structural:false},
     {value:'child', label:'Parent of', inverseLabel:'Child of', structural:true}
   ];
+  var LINK_ANNOTATION_KINDS = [
+    {value:'note', label:'Note'},
+    {value:'question', label:'Question'},
+    {value:'condition', label:'Condition'}
+  ];
 
   function optionValue(value, options, fallback){
     value = String(value || '').trim().toLowerCase();
@@ -42,6 +47,14 @@
   function normalizeKind(value){ return optionValue(value, NOTE_KINDS, 'note'); }
   function normalizeStatus(value){ return optionValue(value, NOTE_STATUSES, 'open'); }
   function normalizeRelation(value){ return optionValue(value, NOTE_RELATIONS, 'manual'); }
+  function normalizeAnnotationKind(value){ return optionValue(value, LINK_ANNOTATION_KINDS, 'note'); }
+  function normalizeLinkAnnotation(annotation){
+    if (typeof annotation === 'string') annotation = {kind:'note', text:annotation};
+    if (!annotation || typeof annotation !== 'object') return null;
+    var text = String(annotation.text || '').trim();
+    if (!text) return null;
+    return {kind:normalizeAnnotationKind(annotation.kind), text:text};
+  }
   function relationLabel(value, inverse){
     value = normalizeRelation(value);
     for (var i=0; i<NOTE_RELATIONS.length; i++){
@@ -210,6 +223,8 @@
     (Array.isArray(rawLinks) ? rawLinks : []).forEach(function(link){
       if (!link || typeof link !== 'object') { dropped++; return; }
       var candidate = {from:link.from, to:link.to, type:normalizeRelation(link.type)};
+      var annotation = normalizeLinkAnnotation(link.annotation);
+      if (annotation) candidate.annotation = annotation;
       if (!validateLink(candidate, accepted, {validIds:validIds}).ok){
         dropped++;
         if (candidate.type === 'child') droppedChild++;
@@ -395,7 +410,7 @@
   }
 
   window.TaskCanvasNotesCore = {
-    version: 4,
+    version: 5,
     bucketText: bucketText,
     noteText: noteText,
     normalizeTaskRef: normalizeTaskRef,
@@ -407,6 +422,8 @@
     kindOptions: function(){ return NOTE_KINDS.map(function(option){ return {value:option.value, label:option.label}; }); },
     statusOptions: function(){ return NOTE_STATUSES.map(function(option){ return {value:option.value, label:option.label}; }); },
     normalizeRelation: normalizeRelation,
+    normalizeLinkAnnotation: normalizeLinkAnnotation,
+    annotationKinds: function(){ return LINK_ANNOTATION_KINDS.map(function(option){ return {value:option.value, label:option.label}; }); },
     relationLabel: relationLabel,
     relationOptions: function(includeStructural){
       return NOTE_RELATIONS.filter(function(option){ return includeStructural || !option.structural; }).map(function(option){

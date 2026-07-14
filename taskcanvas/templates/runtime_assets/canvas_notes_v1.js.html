@@ -13,6 +13,7 @@
   var saveTimer = 0;
   var lasso = null;
   var linkDrag = null;
+  var linkAnnotationEditorKey = null;
   var bucketDrag = null;
   var noteDragActive = false;
   var bucketUiState = Object.create(null);
@@ -326,6 +327,7 @@
   }
   function setLinkType(key, type){
     key = String(key || '');
+    if (linkAnnotationEditorKey === key) removeLinkAnnotationEditor(false);
     type = NoteCore.normalizeRelation(type);
     for (var i=0; i<links.length; i++){
       var link = links[i];
@@ -338,6 +340,26 @@
       touchNote(noteById(link.to));
       selectedLinkKey = noteLinkKey(link);
       renderAll();
+      refreshViewerOutline();
+      saveSoon();
+      return true;
+    }
+    return false;
+  }
+  function setLinkAnnotation(key, annotation){
+    key = String(key || '');
+    if (linkAnnotationEditorKey === key) removeLinkAnnotationEditor(false);
+    for (var i=0; i<links.length; i++){
+      var link = links[i];
+      if (noteLinkKey(link) !== key) continue;
+      var normalized = NoteCore.normalizeLinkAnnotation(annotation);
+      if (normalized) link.annotation = normalized;
+      else delete link.annotation;
+      touchNote(noteById(link.from));
+      touchNote(noteById(link.to));
+      renderLinks();
+      renderLinkInspector();
+      notifyInspectorSelectionChanged();
       refreshViewerOutline();
       saveSoon();
       return true;
@@ -1794,7 +1816,32 @@
     }
     return true;
   }
-  function separateBucketLayouts(){
+  function anchoredBucketNudge(mover, obstacle, gap){
+    var candidates = [];
+    if (overlapSpan(mover.y, mover.y + mover.h, obstacle.y, obstacle.y + obstacle.h)){
+      candidates.push({dx:(obstacle.x - gap) - (mover.x + mover.w), dy:0});
+      candidates.push({dx:(obstacle.x + obstacle.w + gap) - mover.x, dy:0});
+    }
+    if (overlapSpan(mover.x, mover.x + mover.w, obstacle.x, obstacle.x + obstacle.w)){
+      candidates.push({dx:0, dy:(obstacle.y - gap) - (mover.y + mover.h)});
+      candidates.push({dx:0, dy:(obstacle.y + obstacle.h + gap) - mover.y});
+    }
+    candidates = candidates.filter(function(move){
+      if (move.dx < 0 && mover.x + move.dx < 0) return false;
+      if (move.dy < 0 && mover.y + move.dy < 0) return false;
+      return !!move.dx || !!move.dy;
+    });
+    candidates.sort(function(a, b){
+      var ad = Math.abs(a.dx) + Math.abs(a.dy);
+      var bd = Math.abs(b.dx) + Math.abs(b.dy);
+      if (ad !== bd) return ad - bd;
+      if (!!a.dx !== !!b.dx) return a.dx ? -1 : 1;
+      return (a.dx + a.dy) - (b.dx + b.dy);
+    });
+    return candidates[0] || null;
+  }
+  function separateBucketLayouts(anchorBucket){
+    anchorBucket = anchorBucket == null ? null : bucketText(anchorBucket);
     var rects = bucketNames().map(bucketVisualRect).filter(Boolean);
     if (rects.length < 2) return false;
     rects.sort(function(a, b){ return (a.y - b.y) || (a.x - b.x); });
@@ -1806,6 +1853,19 @@
         for (var j = i + 1; j < rects.length; j++){
           var a = rects[i], b = rects[j];
           if (!rectsOverlap(a, b)) continue;
+          if (anchorBucket && (a.bucket === anchorBucket || b.bucket === anchorBucket)){
+            var fixed = a.bucket === anchorBucket ? a : b;
+            var displaced = fixed === a ? b : a;
+            var anchoredMove = anchoredBucketNudge(displaced, fixed, gap);
+            if (!anchoredMove) continue;
+            if (moveBucketForSeparation(displaced.bucket, anchoredMove.dx, anchoredMove.dy)){
+              displaced.x += anchoredMove.dx;
+              displaced.y += anchoredMove.dy;
+              moved = true;
+              changed = true;
+            }
+            continue;
+          }
           var right = (a.x + a.w + gap) - b.x;
           var down = (a.y + a.h + gap) - b.y;
           var dx = 0, dy = 0;
@@ -1883,16 +1943,17 @@
       if (!bucketDrag) return;
       var bucket = bucketDrag.bucket;
       var follow = bucketFollowsNotes(bucketDrag.bucket);
-      bucketDrag = null;
       if (follow){
-        resolveNoteOverlaps();
+        separateBucketLayouts(bucket);
         requestCanvasSpaceForNotes();
-        renderAll();
+        renderBuckets();
+        renderLinks();
       } else {
         settleBucketAgainstNotes(bucket);
         requestCanvasSpaceForNotes();
         renderBuckets();
       }
+      bucketDrag = null;
       saveSoon();
     });
   }
@@ -2362,6 +2423,8 @@
           type:NoteCore.normalizeRelation(link.type),
           typeLabel:NoteCore.relationLabel(link.type, false),
           relationOptions:NoteCore.relationOptions(true),
+          annotation:NoteCore.normalizeLinkAnnotation(link.annotation),
+          annotationKinds:NoteCore.annotationKinds(),
           fromLabel:labels[link.from] || '',
           toLabel:labels[link.to] || '',
           fromText:(noteById(link.from) && noteById(link.from).content) || '',
@@ -2413,6 +2476,7 @@
   }
   function selectNote(id, additive){
     try{ if (typeof window.clearSelection === 'function') window.clearSelection(true); }catch(_){}
+    removeLinkAnnotationEditor(false);
     selectedLinkKey = null;
     if (!noteById(id)){
       selectedNoteId = null;
@@ -2432,6 +2496,7 @@
   }
   function selectNotes(ids, additive){
     try{ if (typeof window.clearSelection === 'function') window.clearSelection(true); }catch(_){}
+    removeLinkAnnotationEditor(false);
     selectedLinkKey = null;
     if (!additive){
       selectedNoteIds = {};
@@ -2458,6 +2523,7 @@
     notifyInspectorSelectionChanged();
   }
   function clearNoteSelection(){
+    removeLinkAnnotationEditor(false);
     selectedLinkKey = null;
     selectedNoteId = null;
     selectedNoteIds = {};
@@ -2520,7 +2586,10 @@
     if (noteFocus && noteFocus.kind === 'branch' && doomed[noteFocus.value]) clearNoteFocus(true);
     notes = notes.filter(function(n){ return !doomed[n.id]; });
     links = links.filter(function(l){ return !doomed[l.from] && !doomed[l.to]; });
-    if (selectedLinkKey && !links.some(function(l){ return noteLinkKey(l) === selectedLinkKey; })) selectedLinkKey = null;
+    if (selectedLinkKey && !links.some(function(l){ return noteLinkKey(l) === selectedLinkKey; })){
+      removeLinkAnnotationEditor(false);
+      selectedLinkKey = null;
+    }
     doomedIds.forEach(function(id){ delete selectedNoteIds[id]; });
     if (doomed[selectedNoteId]) selectedNoteId = selectedIds()[0] || null;
     doomedIds.forEach(function(id){
@@ -2787,8 +2856,112 @@
   function removeLinkEndpoints(){
     qsa('.tcNoteLinkEndpoint').forEach(function(el){ el.remove(); });
   }
+  function linkPathPoint(path, ratio){
+    if (!path || !path.getTotalLength || !path.getPointAtLength) return null;
+    try{
+      var length = path.getTotalLength();
+      var point = path.getPointAtLength(length * (ratio == null ? .46 : ratio));
+      if (point && isFinite(point.x) && isFinite(point.y)) return point;
+    }catch(_){}
+    return null;
+  }
+  function focusLinkHit(key){
+    setTimeout(function(){
+      var hit = document.querySelector('.tcNoteLinkHit[data-link-key="'+escAttr(key)+'"]');
+      if (hit && hit.focus) hit.focus();
+    }, 0);
+  }
+  function removeLinkAnnotationEditor(restoreFocus){
+    var key = linkAnnotationEditorKey;
+    var editor = document.getElementById('tcNoteLinkAnnotationEditor');
+    if (editor) editor.remove();
+    linkAnnotationEditorKey = null;
+    if (restoreFocus && key) focusLinkHit(key);
+  }
+  function openLinkAnnotationEditor(key, point){
+    var link = links.filter(function(item){ return noteLinkKey(item) === key; })[0] || null;
+    var st = stage();
+    if (!link || !st) return false;
+    if (!point){
+      var path = document.querySelector('path.tcNoteLink[data-link-key="'+escAttr(key)+'"]');
+      point = linkPathPoint(path, .46);
+    }
+    if (!point) return false;
+    if (selectedLinkKey !== key) selectLink(key);
+    removeLinkAnnotationEditor(false);
+    var annotation = NoteCore.normalizeLinkAnnotation(link.annotation);
+    var editor = document.createElement('div');
+    editor.id = 'tcNoteLinkAnnotationEditor';
+    editor.className = 'tcNoteLinkAnnotationEditor';
+    editor.setAttribute('data-link-key', key);
+    editor.setAttribute('role', 'dialog');
+    editor.setAttribute('aria-label', annotation ? 'Edit relationship annotation' : 'Add relationship annotation');
+    editor.style.left = Math.round(point.x) + 'px';
+    editor.style.top = Math.round(point.y) + 'px';
+    var kind = document.createElement('select');
+    kind.className = 'tcNoteLinkAnnotationKind';
+    kind.setAttribute('aria-label', 'Annotation kind');
+    NoteCore.annotationKinds().forEach(function(option){
+      var item = document.createElement('option');
+      item.value = option.value;
+      item.textContent = option.label;
+      item.selected = option.value === (annotation ? annotation.kind : 'note');
+      kind.appendChild(item);
+    });
+    var text = document.createElement('textarea');
+    text.className = 'tcNoteLinkAnnotationText';
+    text.rows = 3;
+    text.spellcheck = true;
+    text.placeholder = 'Add context, a question, or a condition';
+    text.value = annotation ? annotation.text : '';
+    var actions = document.createElement('div');
+    actions.className = 'tcNoteLinkAnnotationActions';
+    var cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.textContent = 'Cancel';
+    var save = document.createElement('button');
+    save.type = 'button';
+    save.className = 'primary';
+    save.textContent = 'Save';
+    actions.appendChild(cancel);
+    actions.appendChild(save);
+    editor.appendChild(kind);
+    editor.appendChild(text);
+    editor.appendChild(actions);
+    st.appendChild(editor);
+    linkAnnotationEditorKey = key;
+    function commit(){
+      var next = {kind:kind.value, text:text.value};
+      removeLinkAnnotationEditor(false);
+      setLinkAnnotation(key, next);
+      focusLinkHit(key);
+    }
+    save.addEventListener('click', function(ev){ ev.preventDefault(); ev.stopPropagation(); commit(); });
+    cancel.addEventListener('click', function(ev){ ev.preventDefault(); ev.stopPropagation(); removeLinkAnnotationEditor(true); });
+    editor.addEventListener('mousedown', function(ev){ ev.stopPropagation(); });
+    editor.addEventListener('keydown', function(ev){
+      if (ev.key === 'Escape'){
+        ev.preventDefault();
+        ev.stopPropagation();
+        removeLinkAnnotationEditor(true);
+      } else if (ev.key === 'Enter' && !ev.shiftKey && ev.target === text){
+        ev.preventDefault();
+        ev.stopPropagation();
+        commit();
+      }
+    });
+    setTimeout(function(){ text.focus(); text.select(); }, 0);
+    return true;
+  }
   function selectLink(key){
+    if (selectedLinkKey === (key || null)){
+      renderLinkInspector();
+      publishContextSelection();
+      notifyInspectorSelectionChanged();
+      return;
+    }
     try{ if (typeof window.clearSelection === 'function') window.clearSelection(true); }catch(_){}
+    removeLinkAnnotationEditor(false);
     selectedLinkKey = key || null;
     selectedNoteId = null;
     selectedNoteIds = {};
@@ -2797,6 +2970,7 @@
   }
   function deleteSelectedLink(){
     if (!selectedLinkKey) return false;
+    removeLinkAnnotationEditor(false);
     var removed = links.filter(function(l){ return noteLinkKey(l) === selectedLinkKey; })[0] || null;
     var before = links.length;
     links = links.filter(function(l){ return noteLinkKey(l) !== selectedLinkKey; });
@@ -2965,10 +3139,18 @@
     bar.id = 'tcNoteLinkToolbar';
     bar.className = 'tcNoteLinkToolbar';
     bar.style.left = Math.round((p1.x + p2.x) / 2) + 'px';
-    bar.style.top = Math.round((p1.y + p2.y) / 2) + 'px';
-    bar.innerHTML = '<span class="tcNoteLinkToolbarType"></span><button type="button" title="Unlink selected notes">Unlink</button>';
+    bar.style.top = Math.round((p1.y + p2.y) / 2 - 34) + 'px';
+    bar.innerHTML = '<span class="tcNoteLinkToolbarType"></span><button type="button" data-link-annotation></button><button type="button" data-link-unlink title="Unlink selected notes">Unlink</button>';
     qs('.tcNoteLinkToolbarType', bar).textContent = NoteCore.relationLabel(link.type, false);
-    qs('button', bar).addEventListener('click', function(ev){
+    var annotationBtn = qs('[data-link-annotation]', bar);
+    annotationBtn.textContent = NoteCore.normalizeLinkAnnotation(link.annotation) ? 'Edit note' : 'Add note';
+    annotationBtn.title = NoteCore.normalizeLinkAnnotation(link.annotation) ? 'Edit relationship annotation' : 'Add relationship annotation';
+    annotationBtn.addEventListener('click', function(ev){
+      ev.preventDefault();
+      ev.stopPropagation();
+      openLinkAnnotationEditor(noteLinkKey(link));
+    });
+    qs('[data-link-unlink]', bar).addEventListener('click', function(ev){
       ev.preventDefault();
       ev.stopPropagation();
       deleteSelectedLink();
@@ -2994,6 +3176,107 @@
       handle.addEventListener('mousedown', function(ev){ startRelinkDrag(ev, key, endpoint); });
       st.appendChild(handle);
     });
+  }
+  function renderLinkAnnotation(layer, path, link, key){
+    var annotation = NoteCore.normalizeLinkAnnotation(link && link.annotation);
+    if (!annotation || !layer || !path) return null;
+    var point = linkPathPoint(path, .46);
+    if (!point) return null;
+    var namespace = 'http://www.w3.org/2000/svg';
+    var group = document.createElementNS(namespace, 'g');
+    group.setAttribute('class', 'tcNoteLinkAnnotation' + (selectedLinkKey === key ? ' selected' : ''));
+    group.setAttribute('data-link-key', key);
+    group.setAttribute('data-type', link.type || 'manual');
+    group.setAttribute('data-kind', annotation.kind);
+    group.setAttribute('transform', 'translate(' + point.x + ' ' + point.y + ')');
+    group.setAttribute('role', 'button');
+    group.setAttribute('tabindex', '0');
+    group.setAttribute('aria-label', NoteCore.annotationKinds().filter(function(kind){ return kind.value === annotation.kind; }).map(function(kind){ return kind.label; })[0] + ': ' + annotation.text);
+    var triangle = document.createElementNS(namespace, 'polygon');
+    triangle.setAttribute('class', 'tcNoteLinkAnnotationTriangle');
+    triangle.setAttribute('points', '0,-11 11,9 -11,9');
+    group.appendChild(triangle);
+    var icon = document.createElementNS(namespace, 'text');
+    icon.setAttribute('class', 'tcNoteLinkAnnotationIcon');
+    icon.setAttribute('x', '0');
+    icon.setAttribute('y', '5');
+    icon.setAttribute('text-anchor', 'middle');
+    icon.textContent = annotation.kind === 'question' ? '?' : (annotation.kind === 'condition' ? '!' : 'i');
+    group.appendChild(icon);
+    var labelText = annotation.text.replace(/\s+/g, ' ');
+    if (labelText.length > 34) labelText = labelText.slice(0, 31) + '...';
+    var labelWidth = Math.max(52, Math.min(210, labelText.length * 6.3 + 14));
+    var labelBg = document.createElementNS(namespace, 'rect');
+    labelBg.setAttribute('class', 'tcNoteLinkAnnotationLabelBg');
+    labelBg.setAttribute('x', '15');
+    labelBg.setAttribute('y', '-10');
+    labelBg.setAttribute('width', labelWidth);
+    labelBg.setAttribute('height', '20');
+    labelBg.setAttribute('rx', '5');
+    group.appendChild(labelBg);
+    var label = document.createElementNS(namespace, 'text');
+    label.setAttribute('class', 'tcNoteLinkAnnotationLabel');
+    label.setAttribute('x', '22');
+    label.setAttribute('y', '4');
+    label.textContent = labelText;
+    group.appendChild(label);
+    var title = document.createElementNS(namespace, 'title');
+    title.textContent = annotation.text;
+    group.appendChild(title);
+    function choose(ev){
+      ev.preventDefault();
+      ev.stopPropagation();
+      selectLink(key);
+    }
+    function edit(ev){
+      ev.preventDefault();
+      ev.stopPropagation();
+      openLinkAnnotationEditor(key, point);
+    }
+    group.addEventListener('click', choose);
+    group.addEventListener('dblclick', edit);
+    group.addEventListener('mousedown', function(ev){
+      ev.stopPropagation();
+      if (ev.detail >= 2) edit(ev);
+    });
+    group.addEventListener('keydown', function(ev){
+      if (ev.key === 'Enter') edit(ev);
+      else if (ev.key === ' ') choose(ev);
+    });
+    layer.appendChild(group);
+    return group;
+  }
+  function renderLinkAnnotationAdd(layer, path, link, key){
+    if (NoteCore.normalizeLinkAnnotation(link && link.annotation) || !layer || !path) return null;
+    var point = linkPathPoint(path, .46);
+    if (!point) return null;
+    var namespace = 'http://www.w3.org/2000/svg';
+    var group = document.createElementNS(namespace, 'g');
+    group.setAttribute('class', 'tcNoteLinkAnnotationAdd' + (selectedLinkKey === key ? ' selected' : ''));
+    group.setAttribute('data-link-key', key);
+    group.setAttribute('transform', 'translate(' + point.x + ' ' + point.y + ')');
+    group.setAttribute('role', 'button');
+    group.setAttribute('tabindex', '0');
+    group.setAttribute('aria-label', 'Add relationship annotation');
+    var circle = document.createElementNS(namespace, 'circle');
+    circle.setAttribute('r', '11');
+    group.appendChild(circle);
+    var plus = document.createElementNS(namespace, 'text');
+    plus.setAttribute('x', '0');
+    plus.setAttribute('y', '5');
+    plus.setAttribute('text-anchor', 'middle');
+    plus.textContent = '+';
+    group.appendChild(plus);
+    function open(ev){
+      ev.preventDefault();
+      ev.stopPropagation();
+      openLinkAnnotationEditor(key, point);
+    }
+    group.addEventListener('mousedown', function(ev){ ev.stopPropagation(); });
+    group.addEventListener('click', open);
+    group.addEventListener('keydown', function(ev){ if (ev.key === 'Enter' || ev.key === ' ') open(ev); });
+    layer.appendChild(group);
+    return group;
   }
   function renderLinks(){
     var layer = ensureLinkLayer();
@@ -3023,16 +3306,54 @@
       path.setAttribute('data-type', l.type || 'manual');
       path.setAttribute('data-link-key', key);
       path.setAttribute('aria-label', NoteCore.relationLabel(l.type, false));
+      path.setAttribute('aria-hidden', 'true');
       var title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
       title.textContent = NoteCore.relationLabel(l.type, false);
       path.appendChild(title);
-      path.addEventListener('click', function(ev){
+      var hit = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      hit.setAttribute('class', 'tcNoteLinkHit');
+      hit.setAttribute('d', d);
+      hit.setAttribute('data-link-key', key);
+      hit.setAttribute('role', 'button');
+      hit.setAttribute('tabindex', '0');
+      hit.setAttribute('aria-label', NoteCore.relationLabel(l.type, false) + ' relationship');
+      var hitTitle = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      hitTitle.textContent = NoteCore.relationLabel(l.type, false) + '. Click to select; double-click to annotate.';
+      hit.appendChild(hitTitle);
+      var midpointControl = null;
+      function setHovered(active){
+        path.classList.toggle('hovered', active);
+        hit.classList.toggle('hovered', active);
+        if (midpointControl) midpointControl.classList.toggle('hovered', active);
+      }
+      function choose(ev){
         ev.preventDefault();
         ev.stopPropagation();
         selectLink(key);
+      }
+      function edit(ev){
+        ev.preventDefault();
+        ev.stopPropagation();
+        openLinkAnnotationEditor(key, linkPathPoint(path, .46));
+      }
+      hit.addEventListener('mouseenter', function(){ setHovered(true); });
+      hit.addEventListener('mouseleave', function(){ setHovered(false); });
+      hit.addEventListener('focus', function(){ setHovered(true); });
+      hit.addEventListener('blur', function(){ setHovered(false); });
+      hit.addEventListener('click', choose);
+      hit.addEventListener('dblclick', edit);
+      hit.addEventListener('mousedown', function(ev){
+        ev.stopPropagation();
+        if (ev.detail >= 2) edit(ev);
       });
+      hit.addEventListener('keydown', function(ev){
+        if (ev.key === 'Enter') edit(ev);
+        else if (ev.key === ' ') choose(ev);
+      });
+      layer.appendChild(hit);
       layer.appendChild(path);
       if (direction && direction.decorate) direction.decorate(layer, path, {prefix:'tcNote', type:l.type || 'manual', key:key});
+      midpointControl = renderLinkAnnotation(layer, path, l, key) || renderLinkAnnotationAdd(layer, path, l, key);
       if (selectedLinkKey === key){
         hasSelected = true;
         renderLinkToolbar(l, p1, p2);
@@ -3278,7 +3599,7 @@
     st.__notesLasso = true;
     st.addEventListener('mousedown', function(ev){
       if (ev.button !== 0 || noteMode || linkMode) return;
-      if (ev.target.closest('.tcNoteNode, .node, .projAreaLabel, .tagAreaLabel, .tagAddBtn, .depHandle')) return;
+      if (ev.target.closest('.tcNoteNode, .tcNoteLink, .tcNoteLinkHit, .tcNoteLinkAnnotation, .tcNoteLinkAnnotationAdd, .node, .projAreaLabel, .tagAreaLabel, .tagAddBtn, .depHandle')) return;
       var start = screenToStage(ev.clientX, ev.clientY);
       lasso = {sx:start.x, sy:start.y, x:start.x, y:start.y, active:false, additive:!!(ev.shiftKey || ev.ctrlKey || ev.metaKey)};
     }, true);
@@ -3377,7 +3698,7 @@
     });
     return {
       kind: 'taskcanvas.notes',
-      version: 4,
+      version: 5,
       exportedAt: new Date().toISOString(),
       notes: notes.map(function(n){
         var row = {id:n.id, x:toInt(n.x, 160), y:toInt(n.y, 160), content:n.content || 'New note', bucket:noteBucket(n), kind:noteKind(n), status:noteStatus(n), collapsed:!!n.collapsed, taskRefs:noteTaskRefs(n).slice(), createdAt:Number(n.createdAt) || 0, updatedAt:Number(n.updatedAt) || 0, reviewedAt:Number(n.reviewedAt) || 0};
@@ -3385,7 +3706,10 @@
         return row;
       }),
       links: links.map(function(l){
-        return {from:l.from, to:l.to, type:NoteCore.normalizeRelation(l.type)};
+        var row = {from:l.from, to:l.to, type:NoteCore.normalizeRelation(l.type)};
+        var annotation = NoteCore.normalizeLinkAnnotation(l.annotation);
+        if (annotation) row.annotation = annotation;
+        return row;
       }),
       buckets: bucketData
     };
@@ -3407,6 +3731,7 @@
   function importData(data){
     if (typeof data === 'string') data = JSON.parse(data);
     if (!data || !Array.isArray(data.notes)) throw new Error('Import file must contain a notes array');
+    removeLinkAnnotationEditor(false);
     var nextNotes = data.notes.map(normalizeNote);
     var ids = {};
     nextNotes.forEach(function(n){
@@ -3547,6 +3872,8 @@
     selectLink: selectLink,
     deleteSelectedLink: deleteSelectedLink,
     setLinkType: setLinkType,
+    setLinkAnnotation: setLinkAnnotation,
+    annotationKinds: function(){ return NoteCore.annotationKinds(); },
     relationTypes: function(includeStructural){ return NoteCore.relationOptions(!!includeStructural); },
     focusBranch: focusNoteBranch,
     focusBucket: focusNoteBucket,
