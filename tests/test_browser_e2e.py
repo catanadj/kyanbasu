@@ -1892,7 +1892,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["nearClick"], msg=json.dumps(result))
         self.assertTrue(result["notFarRight"], msg=json.dumps(result))
 
-    def test_canvas_notes_import_export_round_trips_json_without_commands(self):
+    def test_canvas_notes_imports_taskcanvas_export_and_reexports_as_kyanbasu(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
@@ -1903,7 +1903,7 @@ window.addEventListener('load', function(){
   setTimeout(function(){
     try{
       var imported = {
-        kind: 'kyanbasu.notes',
+        kind: 'taskcanvas.notes',
         version: 1,
         notes: [
           {id:'root-note', x:180, y:220, title:'Imported root', body:'Legacy body', bucket:'Planning', collapsed:true},
@@ -4013,7 +4013,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["noteCounts"][1]["notes"], 1, msg=json.dumps(result))
         self.assertEqual(result["noteCounts"][1]["tasks"], 0, msg=json.dumps(result))
 
-    def test_canvas_workbench_import_all_restores_each_workbench_notes(self):
+    def test_canvas_workbench_imports_taskcanvas_export_and_normalizes_kinds(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
@@ -4024,7 +4024,7 @@ window.addEventListener('load', function(){
   setTimeout(function(){
     try{
       var backup = {
-        kind: 'kyanbasu.workbenches',
+        kind: 'taskcanvas.workbenches',
         version: 1,
         activeId: 'delivery',
         nextIndex: 3,
@@ -4034,7 +4034,7 @@ window.addEventListener('load', function(){
             name: 'Main',
             layout: {version:1, zoom:100, drawer_collapsed:true, nodes:{}, projects:[], tags:[]},
             notes: {
-              kind:'kyanbasu.notes',
+              kind:'taskcanvas.notes',
               version:1,
               notes:[{id:'main-note', x:180, y:220, content:'Imported main', bucket:'Planning'}],
               links:[],
@@ -4046,7 +4046,7 @@ window.addEventListener('load', function(){
             name: 'Delivery',
             layout: {version:1, zoom:100, drawer_collapsed:true, nodes:{}, projects:[], tags:[]},
             notes: {
-              kind:'kyanbasu.notes',
+              kind:'taskcanvas.notes',
               version:1,
               notes:[{id:'delivery-note', x:520, y:360, content:'Imported delivery', bucket:'Delivery'}],
               links:[],
@@ -4062,13 +4062,15 @@ window.addEventListener('load', function(){
         window.KyanbasuWorkbenches.switchTo('main');
         setTimeout(function(){
           var mainNotes = window.KyanbasuNotes.notes().map(function(n){ return n.content; });
-          var reexportedKinds = window.KyanbasuWorkbenches.exportData().workbenches.map(function(w){ return w.notes.kind; });
+          var reexported = window.KyanbasuWorkbenches.exportData();
+          var reexportedKinds = reexported.workbenches.map(function(w){ return w.notes.kind; });
           var out = {
             imported: imported,
             active: window.KyanbasuWorkbenches.active(),
             list: window.KyanbasuWorkbenches.list(),
             deliveryNotes: deliveryNotes,
             mainNotes: mainNotes,
+            reexportedKind: reexported.kind,
             reexportedKinds: reexportedKinds
           };
           var pre = document.createElement('pre');
@@ -4096,6 +4098,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["deliveryNotes"], ["Imported delivery"], msg=json.dumps(result))
         self.assertEqual(result["active"]["id"], "main", msg=json.dumps(result))
         self.assertEqual(result["mainNotes"], ["Imported main"], msg=json.dumps(result))
+        self.assertEqual(result["reexportedKind"], "kyanbasu.workbenches", msg=json.dumps(result))
         self.assertEqual(result["reexportedKinds"], ["kyanbasu.notes", "kyanbasu.notes"], msg=json.dumps(result))
         self.assertEqual([w["name"] for w in result["list"]], ["Main", "Delivery"], msg=json.dumps(result))
 

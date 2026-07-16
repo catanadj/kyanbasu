@@ -10,11 +10,13 @@ versioning from the `0.2.0` release onward.
 - The implementation now lives entirely in the `kyanbasu` Python package.
 - The Python distribution is named `kyanbasu` and generated workspaces are
   written to `Kyanbasu.html`.
+- TaskCanvas notes and workbench JSON exports remain importable and are
+  normalized to Kyanbasu formats on the next export.
 
 ### Removed
 
 - The TaskCanvas command, wrapper, package, environment variables, browser API
-  aliases, storage migration, background aliases, and import formats.
+  aliases, storage migration, and background aliases.
 
 ## [0.2.0] - 2026-07-16
 

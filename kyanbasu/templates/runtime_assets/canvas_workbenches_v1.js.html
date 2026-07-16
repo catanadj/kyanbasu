@@ -153,7 +153,7 @@
   }
   function importData(data){
     if (typeof data === 'string') data = JSON.parse(data);
-    var acceptedKind = data && data.kind === 'kyanbasu.workbenches';
+    var acceptedKind = data && (data.kind === 'kyanbasu.workbenches' || data.kind === 'taskcanvas.workbenches');
     if (!acceptedKind || !Array.isArray(data.workbenches) || !data.workbenches.length){
       throw new Error('Import file must contain a workbenches array');
     }

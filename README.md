@@ -191,6 +191,8 @@ python3 Kyanbasu.py   # source-tree wrapper
 - The Python distribution and import package are both named `kyanbasu`.
 - Browser state is stored under `kyanbasu:*` keys.
 - Notes and workbench exports use the `kyanbasu.notes` and `kyanbasu.workbenches` kinds.
+- TaskCanvas notes and workbench JSON exports remain importable; Kyanbasu normalizes
+  them to its current format when they are exported again.
 - Downloaded files use `kyanbasu-notes.json`, `kyanbasu-workbenches.json`, and `kyanbasu-reviewed-commands.sh`.
 - Browser integrations use `window.KyanbasuNotes`, `window.KyanbasuWorkbenches`, and the other `window.Kyanbasu*` APIs.
 

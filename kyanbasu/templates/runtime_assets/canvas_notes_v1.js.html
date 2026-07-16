@@ -2164,7 +2164,7 @@
         try{
           var text = String(reader.result || '');
           var data = JSON.parse(text);
-          if (data && data.kind === 'kyanbasu.workbenches'){
+          if (data && (data.kind === 'kyanbasu.workbenches' || data.kind === 'taskcanvas.workbenches')){
             if (window.confirm && !window.confirm('Replace all workbenches with imported workbenches?')) return;
             if (!window.KyanbasuWorkbenches || typeof window.KyanbasuWorkbenches.importData !== 'function'){
               throw new Error('Workbench import is not available');
@@ -3773,6 +3773,9 @@
   function importData(data){
     if (typeof data === 'string') data = JSON.parse(data);
     if (!data || !Array.isArray(data.notes)) throw new Error('Import file must contain a notes array');
+    if (data.kind && data.kind !== 'kyanbasu.notes' && data.kind !== 'taskcanvas.notes'){
+      throw new Error('Unsupported notes export kind');
+    }
     removeLinkAnnotationEditor(false);
     var nextNotes = data.notes.map(normalizeNote);
     var ids = {};
