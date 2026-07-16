@@ -32,10 +32,10 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/catanadj/taskwarrior-canvas"
-Source = "https://github.com/catanadj/taskwarrior-canvas"
-Issues = "https://github.com/catanadj/taskwarrior-canvas/issues"
-Changelog = "https://github.com/catanadj/taskwarrior-canvas/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/catanadj/kyanbasu"
+Source = "https://github.com/catanadj/kyanbasu"
+Issues = "https://github.com/catanadj/kyanbasu/issues"
+Changelog = "https://github.com/catanadj/kyanbasu/blob/main/CHANGELOG.md"
 
 [project.scripts]
 kyanbasu = "kyanbasu:main"

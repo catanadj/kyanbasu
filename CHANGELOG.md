@@ -40,5 +40,5 @@ versioning from the `0.2.0` release onward.
   `taskwarrior-canvas` identifier during the compatibility period.
 - Legacy browser storage and TaskCanvas note/workbench exports remain readable.
 
-[Unreleased]: https://github.com/catanadj/taskwarrior-canvas/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/catanadj/taskwarrior-canvas/tree/v0.2.0
+[Unreleased]: https://github.com/catanadj/kyanbasu/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/catanadj/kyanbasu/releases/tag/v0.2.0

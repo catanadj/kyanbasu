@@ -1,4 +1,4 @@
-[![CI](https://img.shields.io/github/actions/workflow/status/catanadj/taskwarrior-canvas/ci.yml?branch=main&label=CI)](https://github.com/catanadj/taskwarrior-canvas/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/catanadj/kyanbasu/ci.yml?branch=main&label=CI)](https://github.com/catanadj/kyanbasu/actions/workflows/ci.yml)
 
 ![Kyanbasu workspace](https://github.com/user-attachments/assets/dd74d092-0f3e-4416-a6ec-09f9cbfc6504)
 
@@ -45,8 +45,8 @@ Inside the browser you get an interactive canvas where you can:
 
 ```bash
 # 1. clone the repo
-git clone https://github.com/catanadj/taskwarrior-canvas.git
-cd taskwarrior-canvas
+git clone https://github.com/catanadj/kyanbasu.git
+cd kyanbasu
 python3 -m pip install -e .
 
 # 2. generate the board
@@ -200,10 +200,9 @@ python3 TaskCanvas.py  # compatibility source-tree wrapper
 
 Both commands accept the same arguments and generate the same compatible `TaskCanvas.html` workspace.
 
-The install distribution and source repository retain the `taskwarrior-canvas`
-identifier during the compatibility period. This allows existing package
-installations and repository links to upgrade cleanly while Kyanbasu becomes the
-public product name.
+The install distribution retains the `taskwarrior-canvas` identifier during the
+compatibility period. This allows existing package installations to upgrade
+cleanly while Kyanbasu is the public product and repository name.
 
 ## Runtime compatibility
 

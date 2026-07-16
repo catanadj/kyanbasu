@@ -76,7 +76,13 @@ contain task data and should not be published or attached to bug reports.
 
 ## Repository identity
 
-The source repository remains at `catanadj/taskwarrior-canvas` for this release.
-GitHub redirects can preserve old clone and issue links if the repository is
-renamed later, but that hosting change is independent from the application and
-package migration in `0.2.0`.
+The source repository is now `catanadj/kyanbasu`. GitHub redirects requests from
+the previous `catanadj/taskwarrior-canvas` address, but existing local clones
+should update their canonical remote explicitly:
+
+```bash
+git remote set-url origin https://github.com/catanadj/kyanbasu.git
+```
+
+The repository rename is independent from the Python distribution name, which
+remains `taskwarrior-canvas` for upgrade compatibility.
