@@ -1,0 +1,447 @@
+<script id="COMMANDS_CORE_V1">
+(function(){
+  if (window.KyanbasuCommands && window.KyanbasuCommands.version) return;
+
+  function shQuote(arg){
+    var s = String(arg == null ? '' : arg);
+    return "'" + s.replace(/'/g, "'\"'\"'") + "'";
+  }
+
+  function isModifierToken(tok){
+    var t = String(tok || '').trim();
+    if (!t) return false;
+    if (/^[+-]\S+$/.test(t)) return true;
+    if (/^[A-Za-z0-9_.-]+:.+$/.test(t)) return true;
+    return false;
+  }
+
+  function shellQuoteTaskLine(line){
+    var s = String(line || '').trim();
+    if (!s) return '';
+
+    var mTerm = /^task\s+(\S+)\s+(done|delete)\s*$/i.exec(s);
+    if (mTerm){
+      return 'task ' + shQuote(mTerm[1]) + ' ' + String(mTerm[2] || '').toLowerCase();
+    }
+
+    var mMod = /^task\s+(\S+)\s+modify(?:\s+(.*))?$/i.exec(s);
+    if (mMod){
+      var id = mMod[1];
+      var rest = String(mMod[2] || '').trim();
+      var toks = rest ? rest.split(/\s+/).filter(Boolean) : [];
+      var qmods = toks.map(shQuote);
+      return 'task ' + shQuote(id) + ' modify' + (qmods.length ? (' ' + qmods.join(' ')) : '');
+    }
+
+    var mAddLog = /^task\s+(add|log)\s+(.+)$/i.exec(s);
+    if (mAddLog){
+      var verb = String(mAddLog[1] || '').toLowerCase();
+      var rest2 = String(mAddLog[2] || '').trim();
+      if (!rest2){
+        return 'task ' + verb + ' ' + shQuote('(no description)');
+      }
+      var parts = rest2.split(/\s+/).filter(Boolean);
+      var mods = [];
+      while (parts.length > 1 && isModifierToken(parts[parts.length - 1])){
+        mods.unshift(parts.pop());
+      }
+      var desc = parts.join(' ').trim() || '(no description)';
+      var tail = mods.map(shQuote).join(' ');
+      return 'task ' + verb + ' ' + shQuote(desc) + (tail ? (' ' + tail) : '');
+    }
+
+    return s;
+  }
+
+  function parseAndNormalize(raw){
+    var lines = String(raw||'').split(/\r?\n/).map(function(s){ return s.trim(); }).filter(Boolean);
+    var seenExact = Object.create(null);
+    var passthrough = [];
+    var byTask = Object.create(null);
+    var order = [];
+    var warnings = [];
+
+    function warn(msg){
+      if (warnings.indexOf(msg) === -1) warnings.push(msg);
+    }
+
+    for (var i=0;i<lines.length;i++){
+      var line = lines[i];
+      if (seenExact[line]) continue;
+      seenExact[line] = 1;
+
+      if (/^task\s+(add|log)\s+/i.test(line)){
+        passthrough.push(line);
+        continue;
+      }
+
+      var m = /^task\s+(\S+)\s+(modify|done|delete)\b(?:\s+(.*))?$/i.exec(line);
+      if (!m){
+        passthrough.push(line);
+        continue;
+      }
+
+      var id = m[1];
+      var verb = String(m[2]||'').toLowerCase();
+      var rest = String(m[3]||'').trim();
+
+      if (!byTask[id]){
+        byTask[id] = { terminal:null, mods:[] };
+        order.push(id);
+      }
+      var st = byTask[id];
+
+      if (verb === 'modify'){
+        if (st.terminal){
+          warn('Dropped modify after terminal action for task ' + id);
+          continue;
+        }
+        if (rest) st.mods.push(rest);
+        continue;
+      }
+
+      if (st.terminal && st.terminal !== verb){
+        warn('Conflicting terminal actions for task ' + id + ' (kept last: ' + verb + ')');
+      }
+      st.terminal = verb;
+    }
+
+    var out = passthrough.slice();
+    for (var j=0;j<order.length;j++){
+      var id2 = order[j], s = byTask[id2];
+      if (!s) continue;
+      if (s.terminal){
+        out.push('task ' + id2 + ' ' + s.terminal);
+        continue;
+      }
+      if (s.mods && s.mods.length){
+        var tokSeen = Object.create(null), toks = [];
+        s.mods.join(' ').split(/\s+/).forEach(function(t){
+          if (!t) return;
+          if (tokSeen[t]) return;
+          tokSeen[t] = 1;
+          toks.push(t);
+        });
+        if (toks.length){
+          out.push('task ' + id2 + ' modify ' + toks.join(' '));
+        }
+      }
+    }
+
+    var safe = out.map(shellQuoteTaskLine).filter(Boolean);
+    return { text: safe.join('\n'), warnings: warnings, rawLines: lines, normalizedLines: out };
+  }
+
+  function defaultUuidForShort(short){
+    try{
+      if (window.TASK_BY_SHORT && window.TASK_BY_SHORT[short]) return window.TASK_BY_SHORT[short].uuid || short;
+      var el = document.querySelector('#builderStage [data-short="'+short+'"]');
+      return (el && el.getAttribute('data-uuid')) || short;
+    }catch(_){ return short; }
+  }
+
+  function uuidToShort(target, uuid){
+    target = target || window;
+    try{
+      if (!uuid) return "";
+      if (Array.isArray(target.TASKS)){
+        for (var i=0;i<target.TASKS.length;i++){
+          if (target.TASKS[i] && target.TASKS[i].uuid === uuid) return target.TASKS[i].short || uuid;
+        }
+      }
+      if (target.TASK_BY_SHORT){
+        for (var k in target.TASK_BY_SHORT){
+          if (target.TASK_BY_SHORT[k] && target.TASK_BY_SHORT[k].uuid === uuid) return k;
+        }
+      }
+    }catch(_){}
+    return uuid;
+  }
+
+  function shortifyText(text, target){
+    if (!text) return text || "";
+    return String(text).replace(/\b([0-9a-f]{8}-[0-9a-f-]{13,})\b/ig, function(m){
+      return uuidToShort(target || window, m) || m;
+    });
+  }
+
+  function dependencyLines(state){
+    state = state || {};
+    var out = [];
+    var resolver = typeof state.uuidForShort === 'function' ? state.uuidForShort : defaultUuidForShort;
+    var stagedAdd = Array.isArray(state.stagedAdd) ? state.stagedAdd : [];
+    var depExtraCmds = Array.isArray(state.depExtraCmds) ? state.depExtraCmds : [];
+
+    stagedAdd.forEach(function(e){
+      if (!e || !e.from || !e.to) return;
+      out.push('task ' + resolver(e.from) + ' modify depends:' + resolver(e.to));
+    });
+    depExtraCmds.forEach(function(cmd){
+      var s = String(cmd || '').trim();
+      if (s) out.push(s);
+    });
+    return out;
+  }
+
+  function firstTag(task){
+    var tags = task && Array.isArray(task.tags) ? task.tags : [];
+    return tags.length ? tags[0] : "(no tag)";
+  }
+
+  function isNewId(x){
+    if (!x) return false;
+    var s = String(x);
+    return /^new-/.test(s) || /^n-[0-9a-f]{6}$/i.test(s);
+  }
+
+  function ensureFoldContainer(target){
+    target = target || window;
+    var fold = target.FOLD || target.__FOLD_STATE__ || Object.create(null);
+    target.FOLD = fold;
+    target.__FOLD_STATE__ = fold;
+    return fold;
+  }
+
+  function ensureFold(target, id){
+    var F = ensureFoldContainer(target);
+    var f = F[id] || (F[id] = {});
+    if (!f.tags) f.tags = Object.create(null);
+    if (!Array.isArray(f.extra)) f.extra = [];
+    return f;
+  }
+
+  function parseModsToFold(f, modsTokens){
+    if (!f || !Array.isArray(modsTokens)) return f;
+    if (!f.tags) f.tags = Object.create(null);
+    var seenIdx = Object.create(null), extra = [];
+    for (var i=0;i<modsTokens.length;i++){
+      var tok = String(modsTokens[i]||'').trim();
+      if (!tok) continue;
+      if (tok[0] === '+' && tok.length > 1){ f.tags[tok.slice(1)] = true; continue; }
+      if (tok[0] === '-' && tok.length > 1){ delete f.tags[tok.slice(1)]; continue; }
+      var m = tok.match(/^([^:\s]+):(.*)$/);
+      if (m){
+        var k = m[1].toLowerCase(), v = m[2];
+        if (k === 'project'){ f.project = v || "(no project)"; continue; }
+        if (k === 'due'){ f.due = v; continue; }
+        if (seenIdx[k] != null){ extra[seenIdx[k]] = tok; }
+        else { seenIdx[k] = extra.length; extra.push(tok); }
+      } else {
+        extra.push(tok);
+      }
+    }
+    f.extra = extra;
+    return f;
+  }
+
+  function reconcileNewStaged(target){
+    target = target || window;
+    var A = Array.isArray(target.STAGED_CMDS) ? target.STAGED_CMDS : (target.STAGED_CMDS = []);
+    for (var i=A.length-1;i>=0;i--){
+      var s = String(A[i]||'').trim();
+      var m = s.match(/^task\s+(\S+)\s+(done|delete|modify)\b(?:\s+(.*))?$/i);
+      if (!m) continue;
+      var id = m[1], verb = (m[2]||'').toLowerCase(), rest = (m[3]||'').trim();
+      if (!isNewId(id)) continue;
+      var f = ensureFold(target, id);
+      if (verb === 'done') f.done = true;
+      else if (verb === 'delete') f.deleted = true;
+      else if (verb === 'modify') parseModsToFold(f, rest ? rest.split(/\s+/) : []);
+      A.splice(i, 1);
+    }
+  }
+
+  function defaultNodeStatus(id){
+    try{
+      var nd = document.querySelector('.node[data-uuid="'+id+'"], .node[data-short="'+id+'"]');
+      if (!nd) return {};
+      return {
+        done: nd.classList.contains('stagedDone') || nd.classList.contains('completed') || nd.getAttribute('data-done') === '1',
+        deleted: nd.classList.contains('stagedDel') || nd.getAttribute('data-deleted') === '1'
+      };
+    }catch(_){ return {}; }
+  }
+
+  function newTaskLine(task, state){
+    state = state || {};
+    if (!task) return "";
+    var id = task.uuid || task.short;
+    if (!isNewId(id)) return "";
+    var fold = state.fold || {};
+    var f = fold[task.uuid] || fold[task.short] || {};
+    var status = typeof state.nodeStatus === 'function' ? (state.nodeStatus(id, task) || {}) : defaultNodeStatus(id);
+    var done = !!status.done;
+    var deleted = !!status.deleted;
+    if (f.done) done = true;
+    if (f.deleted) deleted = true;
+    if (deleted) return "";
+
+    var parts = [done ? "task log" : "task add", task.desc || "(no description)"];
+    var proj = (typeof f.project !== 'undefined') ? f.project : (task.project || "(no project)");
+    if (proj && proj !== "(no project)") parts.push("project:" + proj);
+
+    var tagset = Object.create(null);
+    if (Array.isArray(task.tags)){
+      for (var k=0;k<task.tags.length;k++){
+        var tg = task.tags[k];
+        if (tg && tg !== "(no tag)") tagset[tg] = true;
+      }
+    }
+    if (f.tags){
+      for (var ft in f.tags){
+        if (f.tags[ft]) tagset[ft] = true;
+        else delete tagset[ft];
+      }
+    }
+    Object.keys(tagset).forEach(function(tg){ parts.push("+" + tg); });
+
+    var due = (typeof f.due !== 'undefined') ? f.due : task.due;
+    if (due) parts.push("due:" + due);
+    if (Array.isArray(f.extra)){
+      for (var q=0;q<f.extra.length;q++) parts.push(f.extra[q]);
+    }
+    return parts.join(" ");
+  }
+
+  function existingTaskLine(task, state){
+    state = state || {};
+    if (!task) return "";
+    var id = task.uuid || task.short;
+    if (!id || isNewId(id)) return "";
+    var existingOps = state.existingOps || {};
+    var ex = existingOps[task.uuid] || existingOps[task.short] || {};
+    var taskId = task.uuid || task.short;
+    if (ex.deleted) return "task " + taskId + " delete";
+    if (ex.done) return "task " + taskId + " done";
+
+    var initMainTag = state.initMainTag || {};
+    var initProject = state.initProject || {};
+    var oldTag = initMainTag[task.short] || "(no tag)";
+    var newTag = firstTag(task) || "(no tag)";
+    var oldProj = initProject[task.short] || "(no project)";
+    var newProj = task.project || "(no project)";
+    var mods = [];
+
+    if (oldProj !== newProj){
+      mods.push((newProj === "(no project)") ? "project:" : "project:" + newProj);
+    }
+    if (oldTag !== newTag){
+      if (oldTag !== "(no tag)") mods.push("-" + oldTag);
+      if (newTag !== "(no tag)") mods.push("+" + newTag);
+    }
+    if (Array.isArray(ex.mods) && ex.mods.length){
+      var seen = Object.create(null);
+      mods.forEach(function(m){ seen[m] = 1; });
+      ex.mods.forEach(function(m){
+        m = String(m || '').trim();
+        if (m && !seen[m]){
+          seen[m] = 1;
+          mods.push(m);
+        }
+      });
+    }
+    if (!mods.length) return "";
+    return "task " + taskId + " modify " + mods.join(" ");
+  }
+
+  function rawTaskLines(state){
+    state = state || {};
+    var tasks = Array.isArray(state.tasks) ? state.tasks : [];
+    var fold = state.fold || {};
+    var out = [];
+
+    for (var i=0;i<tasks.length;i++){
+      var t = tasks[i];
+      if (!t) continue;
+      if (isNewId(t.uuid || t.short)) continue;
+      var existingLine = existingTaskLine(t, state);
+      if (existingLine) out.push(existingLine);
+    }
+
+    for (var j=0;j<tasks.length;j++){
+      var n = tasks[j];
+      var line = newTaskLine(n, {
+        fold: fold,
+        nodeStatus: state.nodeStatus
+      });
+      if (line) out.push(line);
+    }
+    return out;
+  }
+
+  function runtimeState(win){
+    win = win || window;
+    return {
+      tasks: Array.isArray(win.TASKS) ? win.TASKS : [],
+      initMainTag: win.INIT_MAIN_TAG || {},
+      initProject: win.INIT_PROJECT || {},
+      fold: win.FOLD || win.__FOLD_STATE__ || {},
+      existingOps: win.EX_OPS || win.__EXISTING_OPS__ || {},
+      stagedCmds: Array.isArray(win.STAGED_CMDS) ? win.STAGED_CMDS : [],
+      stagedAdd: Array.isArray(win.stagedAdd) ? win.stagedAdd : [],
+      depExtraCmds: Array.isArray(win.__depExtraCmds) ? win.__depExtraCmds : [],
+      nodeStatus: defaultNodeStatus
+    };
+  }
+
+  function rawRuntimeText(win){
+    return rawTaskLines(runtimeState(win)).join('\n');
+  }
+
+  function build(state){
+    state = state || {};
+    var raw = '';
+    if (typeof state.raw === 'string'){
+      raw = state.raw;
+    } else if (typeof state.rawBuilder === 'function'){
+      raw = String(state.rawBuilder() || '');
+    } else if (state.runtime){
+      var rs = runtimeState(state.runtime);
+      raw = rawTaskLines(rs).join('\n');
+      state.stagedCmds = Array.isArray(state.stagedCmds) ? state.stagedCmds : rs.stagedCmds;
+      state.stagedAdd = Array.isArray(state.stagedAdd) ? state.stagedAdd : rs.stagedAdd;
+      state.depExtraCmds = Array.isArray(state.depExtraCmds) ? state.depExtraCmds : rs.depExtraCmds;
+    }
+    if (Array.isArray(state.stagedCmds) && state.stagedCmds.length){
+      var staged = state.stagedCmds.map(function(s){ return String(s || '').trim(); }).filter(Boolean);
+      if (staged.length) raw = raw ? (raw + '\n' + staged.join('\n')) : staged.join('\n');
+    }
+    var deps = dependencyLines(state);
+    if (deps.length){
+      raw = raw ? (raw + '\n' + deps.join('\n')) : deps.join('\n');
+    }
+    return parseAndNormalize(raw);
+  }
+
+  function runtimeCommandText(target, options){
+    target = target || window;
+    options = options || {};
+    var built = build({ runtime: target });
+    try{ target.__CMD_PREFLIGHT_WARNINGS__ = built.warnings || []; }catch(_){}
+    return options.short ? shortifyText(built.text, target) : built.text;
+  }
+
+  window.KyanbasuCommands = {
+    version: '1',
+    shQuote: shQuote,
+    isNewId: isNewId,
+    uuidToShort: uuidToShort,
+    shortifyText: shortifyText,
+    isModifierToken: isModifierToken,
+    shellQuoteTaskLine: shellQuoteTaskLine,
+    normalize: parseAndNormalize,
+    ensureFoldContainer: ensureFoldContainer,
+    ensureFold: ensureFold,
+    parseModsToFold: parseModsToFold,
+    reconcileNewStaged: reconcileNewStaged,
+    newTaskLine: newTaskLine,
+    existingTaskLine: existingTaskLine,
+    rawTaskLines: rawTaskLines,
+    runtimeState: runtimeState,
+    rawRuntimeText: rawRuntimeText,
+    dependencyLines: dependencyLines,
+    runtimeCommandText: runtimeCommandText,
+    build: build
+  };
+})();
+</script>

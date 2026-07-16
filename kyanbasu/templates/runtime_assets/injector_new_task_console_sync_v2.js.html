@@ -1,0 +1,85 @@
+<script id="FEATURE_NEW_TASK_CONSOLE_SYNC_V2">(function(){
+  if (window.__NEW_TASK_SYNC_V2__) return; window.__NEW_TASK_SYNC_V2__ = true;
+
+  function api(){ return window.KyanbasuCommands || {}; }
+
+  window.isNewId = window.isNewId || function(x){
+    var a = api();
+    if (typeof a.isNewId === 'function') return a.isNewId(x);
+    if (!x) return false;
+    var s = String(x);
+    return /^new-/.test(s) || /^n-[0-9a-f]{6}$/i.test(s);
+  };
+
+  function ensureFold(id){
+    var a = api();
+    if (typeof a.ensureFold === 'function') return a.ensureFold(window, id);
+    if (!window.FOLD) window.FOLD = Object.create(null);
+    var f = window.FOLD[id] || (window.FOLD[id] = {});
+    if (!f.tags) f.tags = Object.create(null);
+    if (!Array.isArray(f.extra)) f.extra = [];
+    return f;
+  }
+
+  function reconcileNewStaged(){
+    var a = api();
+    if (typeof a.reconcileNewStaged === 'function') return a.reconcileNewStaged(window);
+  }
+
+  function buildLines(){
+    var a = api();
+    if (typeof a.build === 'function'){
+      var res = a.build({ runtime: window });
+      window.__CMD_PREFLIGHT_WARNINGS__ = res.warnings || [];
+      return String(res.text || '').split(/\r?\n/).map(function(s){ return s.trim(); }).filter(Boolean);
+    }
+    return [];
+  }
+
+  function writeConsole(lines){
+    try{
+      var txt = (lines || []).join("\n");
+      var ta = document.getElementById('consoleText');
+      if (ta && typeof ta.value === 'string') ta.value = txt;
+      var pre = document.getElementById('depCmdPre');
+      if (pre) pre.textContent = txt;
+    }catch(_){}
+  }
+
+  (function(){
+    var _u = window.updateConsole;
+    window.updateConsole = function(){
+      try{ reconcileNewStaged(); }catch(_){}
+      var rv = (typeof _u === 'function') ? _u.apply(this, arguments) : undefined;
+      try{ writeConsole(buildLines()); }catch(_){}
+      return rv;
+    };
+    window.updateConsole.__newTaskSyncWrap = true;
+  })();
+
+  (function(){
+    var root = document.getElementById('builderStage') || document.body;
+    if (!root) return;
+    var obs = new MutationObserver(function(recs){
+      var touch = false;
+      for (var r of recs){
+        if (r.type !== 'attributes' || r.attributeName !== 'class') continue;
+        var el = r.target; if (!el || !el.classList) continue;
+        var id = el.getAttribute('data-uuid') || el.getAttribute('data-short');
+        if (!window.isNewId(id)) continue;
+        var f = ensureFold(id);
+        var hadDone = /\bstagedDone\b/.test(r.oldValue || ''), hasDone = el.classList.contains('stagedDone');
+        var hadDel = /\bstagedDel\b/.test(r.oldValue || ''), hasDel = el.classList.contains('stagedDel');
+        if (hasDone) f.done = true; if (hadDone && !hasDone) f.done = false;
+        if (hasDel) f.deleted = true; if (hadDel && !hasDel) f.deleted = false;
+        touch = true;
+      }
+      if (touch){ try{ setTimeout(updateConsole, 0); }catch(_){} }
+    });
+    obs.observe(root, {subtree:true, attributes:true, attributeFilter:['class'], attributeOldValue:true});
+  })();
+
+  try{ reconcileNewStaged(); }catch(_){}
+  try{ setTimeout(function(){ if (typeof updateConsole === 'function') updateConsole(); }, 0); }catch(_){}
+  console.log('[new-task-console-sync] v2.3 active');
+})();</script>

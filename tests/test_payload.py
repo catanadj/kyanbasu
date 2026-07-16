@@ -1,6 +1,6 @@
 import unittest
 
-from taskcanvas.payload import build_payload
+from kyanbasu.payload import build_payload
 
 
 class TestPayload(unittest.TestCase):

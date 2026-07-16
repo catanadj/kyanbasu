@@ -10,21 +10,19 @@ Kyanbasu brings Taskwarrior tasks and structured notes onto one spatial canvas. 
 
 Task changes become plain `task` commands that you can review, edit, and copy back into your terminal. The generated HTML remains local and never writes to Taskwarrior directly.
 
-> Kyanbasu was formerly named TaskCanvas. The `taskcanvas` command, `TaskCanvas.py` script, and `TaskCanvas.html` output filename remain supported for compatibility.
-
-[Migration guide](MIGRATION.md) | [Changelog](CHANGELOG.md)
+[Changelog](CHANGELOG.md)
 
 ---
 
 ## What it does
 
-Kyanbasu is a Python 3 app (`taskcanvas/` plus packaged templates) that:
+Kyanbasu is a Python 3 app (`kyanbasu/` plus packaged templates) that:
 
 - Calls task status:pending export (or a custom filter) to fetch your tasks.
 
 - Builds a local workspace payload with tasks, dependencies, and initial placement information.
 
-- Injects that payload into a self-contained HTML/JS workspace (`TaskCanvas.html`) in the current working directory.
+- Injects that payload into a self-contained HTML/JS workspace (`Kyanbasu.html`) in the current working directory.
 
 - Opens the HTML in your default browser (Termux, Linux, macOS, Windows are handled).
 
@@ -138,11 +136,11 @@ kyanbasu --filter "due.before:today"  # any filter string
 
 - You can give Kyanbasu a custom background image via `--bg` and `--bg-opacity`.
 
-- If no flag is provided, it auto-searches for files like `kyanbasu-bg.jpg/png/webp` in the package, current working directory, or demo directory and uses them as a body overlay. Legacy `taskcanvas-bg.*` names are still recognized.
+- If no flag is provided, it auto-searches for files like `kyanbasu-bg.jpg/png/webp` in the package, current working directory, or demo directory and uses them as a body overlay.
 
 ### Termux and desktop friendly
 
-- For compatibility, output HTML is still named `TaskCanvas.html` in the current directory.
+- Output HTML is named `Kyanbasu.html` in the current directory.
 
 - It is opened via termux-open on Termux, xdg-open on Linux, open on macOS, and os.startfile on Windows.
 
@@ -163,53 +161,38 @@ kyanbasu --filter "due.before:today"  # any filter string
 ## Code layout (for contributors)
 
 - `Kyanbasu.py`: preferred wrapper for direct script execution.
-- `kyanbasu/`: public package facade and `python -m kyanbasu` entry point.
-- `TaskCanvas.py`: compatibility wrapper for direct script execution.
-- `taskcanvas/`: current implementation package, retained to preserve imports and installed data paths.
-- `taskcanvas/app.py`: app orchestrator and primary/compatibility CLI entry points.
-- `taskcanvas/task_io.py`: Taskwarrior export execution and parsing.
-- `taskcanvas/payload.py`: task graph payload construction.
-- `taskcanvas/cli.py`: CLI argument extraction helpers (`--filter`, `--bg`, `--bg-opacity`).
-- `taskcanvas/output.py`: cross-platform browser opener.
-- `taskcanvas/injectors.py`: HTML/JS feature injectors and background/overlay patch helpers.
-- `taskcanvas/templates/`: base HTML template, modal replacement fragment, and runtime assets.
-- `MIGRATION.md`: upgrade and compatibility guidance for existing TaskCanvas users.
-- `CHANGELOG.md`: release history and compatibility notes.
+- `kyanbasu/`: application package and `python -m kyanbasu` entry point.
+- `kyanbasu/app.py`: app orchestrator and CLI entry point.
+- `kyanbasu/task_io.py`: Taskwarrior export execution and parsing.
+- `kyanbasu/payload.py`: task graph payload construction.
+- `kyanbasu/cli.py`: CLI argument extraction helpers (`--filter`, `--bg`, `--bg-opacity`).
+- `kyanbasu/output.py`: cross-platform browser opener.
+- `kyanbasu/injectors.py`: HTML/JS feature injectors and background/overlay patch helpers.
+- `kyanbasu/templates/`: base HTML template, modal replacement fragment, and runtime assets.
+- `CHANGELOG.md`: release history.
 
 ---
 
 ## Diagnostics
 
 - Set `KYANBASU_LOG_LEVEL` to control runtime logs (`DEBUG`, `INFO`, `WARNING`, `ERROR`).
-- The legacy `TASKCANVAS_LOG_LEVEL` variable remains supported when `KYANBASU_LOG_LEVEL` is not set.
 - Default log level is `INFO`.
 
-## Command compatibility
+## Commands and runtime
 
-`kyanbasu` is the preferred command. Existing launch methods remain equivalent:
+These launch methods are equivalent:
 
 ```bash
-kyanbasu              # preferred installed command
-python3 -m kyanbasu   # preferred module entry point
-python3 Kyanbasu.py   # preferred source-tree wrapper
-
-taskcanvas             # compatibility command
-python3 -m taskcanvas  # compatibility module entry point
-python3 TaskCanvas.py  # compatibility source-tree wrapper
+kyanbasu              # installed command
+python3 -m kyanbasu   # module entry point
+python3 Kyanbasu.py   # source-tree wrapper
 ```
 
-Both commands accept the same arguments and generate the same compatible `TaskCanvas.html` workspace.
-
-The install distribution retains the `taskwarrior-canvas` identifier during the
-compatibility period. This allows existing package installations to upgrade
-cleanly while Kyanbasu is the public product and repository name.
-
-## Runtime compatibility
-
-- New browser state is stored under `kyanbasu:*` keys. Existing `taskcanvas:*` layouts, notes, workbenches, snapshots, and UI preferences are copied forward automatically when first read.
-- Notes and workbench exports use the `kyanbasu.notes` and `kyanbasu.workbenches` kinds. Imports continue to accept legacy `taskcanvas.notes` and `taskcanvas.workbenches` files.
+- The Python distribution and import package are both named `kyanbasu`.
+- Browser state is stored under `kyanbasu:*` keys.
+- Notes and workbench exports use the `kyanbasu.notes` and `kyanbasu.workbenches` kinds.
 - Downloaded files use `kyanbasu-notes.json`, `kyanbasu-workbenches.json`, and `kyanbasu-reviewed-commands.sh`.
-- Browser integrations can use `window.KyanbasuNotes`, `window.KyanbasuWorkbenches`, and the other `window.Kyanbasu*` APIs. Existing `window.TaskCanvas*` names remain synchronized aliases.
+- Browser integrations use `window.KyanbasuNotes`, `window.KyanbasuWorkbenches`, and the other `window.Kyanbasu*` APIs.
 
 ---
 
@@ -218,7 +201,7 @@ cleanly while Kyanbasu is the public product and repository name.
 - Unit tests:
   - `python3 -m unittest discover -s tests -v`
 - Integration test (real Taskwarrior):
-  - `TASKCANVAS_RUN_INTEGRATION=1 python3 -m unittest tests.test_task_io_integration -v`
+  - `KYANBASU_RUN_INTEGRATION=1 python3 -m unittest tests.test_task_io_integration -v`
 - Combined local release check:
   - `./scripts/release_check.sh`
 - Build the distributable wheel:
@@ -284,9 +267,9 @@ kyanbasu --bg /path/to/image.jpg
 kyanbasu --bg=mywall.png --bg-opacity=0.12
 ```
 
-Kyanbasu will copy the image next to `TaskCanvas.html` in the same directory and add a background overlay with the requested opacity (default approximately 0.18).
+Kyanbasu will copy the image next to `Kyanbasu.html` in the same directory and add a background overlay with the requested opacity (default approximately 0.18).
 
-Without `--bg`, it tries to locate a file named like `kyanbasu-bg.*`, `taskcanvas-bg.*`, `canvas-bg.*`, `background.*`, or `bg.*` in the package directory, current working directory, or demo directory.
+Without `--bg`, it tries to locate a file named like `kyanbasu-bg.*`, `canvas-bg.*`, `background.*`, or `bg.*` in the package directory, current working directory, or demo directory.
 
 ---
 

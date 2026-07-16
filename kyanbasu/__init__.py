@@ -1,6 +1,7 @@
-"""Public Kyanbasu package facade."""
+"""Kyanbasu visual planning workspace."""
 
-from taskcanvas import __version__
-from taskcanvas.app import kyanbasu_main as main
+__version__ = "0.3.0"
+
+from kyanbasu.app import kyanbasu_main as main
 
 __all__ = ["__version__", "main"]

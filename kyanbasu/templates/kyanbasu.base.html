@@ -1,0 +1,4467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="application-name" content="Kyanbasu"/>
+<meta name="description" content="Kyanbasu is a visual planning workspace for Taskwarrior."/>
+<title>Kyanbasu — Visual planning for Taskwarrior</title>
+<style>
+  :root{
+    --bg:#08111d;
+    --bg-deep:#050b14;
+    --surface-1:rgba(12,20,33,.92);
+    --surface-2:rgba(17,28,45,.88);
+    --surface-3:rgba(24,39,60,.92);
+    --surface-4:rgba(10,17,28,.92);
+    --card:#101b2b;
+    --paper-bg:rgba(7,13,22,.86);
+    --fg:#eef4fb;
+    --muted:#90a3bd;
+    --line:rgba(164,185,214,.18);
+    --line-strong:rgba(164,185,214,.28);
+    --accent:#61d0ff;
+    --accent-strong:#2a86ff;
+    --accent-2:#8fd45b;
+    --success:#42d481;
+    --warn:#f2b14a;
+    --danger:#ff6c7c;
+    --select:rgba(97,208,255,.18);
+    --proj-border:rgba(97,208,255,.42);
+    --tag-border:rgba(143,212,91,.4);
+    --proj-label-bg:rgba(18,50,82,.86);
+    --proj-label-fg:#eff8ff;
+    --tag-label-bg:rgba(19,61,41,.86);
+    --tag-label-fg:#effff3;
+    --none-label-bg:rgba(78,32,39,.86);
+    --none-label-fg:#ffd9de;
+    --leftW:380px;
+    --inspectorW:340px;
+    --radius-sm:10px;
+    --radius-md:16px;
+    --radius-lg:22px;
+    --shadow-1:0 10px 24px rgba(0,0,0,.22);
+    --shadow-2:0 18px 44px rgba(0,0,0,.34);
+    --font-ui:"Avenir Next","Segoe UI Variable","Trebuchet MS",sans-serif;
+    --font-display:"Gill Sans","Avenir Next","Segoe UI Variable",sans-serif;
+  }
+  html,body{
+    margin:0;
+    height:100%;
+    color:var(--fg);
+    font:14px/1.5 var(--font-ui);
+    background:
+      radial-gradient(circle at top left, rgba(42,134,255,.18), transparent 30%),
+      radial-gradient(circle at top right, rgba(97,208,255,.14), transparent 26%),
+      linear-gradient(180deg, #0a1220 0%, var(--bg) 42%, var(--bg-deep) 100%);
+  }
+  *{box-sizing:border-box}
+  button,input,textarea{font:inherit}
+  button{transition:transform .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease}
+  input::placeholder, textarea::placeholder{color:rgba(144,163,189,.72)}
+  .app{
+    display:grid;
+    grid-template-rows:auto 1fr auto;
+    grid-template-columns:var(--leftW) 1fr;
+    grid-template-areas:"header header" "left builder" "console console";
+    height:100%;
+    transition:grid-template-columns .22s ease;
+  }
+  header{
+    grid-area:header;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:18px;
+    padding:16px 18px;
+    background:linear-gradient(180deg, rgba(9,16,27,.92), rgba(7,13,22,.78));
+    border-bottom:1px solid var(--line);
+    backdrop-filter:blur(18px);
+    position:sticky;
+    top:0;
+    z-index:100;
+    box-shadow:0 8px 24px rgba(0,0,0,.18);
+  }
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .shellIntro{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    gap:14px;
+    min-width:0;
+    flex:1 1 820px;
+  }
+  .shellIntroTop{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    width:100%;
+    min-width:0;
+    flex-wrap:nowrap;
+  }
+  .shellBrand{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    min-width:150px;
+    flex:0 0 auto;
+  }
+  .shellEyebrow{
+    color:var(--accent);
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+  }
+  .shellTitle{
+    font:700 22px/1 var(--font-display);
+    letter-spacing:.02em;
+  }
+  .shellWordmark{
+    display:flex;
+    align-items:baseline;
+    gap:8px;
+    min-width:0;
+  }
+  .shellKana{
+    color:rgba(97,208,255,.78);
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:.08em;
+    white-space:nowrap;
+  }
+  .shellSubtitle{
+    color:var(--muted);
+    font-size:12px;
+  }
+  .toolbarMeta{display:flex;gap:8px;flex-wrap:wrap}
+  .shellModeControls{
+    display:flex;
+    align-items:stretch;
+    gap:8px;
+    min-width:0;
+    flex:1 1 auto;
+  }
+  .shellLeftControls{
+    display:flex;
+    align-items:stretch;
+    gap:8px;
+    flex-wrap:wrap;
+    max-width:100%;
+  }
+  .shellWorkbenchControls{
+    display:flex;
+    align-items:stretch;
+    min-width:0;
+    flex:0 1 auto;
+  }
+  .shellActionStack{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-end;
+    flex:1 1 520px;
+    gap:8px;
+    min-width:0;
+  }
+  .shellToolsToggle{
+    flex:0 0 34px;
+    width:34px;
+    height:34px;
+    padding:0;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:rgba(15,24,39,.72);
+    color:var(--muted);
+    cursor:pointer;
+    font-size:16px;
+    font-weight:800;
+    line-height:32px;
+  }
+  .shellToolsToggle:hover,
+  .shellToolsToggle:focus-visible{
+    border-color:rgba(97,208,255,.38);
+    color:var(--fg);
+    outline:none;
+  }
+  body.header-tools-collapsed header{
+    align-items:center;
+    flex-direction:row;
+    padding:9px 14px;
+  }
+  body.header-tools-collapsed .shellIntro{
+    flex-basis:auto;
+    gap:0;
+  }
+  body.header-tools-collapsed .shellIntroTop{flex-wrap:nowrap}
+  body.header-tools-collapsed .shellBrand{min-width:105px}
+  body.header-tools-collapsed .shellActionStack,
+  body.header-tools-collapsed .shellLeftControls,
+  body.header-tools-collapsed .toolbarMeta,
+  body.header-tools-collapsed .shellEyebrow,
+  body.header-tools-collapsed .shellSubtitle{
+    display:none;
+  }
+  .shellActions{
+    justify-content:flex-end;
+    align-items:stretch;
+    gap:8px;
+    width:100%;
+  }
+  .shellActionsSecondary{
+    align-items:flex-start;
+  }
+  .toolbarGroup{
+    position:relative;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    flex-wrap:wrap;
+    min-height:46px;
+    padding:18px 7px 7px;
+    border:1px solid var(--line);
+    border-radius:14px;
+    background:rgba(15,24,39,.52);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.03);
+  }
+  .toolbarGroup:empty{display:none}
+  .toolbarGroup::before{
+    content:attr(data-label);
+    position:absolute;
+    left:9px;
+    top:4px;
+    color:rgba(144,163,189,.78);
+    font-size:9px;
+    font-weight:700;
+    line-height:1;
+    text-transform:uppercase;
+  }
+  .toolbarGroup .btn,
+  .toolbarGroup #fitBtn{
+    padding:7px 9px;
+    border-radius:9px;
+    font-size:12px;
+  }
+  .toolbarGroupCommands{background:rgba(16,27,43,.72)}
+  .toolbarGroupNoteTasks{border-color:rgba(97,208,255,.18)}
+  .toolbarGroupNoteData{border-color:rgba(167,139,250,.2)}
+  .tabbar{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:6px;
+    border:1px solid var(--line);
+    border-radius:18px;
+    background:rgba(15,24,39,.72);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.03);
+  }
+  .tabbar .tab,
+  .btn,
+  #fitBtn{
+    appearance:none;
+    border:1px solid transparent;
+    background:linear-gradient(180deg, rgba(29,43,66,.96), rgba(18,28,45,.96));
+    color:var(--fg);
+    padding:9px 12px;
+    border-radius:12px;
+    cursor:pointer;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+  }
+  .tabbar .tab:hover,
+  .btn:hover,
+  #fitBtn:hover{
+    transform:translateY(-1px);
+    border-color:rgba(97,208,255,.26);
+  }
+  .tabbar .tab.active{
+    background:linear-gradient(180deg, rgba(97,208,255,.24), rgba(42,134,255,.26));
+    border-color:rgba(97,208,255,.44);
+    box-shadow:0 8px 22px rgba(42,134,255,.22);
+  }
+  .btn.ghost,
+  #fitBtn{
+    background:linear-gradient(180deg, rgba(17,28,45,.9), rgba(11,18,30,.94));
+    border-color:var(--line);
+  }
+  .btn.primary{
+    background:linear-gradient(180deg, rgba(97,208,255,.28), rgba(42,134,255,.38));
+    border-color:rgba(97,208,255,.42);
+    box-shadow:0 10px 24px rgba(42,134,255,.22);
+  }
+  .btn.warningToggle{
+    gap:8px;
+    background:linear-gradient(180deg, rgba(76,43,16,.92), rgba(48,27,10,.92));
+    border-color:rgba(242,177,74,.28);
+    color:#ffd9a1;
+  }
+  .btn.warningToggle input{accent-color:var(--warn)}
+  .pill{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:7px 12px;
+    border:1px solid var(--line);
+    border-radius:999px;
+    color:var(--fg);
+    font-size:12px;
+    background:rgba(15,24,39,.72);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .left{
+    grid-area:left;
+    background:
+      linear-gradient(180deg, rgba(17,27,42,.94), rgba(9,15,25,.98));
+    border-right:1px solid var(--line);
+    padding:16px 14px 20px;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+    overflow:auto;
+  }
+  .searchPanel{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    padding:14px;
+    border:1px solid var(--line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(17,28,45,.92), rgba(11,18,30,.92));
+    box-shadow:var(--shadow-1);
+  }
+  .panelEyebrow{
+    color:var(--accent);
+    font-size:11px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.14em;
+  }
+  .panelTitle{
+    font:700 18px/1.1 var(--font-display);
+  }
+  .search{display:flex;gap:8px}
+  #q{
+    flex:1;
+    padding:12px 14px;
+    border-radius:14px;
+    border:1px solid var(--line);
+    background:rgba(7,13,22,.78);
+    color:var(--fg);
+    box-shadow:inset 0 1px 1px rgba(255,255,255,.02);
+  }
+  #q:focus,
+  .tcInput:focus{
+    outline:none;
+    border-color:rgba(97,208,255,.5);
+    box-shadow:0 0 0 3px rgba(97,208,255,.14);
+  }
+  .checkboxRow{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    color:var(--muted);
+    font-size:13px;
+  }
+  .checkboxRow input{accent-color:var(--accent-2)}
+  .searchHint{
+    color:var(--muted);
+    font-size:12px;
+    line-height:1.45;
+  }
+  .taskList{display:flex;flex-direction:column;gap:10px}
+  .section{
+    margin-top:10px;
+    color:var(--muted);
+    font-size:11px;
+    font-weight:800;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+  }
+  .item{
+    cursor:grab;
+    padding:12px 13px;
+    border:1px solid var(--line);
+    border-radius:16px;
+    background:linear-gradient(180deg, rgba(17,28,45,.9), rgba(10,17,28,.92));
+    box-shadow:var(--shadow-1);
+    transition:transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+  }
+  .item:hover{
+    transform:translateY(-2px);
+    border-color:rgba(97,208,255,.3);
+    box-shadow:0 16px 28px rgba(0,0,0,.24);
+  }
+  .itemTop{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+  }
+  .short{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    font-size:12px;
+    font-weight:800;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--accent);
+  }
+  .drawerBadge,
+  .nodeShortBadge{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-width:54px;
+    padding:5px 10px;
+    border-radius:999px;
+    border:1px solid rgba(97,208,255,.28);
+    background:rgba(9,29,47,.84);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  .itemState{
+    display:inline-flex;
+    align-items:center;
+    padding:4px 8px;
+    border-radius:999px;
+    font-size:11px;
+    color:var(--muted);
+    border:1px solid rgba(164,185,214,.16);
+    background:rgba(255,255,255,.03);
+  }
+  .desc{margin:10px 0 8px;color:var(--fg)}
+  .meta{color:var(--muted);font-size:12px}
+  .builder{grid-area:builder;position:relative;overflow:hidden}
+  .canvas{
+    position:absolute;
+    inset:0;
+    overflow:auto;
+    background:
+      radial-gradient(circle at top right, rgba(97,208,255,.12), transparent 24%),
+      linear-gradient(rgba(151,167,193,.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(151,167,193,.06) 1px, transparent 1px),
+      linear-gradient(180deg, rgba(7,13,22,.96), rgba(5,10,18,.99));
+    background-size:auto, 32px 32px, 32px 32px, auto;
+    background-position:0 0, -1px -1px, -1px -1px, 0 0;
+  }
+  #builderWrap .canvas{right:var(--inspectorW);border-right:1px solid var(--line)}
+  #viewerWrap .canvas{right:0}
+  .contextSelectionBar{
+    position:absolute;
+    top:12px;
+    left:calc((100% - var(--inspectorW)) / 2);
+    z-index:96;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    max-width:calc(100% - var(--inspectorW) - 32px);
+    padding:6px;
+    border:1px solid rgba(97,208,255,.26);
+    border-radius:8px;
+    background:rgba(8,15,25,.94);
+    box-shadow:0 10px 28px rgba(0,0,0,.32);
+    transform:translateX(-50%);
+    backdrop-filter:blur(14px);
+  }
+  .contextSelectionBar[hidden]{display:none}
+  .contextSelectionLabel{
+    min-width:0;
+    max-width:180px;
+    padding:0 8px;
+    overflow:hidden;
+    color:rgba(220,233,249,.78);
+    font-size:11px;
+    font-weight:700;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .contextSelectionActions{display:flex;align-items:center;gap:4px;min-width:0;overflow-x:auto}
+  .contextSelectionActions button{
+    flex:0 0 auto;
+    border:1px solid rgba(164,185,214,.22);
+    border-radius:6px;
+    padding:7px 9px;
+    background:rgba(255,255,255,.05);
+    color:var(--fg);
+    cursor:pointer;
+    font-size:11px;
+    font-weight:700;
+  }
+  .contextSelectionActions button:hover{border-color:rgba(97,208,255,.44);background:rgba(97,208,255,.12)}
+  .contextSelectionActions button.danger{border-color:rgba(255,108,124,.3);color:#ffd8dd}
+  body.inspector-collapsed .contextSelectionBar{left:50%;max-width:calc(100% - 32px)}
+  .stage{position:relative;width:5000px;height:4000px;transform-origin:0 0}
+  .areas{
+    position:absolute;
+    left:0;
+    top:0;
+    right:0;
+    bottom:0;
+    pointer-events:none;
+    z-index:5;
+  }
+  .areas > div{pointer-events:auto}
+  .chromeLayer{
+    position:absolute;
+    left:0;
+    top:0;
+    right:0;
+    bottom:0;
+    pointer-events:none;
+    z-index:9;
+  }
+  .chromeLayer > *{pointer-events:auto}
+  .links{
+    position:absolute;
+    left:0;
+    top:0;
+    width:5000px;
+    height:4000px;
+    pointer-events:none;
+    z-index:7;
+  }
+  .node{
+    position:absolute;
+    width:280px;
+    min-height:112px;
+    padding:48px 14px 14px;
+    cursor:move;
+    word-wrap:break-word;
+    z-index:20;
+    border-radius:12px;
+    border:1px solid rgba(164,185,214,.24);
+    background:
+      linear-gradient(135deg, rgba(97,208,255,.12), transparent 38%),
+      linear-gradient(180deg, rgba(20,32,50,.98), rgba(9,16,27,.98));
+    box-shadow:0 16px 34px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.06);
+    transition:box-shadow .16s ease, border-color .16s ease, transform .16s ease;
+  }
+  .node::before{
+    content:"";
+    position:absolute;
+    left:0;
+    top:0;
+    bottom:0;
+    width:5px;
+    border-radius:12px 0 0 12px;
+    background:linear-gradient(180deg, rgba(97,208,255,.95), rgba(125,151,255,.72));
+    pointer-events:none;
+  }
+  .node::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    border-radius:12px;
+    background:linear-gradient(180deg, rgba(255,255,255,.055), transparent 42%);
+    pointer-events:none;
+  }
+  .node:hover{
+    border-color:rgba(97,208,255,.38);
+    box-shadow:0 18px 38px rgba(0,0,0,.32), 0 0 0 1px rgba(97,208,255,.10), inset 0 1px 0 rgba(255,255,255,.08);
+  }
+  .nodeTop{
+    position:absolute;
+    left:14px;
+    top:12px;
+    right:44px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .nodeStatePill{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    color:rgba(244,234,215,.70);
+    font-size:10px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+  }
+  .nodeStatePill::before{
+    content:"";
+    width:7px;
+    height:7px;
+    border-radius:999px;
+    background:#69e6a3;
+    box-shadow:0 0 0 3px rgba(105,230,163,.12);
+  }
+  .node.hasDeps .nodeStatePill::before{
+    background:#f2b84b;
+    box-shadow:0 0 0 3px rgba(242,184,75,.14);
+  }
+  .node .title{
+    position:relative;
+    font:700 15px/1.38 var(--font-display);
+    color:var(--fg);
+    letter-spacing:0;
+    z-index:1;
+  }
+  .nodeMeta{
+    position:relative;
+    z-index:1;
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    margin-top:12px;
+  }
+  .nodeChip{
+    max-width:128px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    padding:4px 7px;
+    border:1px solid rgba(164,185,214,.16);
+    border-radius:7px;
+    background:rgba(255,255,255,.045);
+    color:rgba(244,234,215,.72);
+    font-size:10px;
+    font-weight:700;
+    line-height:1;
+  }
+  .nodeChip.tag{
+    border-color:rgba(105,230,163,.20);
+    color:#bff4d3;
+  }
+  .nodeChip.due{
+    border-color:rgba(242,184,75,.24);
+    color:#ffe0a3;
+  }
+  .node.selected{
+    outline:2px solid rgba(97,208,255,.72);
+    outline-offset:2px;
+    box-shadow:0 0 0 4px rgba(97,208,255,.12), 0 20px 40px rgba(0,0,0,.32);
+  }
+  .node.stagedDone{
+    border-color:rgba(105,230,163,.46);
+    background:linear-gradient(135deg, rgba(105,230,163,.14), transparent 38%), linear-gradient(180deg, rgba(18,39,34,.98), rgba(9,20,20,.98));
+  }
+  .node.stagedDel{
+    border-color:rgba(255,108,124,.46);
+    background:linear-gradient(135deg, rgba(255,108,124,.16), transparent 38%), linear-gradient(180deg, rgba(45,21,30,.98), rgba(22,12,20,.98));
+  }
+  .projArea{
+    position:absolute;
+    border:1px solid var(--proj-border);
+    border-radius:20px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015)),
+      linear-gradient(180deg, rgba(97,208,255,.08), rgba(97,208,255,.03));
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.035), 0 18px 34px rgba(0,0,0,.18);
+    backdrop-filter:blur(8px);
+  }
+  .projArea.selectedProject{
+    border-color:rgba(97,208,255,.72);
+    box-shadow:inset 0 0 0 1px rgba(97,208,255,.22), 0 0 0 2px rgba(97,208,255,.14), 0 20px 36px rgba(0,0,0,.22);
+  }
+  .projAreaLabel,
+  .tagAreaLabel{
+    position:absolute;
+    left:14px;
+    top:14px;
+    padding:7px 14px;
+    border-radius:9px;
+    user-select:none;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.10), 0 8px 18px rgba(0,0,0,.18);
+    backdrop-filter:blur(12px);
+    pointer-events:auto;
+    cursor:move;
+    z-index:12;
+  }
+  .projAreaLabel::after,
+  .tagAreaLabel::after{
+    content:attr(data-count);
+    position:absolute;
+    top:50%;
+    right:8px;
+    transform:translateY(-50%);
+    min-width:18px;
+    padding:3px 5px;
+    border-radius:999px;
+    background:rgba(5,10,18,.42);
+    color:rgba(244,234,215,.76);
+    font-size:10px;
+    font-weight:900;
+    line-height:1;
+    text-align:center;
+  }
+  .projAreaLabel{
+    background:var(--proj-label-bg);
+    border:1px solid var(--proj-border);
+    font-size:12px;
+    font-weight:900;
+    color:var(--proj-label-fg);
+    padding-right:42px;
+  }
+  .projAreaLabel.selectedProjectLabel{
+    border-color:rgba(97,208,255,.76);
+    background:linear-gradient(180deg, rgba(33,82,128,.98), rgba(20,56,90,.98)) !important;
+    color:#fff;
+  }
+  body.dep-remove-mode .projAreaLabel{
+    cursor:pointer;
+    border-color:rgba(255,108,124,.48);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.07), 0 8px 18px rgba(0,0,0,.18), 0 0 0 1px rgba(255,108,124,.16);
+  }
+  body.dep-remove-mode .projAreaLabel:hover{
+    background:rgba(94,28,40,.92) !important;
+    color:#ffe4e8;
+  }
+  .projAreaLabel.none{background:var(--none-label-bg);color:var(--none-label-fg);border-color:rgba(255,108,124,.32)}
+  .tagArea{
+    position:absolute;
+    border:1px solid var(--tag-border);
+    border-radius:16px;
+    background:linear-gradient(180deg, rgba(143,212,91,.07), rgba(143,212,91,.025));
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.025);
+    pointer-events:auto;
+  }
+  .tagAreaLabel{
+    z-index:11;
+    background:var(--tag-label-bg);
+    border:1px solid var(--tag-border);
+    font-size:11px;
+    font-weight:800;
+    color:var(--tag-label-fg);
+  }
+  .tagAreaLabel::after{
+    right:30px;
+  }
+  .tagAreaLabel.none{background:var(--none-label-bg);color:var(--none-label-fg);border-color:rgba(255,108,124,.32)}
+  .marquee{
+    position:absolute;
+    border:1px dashed rgba(97,208,255,.9);
+    background:var(--select);
+    box-shadow:0 0 0 1px rgba(97,208,255,.18);
+    pointer-events:none;
+    z-index:11000;
+  }
+  .drawerHandle{
+    position:fixed;
+    left:0;
+    top:40%;
+    transform:translateY(-50%);
+    background:linear-gradient(180deg, rgba(18,29,46,.98), rgba(10,17,28,.98));
+    border:1px solid var(--line);
+    border-left:none;
+    border-radius:0 14px 14px 0;
+    color:var(--fg);
+    padding:10px 12px;
+    cursor:pointer;
+    z-index:15000;
+    display:none;
+    box-shadow:var(--shadow-1);
+  }
+  body.drawer-collapsed .drawerHandle{display:block}
+  .console{
+    grid-area:console;
+    background:linear-gradient(180deg, rgba(9,15,25,.98), rgba(5,10,18,.98));
+    border-top:1px solid var(--line);
+    display:none;
+  }
+  .console.open{display:block}
+  .consoleHead{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:10px 14px;
+    color:var(--muted);
+  }
+  .consoleBody{padding:0 14px 14px}
+  #consoleText{
+    width:100%;
+    height:184px;
+    padding:14px;
+    background:rgba(7,13,22,.92);
+    color:#b5cbff;
+    border:1px solid var(--line);
+    border-radius:16px;
+    font-family:"SFMono-Regular",Menlo,Consolas,monospace;
+    font-size:12px;
+    line-height:1.5;
+    white-space:pre;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.03);
+  }
+  .inspector{
+    position:absolute;
+    top:0;
+    right:0;
+    bottom:0;
+    width:var(--inspectorW);
+    display:flex;
+    flex-direction:column;
+    background:linear-gradient(180deg, rgba(12,20,33,.98), rgba(7,13,22,.98));
+    backdrop-filter:blur(18px);
+    border-left:1px solid var(--line);
+    overflow:hidden;
+    transition:width .22s ease, opacity .18s ease, transform .18s ease;
+  }
+  .inspectorHead{
+    padding:18px 18px 14px;
+    border-bottom:1px solid var(--line);
+  }
+  .inspectorHeadTop{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+  }
+  .inspectorEyebrow{
+    color:var(--accent);
+    font-size:11px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.16em;
+  }
+  .inspectorHideBtn{
+    appearance:none;
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:6px 10px;
+    color:var(--muted);
+    background:rgba(255,255,255,.04);
+    cursor:pointer;
+  }
+  .inspectorTitle{
+    margin-top:8px;
+    font:700 20px/1.1 var(--font-display);
+  }
+  .inspectorSub{
+    margin-top:6px;
+    color:var(--muted);
+    font-size:12px;
+    line-height:1.45;
+  }
+  .inspectorActions{
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    gap:8px;
+    padding:14px 18px;
+    border-bottom:1px solid var(--line);
+  }
+  .inspectorActions button{
+    appearance:none;
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:10px 12px;
+    color:var(--fg);
+    background:linear-gradient(180deg, rgba(18,29,46,.92), rgba(10,17,28,.92));
+    cursor:pointer;
+    text-align:left;
+  }
+  .inspectorActions button:disabled{
+    opacity:.45;
+    cursor:default;
+    transform:none;
+  }
+  .inspectorBody{
+    flex:1 1 auto;
+    overflow:auto;
+    padding:18px;
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+  }
+  .inspectorEmpty{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    padding:18px;
+    border:1px dashed var(--line-strong);
+    border-radius:20px;
+    color:var(--muted);
+    background:rgba(255,255,255,.02);
+  }
+  .inspectorGroup{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .inspectorLabel{
+    color:var(--muted);
+    font-size:11px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.16em;
+  }
+  .inspectorMetrics{
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    gap:10px;
+  }
+  .metricCard{
+    padding:12px;
+    border:1px solid var(--line);
+    border-radius:16px;
+    background:rgba(255,255,255,.03);
+  }
+  .metricValue{
+    font:700 18px/1 var(--font-display);
+  }
+  .metricLabel{
+    margin-top:6px;
+    color:var(--muted);
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.12em;
+  }
+  .inspectorChips{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .inspectorChip{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:6px 10px;
+    border-radius:999px;
+    border:1px solid var(--line);
+    background:rgba(255,255,255,.04);
+    color:var(--fg);
+    font-size:11px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+  }
+  .inspectorChip.success{border-color:rgba(66,212,129,.28);background:rgba(66,212,129,.12)}
+  .inspectorChip.warn{border-color:rgba(242,177,74,.28);background:rgba(242,177,74,.12)}
+  .inspectorChip.danger{border-color:rgba(255,108,124,.3);background:rgba(255,108,124,.12)}
+  .inspectorChip.info{border-color:rgba(97,208,255,.28);background:rgba(97,208,255,.12)}
+  .inspectorList{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .inspectorListItem{
+    padding:10px 12px;
+    border:1px solid var(--line);
+    border-radius:14px;
+    background:rgba(255,255,255,.03);
+    color:var(--fg);
+  }
+  .inspectorItemMeta{
+    margin-top:6px;
+    color:var(--muted);
+    font-size:11px;
+    line-height:1.45;
+  }
+  .inspectorKV{
+    display:grid;
+    grid-template-columns:96px 1fr;
+    gap:10px;
+    align-items:start;
+  }
+  .inspectorKV dt{
+    color:var(--muted);
+    font-size:11px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.14em;
+  }
+  .inspectorKV dd{
+    margin:0;
+    color:var(--fg);
+  }
+  .inspectorCode{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .inspectorCodeLine{
+    margin:0;
+    padding:10px 12px;
+    border:1px solid var(--line);
+    border-radius:14px;
+    background:rgba(7,13,22,.88);
+    color:#bdd4ff;
+    font:12px/1.45 "SFMono-Regular",Menlo,Consolas,monospace;
+    white-space:pre-wrap;
+    word-break:break-word;
+  }
+  .inspectorField{
+    width:100%;
+    min-height:104px;
+    resize:vertical;
+    padding:12px;
+    border:1px solid var(--line);
+    border-radius:14px;
+    background:rgba(7,13,22,.72);
+    color:var(--fg);
+    font:13px/1.45 var(--font-ui);
+    outline:none;
+  }
+  .inspectorField:focus{
+    border-color:rgba(97,208,255,.42);
+    box-shadow:0 0 0 3px rgba(97,208,255,.1);
+  }
+  .inspectorInput{
+    width:100%;
+    padding:10px 12px;
+    border:1px solid var(--line);
+    border-radius:12px;
+    background:rgba(7,13,22,.72);
+    color:var(--fg);
+    font:13px/1.35 var(--font-ui);
+    outline:none;
+  }
+  .inspectorInput:focus{
+    border-color:rgba(97,208,255,.42);
+    box-shadow:0 0 0 3px rgba(97,208,255,.1);
+  }
+  .inspectorSwatches{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .inspectorSwatchReset{
+    width:auto;
+    min-width:86px;
+    padding:0 10px;
+    border-radius:999px;
+    color:var(--fg);
+    background:rgba(255,255,255,.045);
+    font-size:11px;
+    font-weight:700;
+  }
+  .inspectorSwatch{
+    width:24px;
+    height:24px;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,.26);
+    box-shadow:inset 0 0 0 2px rgba(7,13,22,.52);
+    cursor:pointer;
+  }
+  .inspectorSwatch[aria-pressed="true"]{
+    outline:2px solid rgba(255,255,255,.72);
+    outline-offset:2px;
+  }
+  body.inspector-collapsed #builderWrap .canvas{right:0;border-right:none}
+  body.inspector-collapsed .inspector{
+    width:0;
+    opacity:0;
+    pointer-events:none;
+    border-left:none;
+  }
+  body.inspector-collapsed .inspector > *{opacity:0}
+  .inspectorHandle{
+    position:fixed;
+    right:0;
+    top:44%;
+    transform:translateY(-50%);
+    display:none;
+    padding:10px 12px;
+    border:1px solid var(--line);
+    border-right:none;
+    border-radius:14px 0 0 14px;
+    background:linear-gradient(180deg, rgba(18,29,46,.98), rgba(10,17,28,.98));
+    color:var(--fg);
+    box-shadow:var(--shadow-1);
+    cursor:pointer;
+    z-index:15000;
+  }
+  body.inspector-collapsed:not(.viewer-mode) .inspectorHandle{display:block}
+  .viewerEmpty{
+    padding:16px 18px;
+    border:1px solid var(--line);
+    border-radius:18px;
+    background:linear-gradient(180deg, rgba(17,28,45,.88), rgba(10,17,28,.92));
+    color:var(--muted);
+    box-shadow:var(--shadow-1);
+  }
+  .viewerSection{
+    position:absolute;
+    left:40px;
+    right:40px;
+  }
+  .viewerSectionHead{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+    margin-bottom:14px;
+  }
+  .viewerSectionTitle{
+    font:700 18px/1.2 var(--font-display);
+  }
+  .viewerSectionCount{
+    color:var(--muted);
+    font-size:12px;
+  }
+  .viewerSectionActions{
+    display:flex;
+    gap:6px;
+    align-items:center;
+    margin:0 0 12px 0;
+  }
+  .viewerSectionHead .viewerSectionActions{margin:0 0 0 8px}
+  .viewerSortBtn{
+    border:1px solid rgba(164,185,214,.18);
+    border-radius:6px;
+    background:rgba(255,255,255,.035);
+    color:var(--muted);
+    padding:7px 11px;
+    font:700 12px/1 var(--font-ui);
+    cursor:pointer;
+  }
+  .viewerSortBtn.active{
+    color:var(--fg);
+    border-color:rgba(122,162,247,.55);
+    background:rgba(122,162,247,.16);
+  }
+  .viewerColumns{
+    display:flex;
+    align-items:flex-start;
+    gap:18px;
+    flex-wrap:wrap;
+  }
+  .viewerColumn{
+    min-width:280px;
+    max-width:360px;
+    padding:14px;
+    border:1px solid var(--line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(17,28,45,.9), rgba(10,17,28,.94));
+    box-shadow:var(--shadow-1);
+  }
+  .viewerTitle{
+    margin-bottom:12px;
+    font:700 16px/1.2 var(--font-display);
+  }
+  .viewerItem{
+    padding:10px 12px;
+    border:1px solid rgba(164,185,214,.14);
+    border-radius:14px;
+    background:rgba(255,255,255,.03);
+  }
+  .viewerItem + .viewerItem{margin-top:8px}
+  .viewerOutline{
+    max-width:900px;
+    padding:14px;
+    border:1px solid var(--line);
+    border-radius:20px;
+    background:linear-gradient(180deg, rgba(17,28,45,.9), rgba(10,17,28,.94));
+    box-shadow:var(--shadow-1);
+  }
+  .viewerNote{
+    display:grid;
+    grid-template-columns:auto auto minmax(0, 1fr) auto auto;
+    gap:10px;
+    align-items:start;
+    padding:9px 10px;
+    border:1px solid rgba(164,185,214,.12);
+    border-radius:12px;
+    background:rgba(255,255,255,.025);
+  }
+  .viewerNote.selected{
+    border-color:rgba(97,208,255,.45);
+    box-shadow:0 0 0 2px rgba(97,208,255,.10);
+  }
+  .viewerNote + .viewerNote{margin-top:7px}
+  .viewerNoteCode{
+    color:var(--accent);
+    font:700 12px/1.3 var(--font-display);
+    white-space:nowrap;
+  }
+  .viewerNoteText{
+    min-width:0;
+    color:var(--fg);
+    font-size:13px;
+    line-height:1.35;
+    word-break:break-word;
+  }
+  .viewerNoteText[contenteditable="true"]{
+    min-height:20px;
+    padding:1px 3px;
+    border-radius:4px;
+    cursor:text;
+    outline:none;
+  }
+  .viewerNoteText[contenteditable="true"]:focus{
+    background:rgba(97,208,255,.08);
+    box-shadow:0 0 0 1px rgba(97,208,255,.28);
+  }
+  .viewerNoteToggle{
+    width:18px;
+    height:18px;
+    padding:0;
+    border:0;
+    background:transparent;
+    color:var(--muted);
+    cursor:pointer;
+    font-size:11px;
+    line-height:18px;
+  }
+  .viewerNoteToggle:disabled{opacity:.22;cursor:default}
+  .viewerNoteBucket{
+    color:var(--muted);
+    font-size:11px;
+    white-space:nowrap;
+  }
+  .viewerNoteSemantics{
+    display:flex;
+    align-items:center;
+    gap:4px;
+    max-width:240px;
+    overflow:hidden;
+    color:var(--muted);
+    font-size:10px;
+    white-space:nowrap;
+  }
+  .viewerNoteSemantic{
+    padding:2px 4px;
+    border:1px solid rgba(164,185,214,.16);
+    border-radius:5px;
+    background:rgba(255,255,255,.04);
+  }
+  .viewerNoteSemantic.annotation{
+    max-width:120px;
+    overflow:hidden;
+    border-color:rgba(97,208,255,.22);
+    color:#bdeeff;
+    text-overflow:ellipsis;
+  }
+  .viewerNoteSemantic.resolved{color:#9ce8bd;border-color:rgba(47,191,113,.24)}
+  .viewerNoteSemantic.parked{color:#ffd58a;border-color:rgba(242,184,75,.24)}
+  .zoomwrap{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    padding:8px 12px;
+    border:1px solid var(--line);
+    border-radius:16px;
+    background:rgba(15,24,39,.72);
+  }
+  .zoomwrap span:first-child{
+    color:var(--muted);
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:.12em;
+  }
+  .zoomwrap input[type=range]{width:180px;accent-color:var(--accent)}
+  #fitBtn{margin-left:2px}
+  .virtHidden{display:none !important}
+  .fab{
+    position:fixed;
+    right:22px;
+    bottom:24px;
+    width:62px;
+    height:62px;
+    border-radius:22px;
+    background:linear-gradient(180deg, rgba(97,208,255,.96), rgba(42,134,255,.96));
+    color:#fff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:32px;
+    cursor:pointer;
+    user-select:none;
+    box-shadow:0 18px 34px rgba(24,85,185,.34);
+    z-index:30000;
+  }
+  .fab:hover{transform:translateY(-2px)}
+  .fabMenu{
+    position:fixed;
+    right:22px;
+    bottom:96px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    z-index:30000;
+  }
+  .fabMenu.hidden{display:none}
+  .fabMenu button{
+    min-width:198px;
+    justify-content:space-between;
+    background:linear-gradient(180deg, rgba(18,29,46,.97), rgba(10,17,28,.98));
+    color:var(--fg);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:11px 14px;
+    cursor:pointer;
+    white-space:nowrap;
+    box-shadow:var(--shadow-1);
+  }
+  .fabMenu button::after{
+    content:attr(data-kbd);
+    margin-left:8px;
+    color:var(--muted);
+    font-size:12px;
+  }
+  .tagAddBtn,
+  .projAddBtn{
+    position:absolute;
+    right:8px;
+    top:8px;
+    width:22px;
+    height:22px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:rgba(10,17,28,.92);
+    color:var(--fg);
+    cursor:pointer;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+  }
+  .tagAddBtn{font-size:12px;line-height:18px}
+  .due{color:#a5b4fc;font-size:12px;margin-top:6px}
+  .depHandle{
+    position:absolute;
+    right:-10px;
+    top:50%;
+    transform:translateY(-50%);
+    width:22px;
+    height:22px;
+    line-height:22px;
+    text-align:center;
+    font-weight:700;
+    font-size:12px;
+    color:#0b1220;
+    background:#93c5fd;
+    border:1px solid #60a5fa;
+    border-radius:999px;
+    cursor:grab;
+    user-select:none;
+    z-index:2000;
+    box-shadow:0 4px 10px rgba(0,0,0,.26);
+    pointer-events:auto;
+  }
+  .depHandle.dragging{cursor:grabbing}
+  #builderStage [data-short] > .depHandle{
+    opacity:0 !important;
+    transform:translateY(-50%) scale(0.86) !important;
+    transition:opacity .15s ease, transform .15s ease !important;
+    width:auto !important;
+    min-width:24px;
+    padding:0 6px;
+    font-size:12px;
+    letter-spacing:.2px;
+    text-align:center;
+    box-sizing:border-box;
+  }
+  #builderStage [data-short] > .depHandle.dep-hasdeps,
+  #builderStage [data-short] > .depHandle:hover,
+  #builderStage [data-short] > .depHandle.dragging{
+    opacity:1 !important;
+    transform:translateY(-50%) scale(1) !important;
+  }
+  #builderLinks #depPulseOverlay .pulse-dot{
+    fill:#93c5fd;
+    opacity:.95;
+    filter:drop-shadow(0 0 3px rgba(147,197,253,.9));
+  }
+  #builderLinks path.dep-edge{stroke-linecap:round}
+  #builderLinks path.dep-edge.existing{stroke:#9ecbff;stroke-width:2.4;stroke-dasharray:none}
+  #builderLinks path.dep-edge.staged{stroke:#7aa2f7;stroke-width:2.6;stroke-dasharray:8 7}
+  #builderLinks .depDirectionSource{fill:#86c5f4;stroke:rgba(7,13,22,.92);stroke-width:1.4;pointer-events:none}
+  #builderLinks .depDirectionArrow{stroke:#e2f3ff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+  #builderLinks .depDirectionChevron{stroke:#b9e2ff;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+  .tcModalOverlay{
+    position:fixed;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    background:rgba(2,6,13,.62);
+    backdrop-filter:blur(12px);
+    z-index:40010;
+  }
+  .tcModal{
+    width:min(560px, 92vw);
+    max-width:92vw;
+    overflow:hidden;
+    border:1px solid var(--line);
+    border-radius:24px;
+    background:linear-gradient(180deg, rgba(17,28,45,.98), rgba(8,13,22,.98));
+    color:var(--fg);
+    box-shadow:var(--shadow-2);
+  }
+  .tcModalHead,
+  .tcModalBody,
+  .tcModalFoot{
+    padding:16px 18px;
+  }
+  .tcModalHead{
+    border-bottom:1px solid var(--line);
+  }
+  .tcModalEyebrow{
+    color:var(--accent);
+    font-size:11px;
+    font-weight:800;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+  }
+  .tcModalTitle{
+    margin-top:6px;
+    font:700 20px/1.1 var(--font-display);
+  }
+  .tcModalBody{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .tcLabel{
+    color:var(--muted);
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:.12em;
+  }
+  .tcInput{
+    padding:13px 14px;
+    border-radius:14px;
+    border:1px solid var(--line);
+    background:rgba(7,13,22,.88);
+    color:inherit;
+  }
+  .tcModalFoot{
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    border-top:1px solid var(--line);
+  }
+  .tcBtn{
+    appearance:none;
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:10px 14px;
+    color:inherit;
+    background:linear-gradient(180deg, rgba(18,29,46,.92), rgba(10,17,28,.92));
+    cursor:pointer;
+  }
+  .tcBtn.primary{
+    border-color:rgba(97,208,255,.38);
+    background:linear-gradient(180deg, rgba(97,208,255,.22), rgba(42,134,255,.3));
+  }
+  @media (max-width: 1100px){
+    header{flex-direction:column;align-items:stretch}
+    .shellIntro{flex-basis:auto}
+    .shellIntroTop{flex-wrap:wrap}
+    .shellActionStack{align-items:stretch}
+    .shellActions{justify-content:flex-start}
+    :root{--leftW:320px}
+    :root{--inspectorW:300px}
+  }
+  @media (max-width: 760px){
+    header{padding:14px}
+    .app{grid-template-columns:1fr;grid-template-areas:"header" "builder" "console"}
+    .left{
+      position:fixed;
+      inset:92px 14px 14px 14px;
+      z-index:14000;
+      border:1px solid var(--line);
+      border-radius:24px;
+      box-shadow:var(--shadow-2);
+    }
+    body.drawer-collapsed .left{display:none}
+    body.drawer-collapsed .drawerHandle{display:block}
+    .drawerHandle{top:auto;bottom:18px;transform:none}
+    .zoomwrap input[type=range]{width:132px}
+    .fab{right:16px;bottom:18px}
+    .fabMenu{right:16px;bottom:90px}
+    #builderWrap .canvas{right:0}
+    .contextSelectionBar,
+    body.inspector-collapsed .contextSelectionBar{left:50%;max-width:calc(100% - 24px)}
+    .inspector{
+      top:auto;
+      left:0;
+      width:auto;
+      height:min(42vh, 380px);
+      border-top:1px solid var(--line);
+      box-shadow:0 -16px 30px rgba(0,0,0,.28);
+    }
+    body.inspector-collapsed .inspector{
+      width:auto;
+      height:0;
+      transform:translateY(100%);
+      border-top:none;
+    }
+    .inspectorHandle{
+      top:auto;
+      bottom:18px;
+      transform:none;
+      border-radius:14px 0 0 14px;
+    }
+    .inspectorActions{grid-template-columns:repeat(4, minmax(0, 1fr))}
+    .inspectorActions button{padding:9px 10px;font-size:12px}
+  }
+</style>
+<style id="feature-toast-util-v1-css">
+#devConsoleToast {
+  position: fixed; right: 12px; bottom: 12px;
+  background: #1b2230; color: #e6edf3;
+  border: 1px solid #2a3344; border-radius: 8px;
+  padding: 8px 12px; z-index: 99999;
+  font: 13px/1.35 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  box-shadow: 0 6px 20px rgba(0,0,0,.35);
+  opacity: 0; pointer-events: none;
+  transform: translateY(8px);
+  transition: opacity .18s ease, transform .18s ease;
+}
+#devConsoleToast.show { opacity: 1; transform: translateY(0); }
+</style>
+
+</head>
+<body><script>(function(){
+  function safeInit(){
+    try{ if(!window.__INIT_DONE__ && typeof initFromDATA==='function'){ window.__INIT_DONE__=true; initFromDATA(); }}
+    catch(e){ console.log('[boot] init error', e); }
+  }
+  document.addEventListener('twdata', safeInit, {once:true});
+  window.addEventListener('load', function(){ if(window.DATA_READY) safeInit(); }, {once:true});
+})();</script>
+
+<script>
+/* __EXISTING_SOLID_V3A__ boot EXIST_EDGES from payload graph.edges */
+(function(){
+  try{
+    var G = (window.DATA && window.DATA.graph) ? window.DATA.graph : (window.GRAPH || {});
+    if (!('EXIST_EDGES' in window)){
+      window.EXIST_EDGES = (G && Array.isArray(G.edges)) ? G.edges.slice() : [];
+    }
+  }catch(_){}
+  setTimeout(function(){
+    try{ if (typeof refreshDepHandleLetters === 'function') refreshDepHandleLetters(); }catch(_){}
+  }, 0);
+})();
+</script>
+
+<script>
+(function(){
+  function safeInit(){
+    try {
+      if (!window.__INIT_DONE__ && typeof initFromDATA === 'function') {
+        window.__INIT_DONE__ = true;
+        initFromDATA();
+      }
+    } catch(e){ console.log('[boot] init error', e); }
+  }
+  document.addEventListener('twdata', safeInit, { once:true });
+  window.addEventListener('load', function(){ if (window.DATA_READY) safeInit(); }, { once:true });
+})();
+</script>
+<!-- Inline payload -->
+<!-- INLINE_PAYLOAD_HERE -->
+
+<div class="app">
+  <header>
+    <div class="shellIntro">
+      <div class="shellIntroTop">
+        <div class="shellBrand">
+          <div class="shellEyebrow">Visual planning for Taskwarrior</div>
+          <div class="shellWordmark"><div class="shellTitle">Kyanbasu</div><div class="shellKana" lang="ja" aria-hidden="true">キャンバス</div></div>
+          <div class="shellSubtitle">Stage dependencies and task changes without touching live data.</div>
+        </div>
+        <div class="shellModeControls">
+          <div class="tabbar">
+            <button id="tabBuilder" class="tab">Builder</button>
+            <button id="tabViewer" class="tab">Viewer</button>
+            <button id="toggleDrawer" class="btn ghost" title="Show/Hide drawer">Drawer</button>
+          </div>
+          <div id="shellWorkbenchControls" class="shellWorkbenchControls"></div>
+        </div>
+        <button id="toggleHeaderTools" class="shellToolsToggle" type="button" title="Hide tools" aria-label="Hide header tools" aria-expanded="true">⌃</button>
+      </div>
+      <div class="toolbarMeta">
+        <span id="count" class="pill">Loaded: 0</span>
+        <span id="parsedBadge" class="pill" title="Parsed in browser">Parsed: 0</span>
+      </div>
+      <div id="shellLeftControls" class="shellLeftControls">
+        <div class="toolbarGroup toolbarGroupCanvas" data-label="Canvas">
+          <div class="zoomwrap">
+            <span>Zoom</span>
+            <input id="zoom" type="range" min="50" max="200" value="100" />
+            <button id="fitBtn" title="Fit to screen">Fit</button>
+            <span id="zoomPct">100%</span>
+          </div>
+          <button id="resetCanvas" class="btn ghost" title="Reset the current canvas projects to the embedded Taskwarrior snapshot">Reset</button>
+          <button id="clearCanvas" class="btn ghost" title="Clear all projects and tasks from the canvas">Clear</button>
+        </div>
+      </div>
+    </div>
+    <div class="shellActionStack">
+      <div class="row shellActions shellActionsPrimary">
+        <div id="noteToolsGroup" class="toolbarGroup toolbarGroupNotes" data-label="Notes"></div>
+        <div class="toolbarGroup toolbarGroupCommands" data-label="Commands">
+          <button id="toggleConsole" class="btn ghost">Console</button>
+          <button id="copyBtn" class="btn primary" title="Copy Taskwarrior commands">Copy commands</button>
+          <label class="btn warningToggle"><input type="checkbox" id="removeMode"> Remove mode</label>
+        </div>
+      </div>
+      <div class="row shellActions shellActionsSecondary">
+        <div id="noteTaskGroup" class="toolbarGroup toolbarGroupNoteTasks" data-label="Note Tasks"></div>
+        <div id="noteDataGroup" class="toolbarGroup toolbarGroupNoteData" data-label="Note Data"></div>
+      </div>
+    </div>
+  </header>
+
+  <div id="left" class="left">
+    <div class="searchPanel">
+      <div class="panelEyebrow">Task Drawer</div>
+      <div class="panelTitle">Find and place tasks</div>
+      <div class="search"><input id="q" placeholder="Search by text, project:work, tag:home"/></div>
+      <label class="checkboxRow"><input type="checkbox" id="hideHasDeps"> Hide tasks that already have depends</label>
+      <div class="searchHint">Filter by text, `project:...`, or `tag:...`, then drag tasks into the canvas.</div>
+    </div>
+    <div id="list" class="taskList"></div>
+  </div>
+
+  <div id="builderWrap" class="builder">
+    <div class="canvas">
+      <div id="builderStage" class="stage">
+        <div id="areasLayer" class="areas"></div>
+        <div id="tagsLayer" class="areas"></div>
+        <svg id="builderLinks" class="links" viewBox="0 0 5000 4000" preserveAspectRatio="none"></svg>
+        <div id="chromeLayer" class="chromeLayer"></div>
+      </div>
+    </div>
+    <div id="contextSelectionBar" class="contextSelectionBar" hidden>
+      <div id="contextSelectionLabel" class="contextSelectionLabel"></div>
+      <div id="contextSelectionActions" class="contextSelectionActions"></div>
+    </div>
+    <aside id="inspectorPanel" class="inspector">
+      <div class="inspectorHead">
+        <div class="inspectorHeadTop">
+          <div class="inspectorEyebrow">Selection Inspector</div>
+          <button id="hideInspector" class="inspectorHideBtn" type="button">Hide</button>
+        </div>
+        <div id="inspectorTitle" class="inspectorTitle">Nothing selected</div>
+        <div id="inspectorSub" class="inspectorSub">Select a task card to inspect its placement, dependencies, and staged commands.</div>
+      </div>
+      <div class="inspectorActions">
+        <button id="inspectorLocate" type="button">Locate</button>
+        <button id="inspectorDone" type="button">Done</button>
+        <button id="inspectorDelete" type="button">Delete</button>
+        <button id="inspectorModify" type="button">Modify</button>
+      </div>
+      <div id="inspectorBody" class="inspectorBody"></div>
+    </aside>
+  </div>
+
+  <div id="viewerWrap" class="builder" style="display:none">
+    <div class="canvas">
+      <div id="viewerStage" class="stage"></div>
+    </div>
+  </div>
+
+  <div id="consolePanel" class="console">
+    <div class="consoleHead">
+      <div>Pending commands</div>
+      <div class="row">
+        <button id="copyBtn2" class="btn">Copy</button>
+      </div>
+    </div>
+    <div class="consoleBody">
+      <textarea id="consoleText" readonly></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- Drawer hover handle -->
+<div id="drawerHandle" class="drawerHandle">Tasks ▸</div>
+<div id="inspectorHandle" class="inspectorHandle">◂ Inspector</div>
+
+<!-- Floating Add button and menu -->
+<div id="fab" class="fab" title="Add…">＋</div>
+<div id="fabMenu" class="fabMenu hidden">
+  <button id="fabAddProject">Add project…</button>
+  <button id="fabAddFiltered">Add filtered tasks</button>
+  <button id="fabAddNew">Add new task…</button>
+</div>
+
+<script>
+if (typeof projectPalette !== 'function'){
+  function projectPalette(proj){
+    try{
+      var h = hash32(String(proj||"(no project)")) % 360;
+      return {
+        bg:  "linear-gradient(180deg, hsla("+h+",30%,18%,.20), hsla("+h+",30%,12%,.12))",
+        border: "hsla("+h+",55%,46%,.85)",
+        labelBg: "hsla("+h+",50%,20%,.85)"
+      };
+    }catch(_){
+      return { bg:"linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01))",
+               border:"#3f4757", labelBg:"#2a3344" };
+    }
+  }
+}
+
+
+/* ===== State / helpers ===== */
+if (typeof window.escapeHtml !== 'function') {
+  window.escapeHtml = function(s) {
+    if (s == null) return "";
+    return String(s).replace(/[&<>"']/g, function(c){
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+    });
+  };
+}
+
+var TASKS = [];
+var INIT_MAIN_TAG = {};     // short -> initial main tag
+var INIT_PROJECT = {};      // short -> initial project
+var TASK_BY_SHORT = {};     // short -> task object (live)
+var PARENT_DEPS0 = {};
+var CHILD_TO_PARENTS = {};
+
+var ZSCALE = 1.0;
+var DRAWER_PINNED = false; // start collapsed
+
+var projectAreas = new Map(); // project -> {x,y,w,h,tagCols,tagW0,tagH0,nextTagIndex,el}
+var tagAreas = new Map();     // key "p||t" -> {x,y,w,h,project,tag,el,_cols}
+var LAYOUT = {
+  CELL_W:280, COLS:2, COL_GAP:24, ROW_GAP:18,
+  AREA_PAD:16, AREA_GAP:60, TAG_PAD:10, TAG_HEAD:40, PROJ_HEAD:56, TAG_COLS:3
+};
+
+// === Tag color helpers ===
+function hash32(str){
+  var h=2166136261>>>0;
+  for (var i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=(h>>>0)*16777619>>>0; }
+  return h>>>0;
+}
+function tagPalette(tag){
+  var h = hash32(tag||"none") % 360;
+  return {
+    bg:  "linear-gradient(180deg, hsla("+h+",40%,18%,.22), hsla("+h+",40%,12%,.14))",
+    border: "hsla("+h+",55%,46%,.85)",
+    labelBg: "hsla("+h+",50%,20%,.85)"
+  };
+}
+function taskDueLabel(task){
+  var due = task && task.due;
+  if (!due) return "";
+  var s = String(due);
+  var m = s.match(/^(\d{4})(\d{2})(\d{2})/);
+  return m ? (m[1] + "-" + m[2] + "-" + m[3]) : s;
+}
+function taskStatusLabel(task){
+  return task && task.has_depends ? "Blocked" : "Ready";
+}
+
+
+var left        = document.getElementById('left');
+var builderWrap = document.getElementById('builderWrap');
+var viewerWrap  = document.getElementById('viewerWrap');
+var tabBuilder  = document.getElementById('tabBuilder');
+var tabViewer   = document.getElementById('tabViewer');
+var toggleDrawer= document.getElementById('toggleDrawer');
+var toggleHeaderTools = document.getElementById('toggleHeaderTools');
+var drawerHandle= document.getElementById('drawerHandle');
+var inspectorHandle = document.getElementById('inspectorHandle');
+
+var list        = document.getElementById('list');
+var q           = document.getElementById('q');
+var hideHasDeps = document.getElementById('hideHasDeps');
+var count       = document.getElementById('count');
+var parsedBadge = document.getElementById('parsedBadge');
+var removeMode  = document.getElementById('removeMode');
+
+var builderStage = document.getElementById('builderStage');
+var areasLayer   = document.getElementById('areasLayer');
+var tagsLayer    = document.getElementById('tagsLayer');
+var builderLinks = document.getElementById('builderLinks');
+var chromeLayer  = document.getElementById('chromeLayer');
+var viewerStage  = document.getElementById('viewerStage');
+
+var zoom        = document.getElementById('zoom');
+var zoomPct     = document.getElementById('zoomPct');
+var copyBtn     = document.getElementById('copyBtn');
+var copyBtn2    = document.getElementById('copyBtn2');
+var resetCanvas = document.getElementById('resetCanvas');
+var clearCanvasBtn = document.getElementById('clearCanvas');
+var consolePanel= document.getElementById('consolePanel');
+var toggleConsole=document.getElementById('toggleConsole');
+var consoleText = document.getElementById('consoleText');
+
+var fab = document.getElementById('fab');
+var fabMenu = document.getElementById('fabMenu');
+var fabAddProject = document.getElementById('fabAddProject');
+var fabAddFiltered = document.getElementById('fabAddFiltered');
+var fabAddNew = document.getElementById('fabAddNew');
+var inspectorPanel = document.getElementById('inspectorPanel');
+var inspectorTitle = document.getElementById('inspectorTitle');
+var inspectorSub = document.getElementById('inspectorSub');
+var inspectorBody = document.getElementById('inspectorBody');
+var inspectorLocate = document.getElementById('inspectorLocate');
+var inspectorDone = document.getElementById('inspectorDone');
+var inspectorDelete = document.getElementById('inspectorDelete');
+var inspectorModify = document.getElementById('inspectorModify');
+var hideInspector = document.getElementById('hideInspector');
+var contextSelectionBar = document.getElementById('contextSelectionBar');
+var contextSelectionLabel = document.getElementById('contextSelectionLabel');
+var contextSelectionActions = document.getElementById('contextSelectionActions');
+var inspectorTimer = 0;
+var selectedProject = null;
+var dragProjMoved = false;
+var lastProjectDragAt = 0;
+var BASE_DATA_SNAPSHOT = null;
+
+/* ===== Drawer collapse/expand ===== */
+function setDrawerWidth(px){ document.documentElement.style.setProperty('--leftW', px + 'px'); }
+function collapseDrawer(){ DRAWER_PINNED=false; setDrawerWidth(0); document.body.classList.add('drawer-collapsed'); }
+function expandDrawer(pin){ if (pin===true) DRAWER_PINNED=true; setDrawerWidth(360); document.body.classList.remove('drawer-collapsed'); }
+toggleDrawer.addEventListener('click', function(){ if (DRAWER_PINNED){ collapseDrawer(); } else { expandDrawer(true); } });
+drawerHandle.addEventListener('mouseenter', function(){ if (!DRAWER_PINNED) expandDrawer(false); });
+left.addEventListener('mouseleave', function(){ if (!DRAWER_PINNED) collapseDrawer(); });
+
+function collapseInspector(){ document.body.classList.add('inspector-collapsed'); }
+function expandInspector(){ document.body.classList.remove('inspector-collapsed'); }
+if (hideInspector) hideInspector.addEventListener('click', collapseInspector);
+if (inspectorHandle) inspectorHandle.addEventListener('click', expandInspector);
+
+var HEADER_TOOLS_STORAGE_KEY = 'kyanbasu:header-tools-collapsed';
+function setHeaderToolsCollapsed(collapsed, persist){
+  collapsed = !!collapsed;
+  document.body.classList.toggle('header-tools-collapsed', collapsed);
+  if (toggleHeaderTools){
+    toggleHeaderTools.textContent = collapsed ? '⌄' : '⌃';
+    toggleHeaderTools.title = collapsed ? 'Show tools' : 'Hide tools';
+    toggleHeaderTools.setAttribute('aria-label', toggleHeaderTools.title);
+    toggleHeaderTools.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  }
+  if (persist !== false){
+    try{ localStorage.setItem(HEADER_TOOLS_STORAGE_KEY, collapsed ? '1' : '0'); }catch(_){}
+  }
+  return collapsed;
+}
+function restoreHeaderToolsState(){
+  var collapsed = false;
+  try{
+    var saved = localStorage.getItem(HEADER_TOOLS_STORAGE_KEY);
+    collapsed = saved === '1';
+  }catch(_){}
+  return setHeaderToolsCollapsed(collapsed, false);
+}
+if (toggleHeaderTools) toggleHeaderTools.addEventListener('click', function(){
+  setHeaderToolsCollapsed(!document.body.classList.contains('header-tools-collapsed'));
+});
+window.setHeaderToolsCollapsed = setHeaderToolsCollapsed;
+window.restoreHeaderToolsState = restoreHeaderToolsState;
+restoreHeaderToolsState();
+
+function cloneJSON(v){
+  try{ return JSON.parse(JSON.stringify(v)); }catch(_){ return v; }
+}
+function layoutBoardKeyFromTasks(tasks){
+  try{
+    var prefix = "kyanbasu:layout:v1:";
+    if (!tasks || !tasks.length) return prefix + "empty";
+    var ids = tasks.map(function(t){
+      return t ? String(t.uuid || t.short || "") : "";
+    }).filter(Boolean).sort().join("|");
+    var h = 2166136261 >>> 0;
+    for (var i=0; i<ids.length; i++){
+      h ^= ids.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return prefix + (h >>> 0).toString(16);
+  }catch(_){
+    return "kyanbasu:layout:v1:fallback";
+  }
+}
+function layoutBoardKey(){
+  var tasks = (window.DATA && Array.isArray(window.DATA.tasks)) ? window.DATA.tasks : TASKS;
+  return layoutBoardKeyFromTasks(tasks);
+}
+function clearPersistedLayout(){
+  try{
+    localStorage.removeItem(layoutBoardKey());
+  }catch(_){}
+}
+function clearPersistedLayoutForData(data){
+  try{
+    var tasks = (data && Array.isArray(data.tasks)) ? data.tasks : [];
+    localStorage.removeItem(layoutBoardKeyFromTasks(tasks));
+  }catch(_){}
+}
+function emptyObjectInPlace(obj){
+  if (!obj || typeof obj !== 'object') return obj;
+  Object.keys(obj).forEach(function(k){ delete obj[k]; });
+  return obj;
+}
+function clearRuntimeStageState(){
+  try{
+    window.STAGED_CMDS = Array.isArray(window.STAGED_CMDS) ? window.STAGED_CMDS : [];
+    window.STAGED_CMDS.length = 0;
+  }catch(_){}
+  try{
+    window.STAGED_HUMAN = Array.isArray(window.STAGED_HUMAN) ? window.STAGED_HUMAN : [];
+    window.STAGED_HUMAN.length = 0;
+  }catch(_){}
+  try{
+    window.stagedAdd = Array.isArray(window.stagedAdd) ? window.stagedAdd : [];
+    window.stagedAdd.length = 0;
+  }catch(_){}
+  try{
+    window.__depExtraCmds = Array.isArray(window.__depExtraCmds) ? window.__depExtraCmds : [];
+    window.__depExtraCmds.length = 0;
+  }catch(_){}
+  try{ window.__REMOVED_DEPS = emptyObjectInPlace(window.__REMOVED_DEPS || Object.create(null)); }catch(_){}
+  try{
+    window.__FOLD_STATE__ = emptyObjectInPlace(window.__FOLD_STATE__ || window.FOLD || Object.create(null));
+    window.FOLD = window.__FOLD_STATE__;
+  }catch(_){}
+  try{
+    window.__EXISTING_OPS__ = emptyObjectInPlace(window.__EXISTING_OPS__ || window.EX_OPS || Object.create(null));
+    window.EX_OPS = window.__EXISTING_OPS__;
+  }catch(_){}
+  try{
+    window.EXIST_EDGES = Array.isArray(window.EXIST_EDGES) ? window.EXIST_EDGES : [];
+    window.EXIST_EDGES.length = 0;
+  }catch(_){}
+}
+function clearCanvasDomState(){
+  try{ clearSelection(); }catch(_){}
+  try{ clearProjectSelection(true); }catch(_){}
+  projectAreas = new Map();
+  tagAreas = new Map();
+  try{ builderStage.querySelectorAll('.node').forEach(function(n){ n.remove(); }); }catch(_){}
+  try{ recomputeAreasAndTags(); }catch(_){}
+  try{ drawLinks(); }catch(_){}
+  try{ if (typeof refreshDepHandleLetters === 'function') refreshDepHandleLetters(); }catch(_){}
+}
+function snapshotCanvasProjects(){
+  var items = [];
+  projectAreas.forEach(function(pa, project){
+    if (!pa) return;
+    items.push({
+      project: project || "(no project)",
+      x: parseInt(pa.x || 0, 10) || 0,
+      y: parseInt(pa.y || 0, 10) || 0,
+      tagCols: parseInt(pa.tagCols || LAYOUT.TAG_COLS, 10) || LAYOUT.TAG_COLS,
+      tagW0: parseInt(pa.tagW0 || (LAYOUT.TAG_PAD*2 + LAYOUT.CELL_W), 10) || (LAYOUT.TAG_PAD*2 + LAYOUT.CELL_W),
+      tagH0: parseInt(pa.tagH0 || (LAYOUT.TAG_HEAD + LAYOUT.TAG_PAD + 140), 10) || (LAYOUT.TAG_HEAD + LAYOUT.TAG_PAD + 140)
+    });
+  });
+  items.sort(function(a,b){
+    if (a.y !== b.y) return a.y - b.y;
+    if (a.x !== b.x) return a.x - b.x;
+    return a.project < b.project ? -1 : (a.project > b.project ? 1 : 0);
+  });
+  return items;
+}
+function seedProjectArea(state){
+  var project = (state && state.project) ? state.project : "(no project)";
+  if (projectAreas.has(project)) return projectAreas.get(project);
+  var pa = {
+    x: (state && isFinite(state.x)) ? state.x : 20,
+    y: (state && isFinite(state.y)) ? state.y : 20,
+    w: 280,
+    h: 120,
+    tagCols: (state && isFinite(state.tagCols)) ? state.tagCols : LAYOUT.TAG_COLS,
+    tagW0: (state && isFinite(state.tagW0)) ? state.tagW0 : (LAYOUT.TAG_PAD*2 + LAYOUT.CELL_W),
+    tagH0: (state && isFinite(state.tagH0)) ? state.tagH0 : (LAYOUT.TAG_HEAD + LAYOUT.TAG_PAD + 140),
+    nextTagIndex: 0,
+    el: null
+  };
+  projectAreas.set(project, pa);
+  return pa;
+}
+function rebuildCanvasProjects(projectStates){
+  if (!Array.isArray(projectStates) || !projectStates.length) return 0;
+  var present = Object.create(null);
+  for (var i=0; i<TASKS.length; i++){
+    present[TASKS[i].project || "(no project)"] = 1;
+  }
+  var wanted = projectStates.filter(function(state){
+    var project = (state && state.project) ? state.project : "(no project)";
+    return !!present[project];
+  });
+  if (!wanted.length) return 0;
+
+  wanted.forEach(seedProjectArea);
+  recomputeAreasAndTags();
+
+  var restoredProjects = 0;
+  for (var j=0; j<wanted.length; j++){
+    var project = wanted[j].project || "(no project)";
+    if (addProjectTasks(project) > 0) restoredProjects++;
+  }
+  for (var k=0; k<wanted.length; k++){
+    var state = wanted[k];
+    var projectName = state.project || "(no project)";
+    var pa = projectAreas.get(projectName);
+    if (!pa) continue;
+    var targetX = (state && isFinite(state.x)) ? state.x : pa.x;
+    var targetY = (state && isFinite(state.y)) ? state.y : pa.y;
+    var dx = targetX - pa.x;
+    var dy = targetY - pa.y;
+    if (dx || dy) moveWholeProject(projectName, dx, dy);
+  }
+  recomputeAreasAndTags();
+  settleCanvasAgainstNotes();
+  drawLinks();
+  updateConsole();
+  try{ if (typeof refreshDepHandleLetters === 'function') refreshDepHandleLetters(); }catch(_){}
+  return restoredProjects;
+}
+function restoreCanvasSnapshot(mode){
+  if (!BASE_DATA_SNAPSHOT) return;
+  var resetCurrentProjects = (mode === 'reset-projects');
+  var currentProjects = resetCurrentProjects ? snapshotCanvasProjects() : [];
+  clearPersistedLayout();
+  clearPersistedLayoutForData(BASE_DATA_SNAPSHOT);
+  clearRuntimeStageState();
+  clearCanvasDomState();
+  window.DATA = cloneJSON(BASE_DATA_SNAPSHOT);
+  if (mode === 'clear'){
+    initFromDATA({ skipInitialPlacement: true });
+  } else if (resetCurrentProjects && currentProjects.length){
+    initFromDATA({ skipInitialPlacement: true });
+    rebuildCanvasProjects(currentProjects);
+  } else {
+    initFromDATA({ skipInitialPlacement: false });
+  }
+  try{
+    if (typeof showToast === 'function'){
+      if (mode === 'clear'){
+        showToast('Canvas cleared.');
+      } else if (resetCurrentProjects && currentProjects.length){
+        showToast('Current canvas projects reset to embedded snapshot.');
+      } else {
+        showToast('Canvas reset to embedded snapshot.');
+      }
+    }
+  }catch(_){}
+}
+if (resetCanvas) resetCanvas.addEventListener('click', function(){ restoreCanvasSnapshot('reset-projects'); });
+if (clearCanvasBtn) clearCanvasBtn.addEventListener('click', function(){ restoreCanvasSnapshot('clear'); });
+
+/* ===== Tabs ===== */
+function setMode(mode){
+  if(mode==="viewer"){
+    document.body.classList.add('viewer-mode');
+    left.style.display='none';
+    builderWrap.style.display='none';
+    viewerWrap.style.display='block';
+    tabViewer.classList.add('active'); tabBuilder.classList.remove('active');
+    renderViewer();
+  }else{
+    document.body.classList.remove('viewer-mode');
+    left.style.display='block';
+    builderWrap.style.display='block';
+    viewerWrap.style.display='none';
+    tabBuilder.classList.add('active'); tabViewer.classList.remove('active');
+    recomputeAreasAndTags();
+    drawLinks();
+  }
+  queueInspectorRender(0);
+}
+tabBuilder.addEventListener('click', function(){ setMode('builder'); });
+tabViewer.addEventListener('click', function(){ setMode('viewer'); });
+
+/* ===== Filters ===== */
+function parseQuery(txt){
+  var t=(txt||"").trim().toLowerCase().split(/\s+/).filter(function(s){return s;});
+  var res={proj:null,tags:[],text:[]};
+  for(var i=0;i<t.length;i++){
+    var v=t[i];
+    if(v.startsWith("project:")) res.proj=v.slice(8);
+    else if(v.startsWith("tag:")) res.tags.push(v.slice(4));
+    else res.text.push(v);
+  }
+  return res;
+}
+function matches(t, f){
+  if(f.proj && (t.project||"").toLowerCase().indexOf(f.proj)===-1) return false;
+  for(var i=0;i<f.tags.length;i++){
+    if(!t.tags || t.tags.map(function(x){return (x||"").toLowerCase();}).indexOf(f.tags[i])===-1) return false;
+  }
+  var hay=(t.desc||"").toLowerCase()+" "+(t.project||"").toLowerCase()+" "+(t.tags||[]).join(" ").toLowerCase();
+  for(var j=0;j<f.text.length;j++){ if(hay.indexOf(f.text[j])===-1) return false; }
+  return true;
+}
+// helper: collapse full UUIDs to short (8 chars)
+function shortenUUIDs(s){
+  return String(s || '').replace(
+    /\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b/gi,
+    m => m.slice(0, 8)
+  );
+}
+
+/* ===== Drawer list ===== */
+function renderList(){
+  list.innerHTML="";
+  count.textContent="Loaded: "+TASKS.length;
+  var f=parseQuery(q ? q.value : "");
+  var filtered;
+  if ((q && q.value && q.value.trim()) || (hideHasDeps && hideHasDeps.checked)){
+    filtered=TASKS.filter(function(t){return matches(t,f);});
+    if (hideHasDeps && hideHasDeps.checked){ filtered = filtered.filter(function(t){ return !t.has_depends; }); }
+  } else { filtered=TASKS.slice(); }
+  var byProj={}, i;
+  for(i=0;i<filtered.length;i++){
+    var p=filtered[i].project||"(no project)";
+    if(!byProj[p]) byProj[p]=[];
+    byProj[p].push(filtered[i]);
+  }
+  var keys=Object.keys(byProj).sort();
+  for(i=0;i<keys.length;i++){
+    var proj=keys[i];
+    var sec=document.createElement('div'); sec.className="section"; sec.textContent=proj+" ("+byProj[proj].length+")";
+    list.appendChild(sec);
+    var arr=byProj[proj];
+    for(var k=0;k<arr.length;k++){
+      var t=arr[k];
+      var el=document.createElement('div'); el.className="item";
+      if (t.uuid) el.setAttribute('data-uuid', t.uuid);
+      if (t.short) el.setAttribute('data-short', t.short);
+      var primaryTag = firstTag(t);
+      el.innerHTML =
+        '<div class="itemTop">' +
+          '<span class="short"><span class="drawerBadge">'+escapeHtml(t.short)+'</span></span>' +
+          '<span class="itemState">'+(t.has_depends ? 'Has deps' : 'Ready')+'</span>' +
+        '</div>' +
+        '<div class="desc">'+escapeHtml(t.desc)+'</div>' +
+        '<div class="meta">'+escapeHtml((t.project||"(no project)")+' • '+primaryTag)+'</div>';
+      // place INSIDE its project/tag bubble (grid)
+      el.addEventListener('mousedown', (function(task){
+        return function(e){ if(e.button!==0) return; addToBuilder(task, null, null); };
+      })(t));
+      list.appendChild(el);
+    }
+  }
+  if(!filtered.length){
+    var empty=document.createElement('div'); empty.className="meta"; empty.textContent="No tasks.";
+    list.appendChild(empty);
+  }
+}
+
+/* ===== Keys & helpers ===== */
+function keyPT(project, tag){ return (project||"(no project)") + "||" + (tag||"(no tag)"); }
+function firstTag(t){ return (t.tags && t.tags.length) ? t.tags[0] : "(no tag)"; }
+
+/* ===== Areas: projects & tags ===== */
+function ensureProjectArea(project){
+  var p=project||"(no project)";
+  var a = projectAreas.get(p);
+  if(!a){
+    // stack vertically: place after bottom-most project
+    var maxBottom = 20, first = true;
+    projectAreas.forEach(function(pa){ first=false; maxBottom = Math.max(maxBottom, pa.y + (pa.h||0)); });
+    var y = first ? 20 : (maxBottom + LAYOUT.AREA_GAP);
+    a = { x:20, y:y, w:280, h:120, tagCols:LAYOUT.TAG_COLS, tagW0:(LAYOUT.TAG_PAD*2+LAYOUT.CELL_W),
+          tagH0:(LAYOUT.TAG_HEAD + LAYOUT.TAG_PAD + 140), nextTagIndex:0, el:null };
+    projectAreas.set(p,a);
+  }
+  return a;
+}
+function ensureTagArea(project, tag){
+  var p = project || "(no project)";
+  var t = tag || "(no tag)";
+  var k = keyPT(p, t);
+  var ta = tagAreas.get(k);
+  if (ta) return ta;
+
+  var pa = ensureProjectArea(p);
+  var idx = pa.nextTagIndex++;
+  var c = idx % pa.tagCols;
+  var r = Math.floor(idx / pa.tagCols);
+  var tx = pa.x + LAYOUT.AREA_PAD + c*(pa.tagW0 + LAYOUT.COL_GAP);
+  var ty = pa.y + LAYOUT.PROJ_HEAD + LAYOUT.AREA_PAD + r*(pa.tagH0 + LAYOUT.ROW_GAP);
+
+  ta = { x:tx, y:ty, w:pa.tagW0, h:pa.tagH0, project:p, tag:t, el:null };
+  ta._cols = new Array(LAYOUT.COLS).fill(ta.y + LAYOUT.TAG_HEAD + LAYOUT.TAG_PAD);
+  tagAreas.set(k, ta);
+  updateProjectBoundsFromTags(p);
+  return ta;
+}
+function renameTagAreaKey(oldProj, tag, newProj){
+  var oldKey = keyPT(oldProj, tag);
+  var ta = tagAreas.get(oldKey);
+  if (!ta) return;
+  tagAreas.delete(oldKey);
+  ta.project = newProj;
+  tagAreas.set(keyPT(newProj, tag), ta);
+}
+function updateProjectBoundsFromTags(project){
+  var pa = ensureProjectArea(project);
+  var maxR = pa.x + 260, maxB = pa.y + 120;
+  tagAreas.forEach(function(ta){
+    if (ta.project !== project) return;
+    maxR = Math.max(maxR, ta.x + ta.w);
+    maxB = Math.max(maxB, ta.y + ta.h);
+  });
+  pa.w = (maxR - pa.x) + LAYOUT.AREA_PAD;
+  pa.h = (maxB - pa.y) + LAYOUT.AREA_PAD;
+}
+
+/* ===== Node helpers ===== */
+function nodesForTag(project, tag){
+  return Array.from(builderStage.querySelectorAll('.node'))
+    .filter(function(n){ return n.getAttribute('data-proj') === (project||"(no project)") && n.getAttribute('data-tag') === (tag||"(no tag)"); });
+}
+function nodesForProject(project){
+  return Array.from(builderStage.querySelectorAll('.node'))
+    .filter(function(n){ return n.getAttribute('data-proj') === (project||"(no project)"); });
+}
+function moveNodesForTag(project, tag, dx, dy){
+  nodesForTag(project, tag).forEach(function(n){
+    var x = parseInt(n.style.left||"0",10), y = parseInt(n.style.top||"0",10);
+    n.style.left = ((x+dx)|0) + "px";
+    n.style.top  = ((y+dy)|0) + "px";
+  });
+}
+function removeProjectFromCanvas(project){
+  if (!projectAreas.has(project)) return false;
+  if (selectedProject === project) clearProjectSelection(true);
+  var removedCount = 0;
+
+  Array.from(builderStage.querySelectorAll('.node')).forEach(function(n){
+    if (n.getAttribute('data-proj') !== project) return;
+    if (selected.has(n)){
+      n.classList.remove('selected');
+      selected.delete(n);
+    }
+    try{ n.remove(); }catch(_){}
+    removedCount++;
+  });
+
+  Array.from(tagAreas.keys()).forEach(function(key){
+    var ta = tagAreas.get(key);
+    if (ta && ta.project === project) tagAreas.delete(key);
+  });
+  projectAreas.delete(project);
+
+  recomputeAreasAndTags();
+  drawLinks();
+  try{ if (typeof refreshDepHandleLetters === 'function') refreshDepHandleLetters(); }catch(_){}
+  updateConsole();
+  if (typeof publishTaskSelection === 'function') publishTaskSelection();
+  queueInspectorRender(0);
+  try{ if (typeof showToast === 'function') showToast('Removed project "'+project+'" from canvas ('+removedCount+' task'+(removedCount===1?'':'s')+').'); }catch(_){}
+  return true;
+}
+
+/* ===== Overlap detection & resolution ===== */
+function rectsOverlap(a,b){
+  return (a.x < b.x + b.w) && (a.x + a.w > b.x) && (a.y < b.y + b.h) && (a.y + a.h > b.y);
+}
+
+/* Tag-level magnetic push (within one project) */
+function resolveTagOverlaps(project){
+  var tags=[];
+  tagAreas.forEach(function(ta){ if (ta.project===project) tags.push(ta); });
+  if (tags.length<=1) { updateProjectBoundsFromTags(project); return; }
+
+  // sort top-to-bottom, then left-to-right for stable pushes
+  tags.sort(function(a,b){ return (a.y-b.y) || (a.x-b.x); });
+
+  var changed=true, safety=0;
+  while (changed && safety<50){
+    changed=false; safety++;
+    for (var i=0;i<tags.length;i++){
+      for (var j=0;j<tags.length;j++){
+        if (i===j) continue;
+        var A=tags[i], B=tags[j];
+        if (!rectsOverlap(A,B)) continue;
+        // Push the lower one down; if heights equal, push B
+        var target = (A.y <= B.y) ? B : A;
+        var other  = (target===B) ? A : B;
+        var newY = other.y + other.h + LAYOUT.ROW_GAP;
+        var dy = newY - target.y;
+        if (dy <= 0) dy = (other.h/2 + LAYOUT.ROW_GAP); // fallback
+        target.y += dy;
+        if (target.el){ target.el.style.top = (target.y|0)+"px"; }
+        if (target.labelEl){ target.labelEl.style.top = ((target.y + 14)|0)+"px"; }
+        moveNodesForTag(target.project, target.tag, 0, dy);
+        changed=true;
+      }
+    }
+  }
+  updateProjectBoundsFromTags(project);
+}
+
+/* Project-level magnetic push (between projects) */
+function stageBounds(){
+  var w = (builderStage && builderStage.offsetWidth) || 5000;
+  var h = (builderStage && builderStage.offsetHeight) || 4000;
+  return {
+    minX: 20,
+    minY: 20,
+    maxX: Math.max(20, w - 20),
+    maxY: Math.max(20, h - 20)
+  };
+}
+function clampProjectPosition(pa, x, y){
+  var b = stageBounds();
+  var maxX = Math.max(b.minX, b.maxX - pa.w);
+  var maxY = Math.max(b.minY, b.maxY - pa.h);
+  return {
+    x: Math.max(b.minX, Math.min(x, maxX)),
+    y: Math.max(b.minY, Math.min(y, maxY))
+  };
+}
+function moveWholeProject(project, dx, dy){
+  var pa = projectAreas.get(project); if (!pa) return;
+  var pos = clampProjectPosition(pa, pa.x + dx, pa.y + dy);
+  dx = pos.x - pa.x;
+  dy = pos.y - pa.y;
+  if (!dx && !dy) return;
+  pa.x = pos.x; pa.y = pos.y;
+  if (pa.el){ pa.el.style.left=(pa.x|0)+"px"; pa.el.style.top=(pa.y|0)+"px"; }
+  if (pa.labelEl){ pa.labelEl.style.left=((pa.x + 14)|0)+"px"; pa.labelEl.style.top=((pa.y + 14)|0)+"px"; }
+  // move children tags and their nodes
+  tagAreas.forEach(function(ta){
+    if (ta.project !== project) return;
+    ta.x += dx; ta.y += dy;
+    if (ta.el){ ta.el.style.left=(ta.x|0)+"px"; ta.el.style.top=(ta.y|0)+"px"; }
+    if (ta.labelEl){ ta.labelEl.style.left=((ta.x + 14)|0)+"px"; ta.labelEl.style.top=((ta.y + 14)|0)+"px"; }
+    moveNodesForTag(ta.project, ta.tag, dx, dy);
+  });
+}
+function resolveProjectOverlaps(){
+  var projs=[];
+  projectAreas.forEach(function(pa, name){ projs.push({name:name, pa:pa}); });
+  if (projs.length<=1) return;
+  projs.sort(function(a,b){ return (a.pa.y - b.pa.y) || (a.pa.x - b.pa.x); });
+
+  var changed=true, safety=0;
+  while (changed && safety<50){
+    changed=false; safety++;
+    for (var i=0;i<projs.length;i++){
+      for (var j=0;j<projs.length;j++){
+        if (i===j) continue;
+        var A=projs[i].pa, B=projs[j].pa;
+        var aRect={x:A.x,y:A.y,w:A.w,h:A.h}, bRect={x:B.x,y:B.y,w:B.w,h:B.h};
+        if (!rectsOverlap(aRect,bRect)) continue;
+        var nudgeA = findNearestProjectMove(aRect, projectObstacleRects(projs[i].name).filter(function(r){ return r !== aRect; }));
+        var nudgeB = findNearestProjectMove(bRect, projectObstacleRects(projs[j].name).filter(function(r){ return r !== bRect; }));
+        if (nudgeA && nudgeB){
+          var da = Math.abs(nudgeA.dx) + Math.abs(nudgeA.dy);
+          var db = Math.abs(nudgeB.dx) + Math.abs(nudgeB.dy);
+          if (da <= db) moveWholeProject(projs[i].name, nudgeA.dx, nudgeA.dy);
+          else moveWholeProject(projs[j].name, nudgeB.dx, nudgeB.dy);
+        } else if (nudgeA){
+          moveWholeProject(projs[i].name, nudgeA.dx, nudgeA.dy);
+        } else if (nudgeB){
+          moveWholeProject(projs[j].name, nudgeB.dx, nudgeB.dy);
+        } else {
+          var targetIdx = (A.y <= B.y) ? j : i;
+          var otherIdx  = (targetIdx===j) ? i : j;
+          var target = projs[targetIdx]; var other = projs[otherIdx];
+          var newY = other.pa.y + other.pa.h + LAYOUT.AREA_GAP;
+          var dy = newY - target.pa.y; if (dy<=0) dy = other.pa.h/2 + LAYOUT.AREA_GAP;
+          moveWholeProject(target.name, 0, dy);
+        }
+        changed=true;
+      }
+    }
+  }
+}
+
+function noteRects(){
+  var rects = [];
+  try{
+    document.querySelectorAll('.tcNoteNode').forEach(function(el){
+      if (!el || el.style.display === 'none') return;
+      rects.push({
+        x: parseInt(el.style.left || '0', 10) || 0,
+        y: parseInt(el.style.top || '0', 10) || 0,
+        w: el.offsetWidth || 220,
+        h: el.offsetHeight || 92
+      });
+    });
+  }catch(_){}
+  return rects;
+}
+
+function projectObstacleRects(excludeProject){
+  var rects = [];
+  projectAreas.forEach(function(pa, name){
+    if (name === excludeProject) return;
+    rects.push({x: pa.x, y: pa.y, w: pa.w, h: pa.h});
+  });
+  return rects;
+}
+function projectObstacleRectsWithNotes(excludeProject){
+  var notes = noteRects();
+  try{
+    if (window.KyanbasuNotes && typeof window.KyanbasuNotes.noteSpaceRects === "function"){
+      notes = window.KyanbasuNotes.noteSpaceRects();
+    }
+  }catch(_){}
+  return notes.concat(projectObstacleRects(excludeProject));
+}
+function projectAndTaskRects(){
+  var rects = [];
+  projectAreas.forEach(function(pa){
+    rects.push({x: pa.x, y: pa.y, w: pa.w, h: pa.h});
+  });
+  tagAreas.forEach(function(ta){
+    rects.push({x: ta.x, y: ta.y, w: ta.w, h: ta.h});
+  });
+  Array.from(builderStage.querySelectorAll('.node')).forEach(function(n){
+    rects.push({
+      x: parseInt(n.style.left || "0", 10) || 0,
+      y: parseInt(n.style.top || "0", 10) || 0,
+      w: n.offsetWidth || 220,
+      h: n.offsetHeight || 92
+    });
+  });
+  return rects;
+}
+
+function overlapSpan(aStart, aEnd, bStart, bEnd){
+  return aStart < bEnd && aEnd > bStart;
+}
+
+function findNearestProjectMove(rect, obstacles){
+  var bounds = stageBounds();
+  var gap = LAYOUT.AREA_GAP;
+  var xs = [rect.x, bounds.minX, Math.max(bounds.minX, bounds.maxX - rect.w)];
+  var ys = [rect.y, bounds.minY, Math.max(bounds.minY, bounds.maxY - rect.h)];
+  var seenX = Object.create(null);
+  var seenY = Object.create(null);
+  var best = null;
+
+  function addValue(list, seen, value){
+    if (!isFinite(value)) return;
+    value = Math.round(value);
+    var key = String(value);
+    if (seen[key]) return;
+    seen[key] = true;
+    list.push(value);
+  }
+
+  obstacles.forEach(function(o){
+    addValue(xs, seenX, o.x - rect.w - gap);
+    addValue(xs, seenX, o.x + o.w + gap);
+    addValue(ys, seenY, o.y - rect.h - gap);
+    addValue(ys, seenY, o.y + o.h + gap);
+  });
+
+  function clearAt(x, y){
+    if (x < bounds.minX || y < bounds.minY || x + rect.w > bounds.maxX || y + rect.h > bounds.maxY) return false;
+    var probe = {x:x, y:y, w:rect.w, h:rect.h};
+    for (var i=0;i<obstacles.length;i++){
+      if (rectsOverlap(probe, obstacles[i])) return false;
+    }
+    return true;
+  }
+
+  xs.forEach(function(x){
+    ys.forEach(function(y){
+      if (!clearAt(x, y)) return;
+      var dx = x - rect.x;
+      var dy = y - rect.y;
+      var dist = Math.abs(dx) + Math.abs(dy);
+      if (!best || dist < best.dist || (dist === best.dist && Math.abs(dy) < best.absDy) || (dist === best.dist && Math.abs(dy) === best.absDy && Math.abs(dx) < best.absDx)){
+        best = {dx: dx, dy: dy, dist: dist, absDx: Math.abs(dx), absDy: Math.abs(dy)};
+      }
+    });
+  });
+
+  return best ? {dx: best.dx, dy: best.dy} : null;
+}
+
+function resolveProjectNoteOverlaps(){
+  if (!window.KyanbasuNotes || typeof window.KyanbasuNotes.makeSpaceForRects !== "function") return false;
+  if (!noteRects().length) return false;
+  return !!window.KyanbasuNotes.makeSpaceForRects(projectAndTaskRects());
+}
+
+function settleProjectsAgainstNotes(){
+  var noteSpace = noteRects();
+  try{
+    if (window.KyanbasuNotes && typeof window.KyanbasuNotes.noteSpaceRects === "function"){
+      noteSpace = window.KyanbasuNotes.noteSpaceRects();
+    }
+  }catch(_){}
+  if (!noteSpace.length) return false;
+  var changed = false;
+  var safety = 0;
+  while (safety < 30){
+    var moved = false;
+    var projs = [];
+    projectAreas.forEach(function(pa, name){ projs.push({name:name, pa:pa}); });
+    projs.sort(function(a,b){ return (a.pa.y - b.pa.y) || (a.pa.x - b.pa.x); });
+    for (var i = 0; i < projs.length; i++){
+      var item = projs[i];
+      var pa = item.pa;
+      var rect = {x:pa.x, y:pa.y, w:pa.w, h:pa.h};
+      var obstacles = projectObstacleRectsWithNotes(item.name);
+      var blocked = false;
+      for (var j = 0; j < obstacles.length; j++){
+        if (rectsOverlap(rect, obstacles[j])){ blocked = true; break; }
+      }
+      if (!blocked) continue;
+      var nudge = findNearestProjectMove(rect, obstacles);
+      if (!nudge) continue;
+      moveWholeProject(item.name, nudge.dx, nudge.dy);
+      moved = true;
+      changed = true;
+    }
+    if (!moved) break;
+    safety++;
+  }
+  if (changed){
+    resolveProjectOverlaps();
+    recomputeAreasAndTags();
+    drawLinks();
+  }
+  return changed;
+}
+
+function settleCanvasAgainstNotes(){
+  var changed = false;
+  changed = resolveProjectNoteOverlaps() || changed;
+  resolveProjectOverlaps();
+  changed = resolveProjectNoteOverlaps() || changed;
+  resolveProjectOverlaps();
+  changed = resolveProjectNoteOverlaps() || changed;
+  return changed;
+}
+
+/* ===== Relayout (no task overlap inside a tag) ===== */
+function relayoutTag(project, tag){
+  var ta = ensureTagArea(project, tag);
+  var nodes = nodesForTag(project, tag);
+  if (!nodes.length) return;
+
+  ta._cols = new Array(LAYOUT.COLS).fill(ta.y + LAYOUT.TAG_HEAD + LAYOUT.TAG_PAD);
+  var colX = [];
+  for (var c=0;c<LAYOUT.COLS;c++){
+    colX[c] = ta.x + LAYOUT.TAG_PAD + c*(LAYOUT.CELL_W + LAYOUT.COL_GAP);
+  }
+  var maxRight = ta.x + ta.w, maxBottom = ta.y + ta.h;
+
+  nodes.forEach(function(n){
+    var col = 0, minY = ta._cols[0];
+    for (var i=1;i<LAYOUT.COLS;i++){ if (ta._cols[i] < minY){ minY = ta._cols[i]; col = i; } }
+    var nx = colX[col];
+    var ny = minY;
+    n.style.left = nx+"px";
+    n.style.top  = ny+"px";
+    var h = n.offsetHeight;
+    ta._cols[col] = ny + h + LAYOUT.ROW_GAP;
+    maxRight = Math.max(maxRight, nx + LAYOUT.CELL_W + LAYOUT.TAG_PAD);
+    maxBottom = Math.max(maxBottom, ny + h + LAYOUT.TAG_PAD);
+  });
+
+  ta.w = Math.max(ta.w, maxRight - ta.x);
+  ta.h = Math.max(ta.h, maxBottom - ta.y);
+
+  updateProjectBoundsFromTags(project);
+  recomputeAreasAndTags();
+  resolveTagOverlaps(project);
+  resolveProjectOverlaps();
+}
+
+/* ===== Redraw areas with draggable labels ===== */
+function recomputeAreasAndTags(){
+  areasLayer.innerHTML=""; tagsLayer.innerHTML="";
+  if (chromeLayer) chromeLayer.innerHTML="";
+  // projects
+  projectAreas.forEach(function(pa, proj){
+    var pd = document.createElement('div');
+    pd.className = "projArea";
+    pd.style.left = (pa.x|0)+"px"; pd.style.top=(pa.y|0)+"px";
+    pd.style.width = (pa.w|0)+"px"; pd.style.height = (pa.h|0)+"px";
+    pd.setAttribute('data-proj', proj);
+    var pl = document.createElement('div');
+    pl.className="projAreaLabel"; if (proj==="(no project)") pl.classList.add('none');
+    pl.textContent = proj;
+    pl.setAttribute('data-count', String(nodesForProject(proj).length));
+    pl.setAttribute('data-proj-label', proj);
+    pl.style.left = ((pa.x + 14)|0)+"px";
+    pl.style.top = ((pa.y + 14)|0)+"px";
+    if (selectedProject === proj){
+      pd.classList.add('selectedProject');
+      pl.classList.add('selectedProjectLabel');
+    }
+    // Apply project palette
+    try {
+      var ppal = projectPalette(proj);
+      pd.style.background = ppal.bg;
+      pd.style.borderColor = ppal.border;
+      pl.style.background = ppal.labelBg;
+    } catch(_) {}
+
+    areasLayer.appendChild(pd);
+    if (chromeLayer) chromeLayer.appendChild(pl);
+    pa.el = pd;
+    pa.labelEl = pl;
+    pl.title = 'Drag project';
+    pl.addEventListener('mousedown', function(e){
+      if (removeMode && removeMode.checked){
+        e.preventDefault();
+        e.stopPropagation();
+        removeProjectFromCanvas(proj);
+        return;
+      }
+      startProjectDrag(e, pa);
+    });
+    pl.addEventListener('click', function(e){
+      if (removeMode && removeMode.checked) return;
+      if (Date.now() - lastProjectDragAt < 220) return;
+      e.preventDefault();
+      e.stopPropagation();
+      selectProject(proj);
+    });
+  });
+  // tags
+  tagAreas.forEach(function(ta){
+    if (!projectAreas.has(ta.project)) return;
+    var td = document.createElement('div');
+    td.className="tagArea";
+    td.style.left=(ta.x|0)+"px"; td.style.top=(ta.y|0)+"px";
+    td.style.width=(ta.w|0)+"px"; td.style.height=(ta.h|0)+"px";
+    td.setAttribute('data-proj', ta.project);
+    td.setAttribute('data-tag', ta.tag);
+    var tl = document.createElement('div');
+    tl.className="tagAreaLabel"; if (ta.tag==="(no tag)") tl.classList.add('none');
+    tl.textContent = ta.tag;
+    tl.setAttribute('data-tag-label', ta.tag);
+    tl.setAttribute('data-count', String(nodesForTag(ta.project, ta.tag).length));
+    tl.style.left = ((ta.x + 14)|0)+"px";
+    tl.style.top = ((ta.y + 14)|0)+"px";
+    // Apply per-tag palette
+    var pal = tagPalette(ta.tag);
+    td.style.background = pal.bg;
+    td.style.borderColor = pal.border;
+    tl.style.background = pal.labelBg;
+    tl.style.borderRadius = "9px";
+    tl.style.paddingRight = "56px"; // room for the count and + button
+
+    // Add a per-tag '+' button
+    var addBtn = document.createElement('button');
+    addBtn.addEventListener('mousedown', function(e){ e.stopPropagation(); e.preventDefault(); });
+        addBtn.className = 'tagAddBtn';
+    addBtn.textContent = '＋';
+    addBtn.title = 'Add task to tag “'+ta.tag+'”';
+    addBtn.style.position = 'absolute';
+    addBtn.style.right = '6px';
+    addBtn.style.top = '6px';
+    addBtn.style.width = '20px';
+    addBtn.style.height = '20px';
+    addBtn.style.border = '1px solid #2a3344';
+    addBtn.style.borderRadius = '50%';
+    addBtn.style.background = '#1b2230';
+    addBtn.style.color = 'var(--fg)';
+    addBtn.style.cursor = 'pointer';
+    addBtn.addEventListener('click', function(e){
+      e.stopPropagation();
+      var desc = prompt("New task description:", "");
+      if (!desc) return;
+      var uuid = "new-"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+      var t = { uuid:uuid, short:uuid.slice(0,8), desc:desc, project: ta.project, tags:[ta.tag], has_depends:false };
+      TASKS.push(t); TASK_BY_SHORT[t.short]=t;
+      renderList();
+      ensureTagArea(ta.project, ta.tag);
+      addToBuilder(t, null, null);
+      updateConsole();
+    });
+    tl.appendChild(addBtn);
+
+    tagsLayer.appendChild(td);
+    if (chromeLayer) chromeLayer.appendChild(tl);
+    ta.el = td;
+    ta.labelEl = tl;
+    tl.addEventListener('mousedown', function(e){ startTagDrag(e, ta); });
+  });
+
+  try{queueVirt&&queueVirt();}catch(e){} // Tw Patch hook
+}
+
+/* ===== Hit testing ===== */
+function areaAtPoint(x, y){
+  var within = null;
+  tagAreas.forEach(function(ta){
+    if (x>=ta.x && x<=ta.x+ta.w && y>=ta.y && y<=ta.y+ta.h){
+      within = {type:'tag', area:ta};
+    }
+  });
+  if (within) return within;
+  projectAreas.forEach(function(pa, proj){
+    if (x>=pa.x && x<=pa.x+pa.w && y>=pa.y && y<=pa.y+pa.h){
+      within = {type:'project', area:pa, project:proj};
+    }
+  });
+  return within;
+}
+function projectAtPoint(x, y){
+  var found = null;
+  projectAreas.forEach(function(pa, proj){
+    if (x>=pa.x && x<=pa.x+pa.w && y>=pa.y && y<=pa.y+pa.h){ found = proj; }
+  });
+  return found;
+}
+function clearProjectSelection(skipRender){
+  selectedProject = null;
+  document.querySelectorAll('.projArea.selectedProject').forEach(function(el){ el.classList.remove('selectedProject'); });
+  document.querySelectorAll('.projAreaLabel.selectedProjectLabel').forEach(function(el){ el.classList.remove('selectedProjectLabel'); });
+  if (!skipRender) queueInspectorRender(0);
+}
+function syncProjectSelectionUI(){
+  document.querySelectorAll('.projArea.selectedProject').forEach(function(el){ el.classList.remove('selectedProject'); });
+  document.querySelectorAll('.projAreaLabel.selectedProjectLabel').forEach(function(el){ el.classList.remove('selectedProjectLabel'); });
+  if (!selectedProject) return;
+  document.querySelectorAll('.projArea[data-proj]').forEach(function(el){
+    if (el.getAttribute('data-proj') === selectedProject) el.classList.add('selectedProject');
+  });
+  document.querySelectorAll('.projAreaLabel[data-proj-label]').forEach(function(el){
+    if (el.getAttribute('data-proj-label') === selectedProject) el.classList.add('selectedProjectLabel');
+  });
+}
+function selectProject(project){
+  clearSelection();
+  selectedProject = project || null;
+  syncProjectSelectionUI();
+  queueInspectorRender(0);
+}
+
+function queueInspectorRender(delay){
+  if (inspectorTimer) clearTimeout(inspectorTimer);
+  inspectorTimer = setTimeout(function(){
+    inspectorTimer = 0;
+    renderInspector();
+  }, Math.max(0, delay || 0));
+}
+window.queueInspectorRender = queueInspectorRender;
+function primarySelectedNode(){
+  var arr = Array.from(selected).filter(function(n){ return n && n.isConnected; });
+  return arr.length ? arr[0] : null;
+}
+function getCanvasScroller(){
+  return document.querySelector('#builderWrap .canvas') || document.querySelector('.canvas');
+}
+function centerNodeIntoView(node){
+  try{
+    var cv = getCanvasScroller();
+    if (!cv || !node) return;
+    var cvr = cv.getBoundingClientRect();
+    var er = node.getBoundingClientRect();
+    var dx = (er.left + er.width/2) - (cvr.left + cvr.width/2);
+    var dy = (er.top + er.height/2) - (cvr.top + cv.clientHeight/2);
+    cv.scrollTo({
+      left: Math.max(0, Math.min(cv.scrollWidth - cv.clientWidth, cv.scrollLeft + dx)),
+      top: Math.max(0, Math.min(cv.scrollHeight - cv.clientHeight, cv.scrollTop + dy)),
+      behavior: 'smooth'
+    });
+    try{ node.classList.add('pulse'); setTimeout(function(){ node.classList.remove('pulse'); }, 820); }catch(_){}
+  }catch(_){}
+}
+function centerProjectIntoView(project){
+  if (!project) return;
+  var el = null;
+  document.querySelectorAll('.projArea[data-proj]').forEach(function(node){
+    if (!el && node.getAttribute('data-proj') === project) el = node;
+  });
+  if (el) centerNodeIntoView(el);
+}
+function taskForNode(node){
+  if (!node) return null;
+  return TASK_BY_SHORT[node.getAttribute('data-short')] || null;
+}
+function tasksForProject(project){
+  return TASKS.filter(function(t){ return (t.project || '(no project)') === project; });
+}
+function canvasTasksForProject(project){
+  var seen = Object.create(null);
+  return Array.from(builderStage.querySelectorAll('.node')).filter(function(n){
+    return n.getAttribute('data-proj') === project;
+  }).map(taskForNode).filter(function(t){
+    if (!t || seen[t.short]) return false;
+    seen[t.short] = 1;
+    return true;
+  });
+}
+function uniqueStrings(arr){
+  var out = [], seen = Object.create(null);
+  (arr || []).forEach(function(v){
+    v = String(v || '');
+    if (!v || seen[v]) return;
+    seen[v] = 1;
+    out.push(v);
+  });
+  return out;
+}
+function isTaskActionable(task){
+  if (!task) return false;
+  var shortId = task.short || '';
+  var deps = uniqueStrings((PARENT_DEPS0 && PARENT_DEPS0[shortId]) || []);
+  var stagedDeps = uniqueStrings((window.stagedAdd || []).filter(function(e){ return e && e.from === shortId; }).map(function(e){ return e.to; }));
+  return deps.length === 0 && stagedDeps.length === 0;
+}
+function inspectorStateChips(task, node){
+  var chips = [];
+  if (!task || !node) return chips;
+  var shortId = task.short || '';
+  var deps = uniqueStrings((PARENT_DEPS0 && PARENT_DEPS0[shortId]) || []);
+  var stagedDeps = uniqueStrings((window.stagedAdd || []).filter(function(e){ return e && e.from === shortId; }).map(function(e){ return e.to; }));
+  if (String(task.uuid || '').indexOf('new-') === 0) chips.push({kind:'info', text:'New task'});
+  if (!deps.length && !stagedDeps.length) chips.push({kind:'success', text:'Actionable'});
+  else chips.push({kind:'warn', text:(deps.length + stagedDeps.length)+' dependencies'});
+  if (task.due) chips.push({kind:'info', text:'Due '+task.due});
+  if (node.classList.contains('stagedDone')) chips.push({kind:'success', text:'Marked done'});
+  if (node.classList.contains('stagedDel')) chips.push({kind:'danger', text:'Marked delete'});
+  return chips;
+}
+function inspectorChangeItems(task, node){
+  var items = [];
+  if (!task || !node) return items;
+  var isNew = String(task.uuid || '').indexOf('new-') === 0;
+  var currentTag = firstTag(task) || '(no tag)';
+  var currentProj = task.project || '(no project)';
+  var initialTag = INIT_MAIN_TAG[task.short] || '(no tag)';
+  var initialProj = INIT_PROJECT[task.short] || '(no project)';
+  var ex = ((window.EX_OPS || window.__EXISTING_OPS__ || {})[task.uuid] || (window.EX_OPS || window.__EXISTING_OPS__ || {})[task.short] || {});
+  var fold = ((window.FOLD || window.__FOLD_STATE__ || {})[task.uuid] || (window.FOLD || window.__FOLD_STATE__ || {})[task.short] || {});
+  if (isNew) items.push('Will be created on apply');
+  if (!isNew && currentProj !== initialProj) items.push('Project: '+initialProj+' -> '+currentProj);
+  if (!isNew && currentTag !== initialTag) items.push('Tag: '+initialTag+' -> '+currentTag);
+  if (Array.isArray(ex.mods)) ex.mods.forEach(function(mod){ items.push('Modify: '+mod); });
+  if (Array.isArray(fold.extra)) fold.extra.forEach(function(mod){ items.push('Modify: '+mod); });
+  if (fold.project && fold.project !== currentProj) items.push('Project: '+currentProj+' -> '+fold.project);
+  if (fold.due && fold.due !== task.due) items.push('Due: '+fold.due);
+  var stagedOut = uniqueStrings((window.stagedAdd || []).filter(function(e){ return e && e.from === task.short; }).map(function(e){ return e.to; }));
+  if (stagedOut.length) items.push('Adds dependencies: '+stagedOut.join(', '));
+  return items;
+}
+function inspectorCommandLines(task){
+  if (!task) return [];
+  var lines = [];
+  var text = (consoleText && consoleText.value) ? consoleText.value : buildCommands();
+  text.split(/\n/).forEach(function(line){
+    var l = String(line || '').trim();
+    if (!l) return;
+    if (l.indexOf(task.uuid) !== -1 || l.indexOf(task.short) !== -1){
+      lines.push(l);
+      return;
+    }
+    if (String(task.uuid || '').indexOf('new-') === 0 && /^task\s+(add|log)\b/i.test(l) && l.indexOf(task.desc) !== -1){
+      lines.push(l);
+    }
+  });
+  return uniqueStrings(lines);
+}
+function dependencyTaskSummary(shortId){
+  var sid = String(shortId || '').trim();
+  if (!sid) return null;
+  var task = (TASK_BY_SHORT && TASK_BY_SHORT[sid]) || null;
+  if (task){
+    return {
+      short: task.short || sid,
+      desc: task.desc || '(no description)',
+      project: task.project || '(no project)',
+      due: task.due || ''
+    };
+  }
+  return {
+    short: sid,
+    desc: 'Task details unavailable in this snapshot.',
+    project: '',
+    due: ''
+  };
+}
+function renderDependencyItems(ids, emptyText){
+  var items = uniqueStrings(ids || []).map(dependencyTaskSummary).filter(Boolean);
+  if (!items.length){
+    return '<div class="inspectorEmpty"><div>'+escapeHtml(emptyText || 'No related tasks.')+'</div></div>';
+  }
+  return '<div class="inspectorList">' + items.map(function(item){
+    var meta = [];
+    if (item.project) meta.push(item.project);
+    if (item.due) meta.push('Due ' + item.due);
+    return '<div class="inspectorListItem"><strong>'+escapeHtml(item.short)+'</strong> '+
+      escapeHtml(item.desc) +
+      (meta.length ? '<div class="inspectorItemMeta">'+escapeHtml(meta.join(' • '))+'</div>' : '') +
+      '</div>';
+  }).join('') + '</div>';
+}
+function projectCommandLines(project){
+  var tasks = tasksForProject(project);
+  var ids = Object.create(null);
+  var descs = [];
+  tasks.forEach(function(t){
+    if (!t) return;
+    if (t.uuid) ids[t.uuid] = 1;
+    if (t.short) ids[t.short] = 1;
+    if (String(t.uuid || '').indexOf('new-') === 0 && t.desc) descs.push(t.desc);
+  });
+  var lines = [];
+  var text = (consoleText && consoleText.value) ? consoleText.value : buildCommands();
+  text.split(/\n/).forEach(function(line){
+    var l = String(line || '').trim();
+    if (!l) return;
+    var matched = false;
+    Object.keys(ids).forEach(function(id){
+      if (!matched && l.indexOf(id) !== -1) matched = true;
+    });
+    if (!matched){
+      for (var i=0; i<descs.length; i++){
+        if (l.indexOf(descs[i]) !== -1){ matched = true; break; }
+      }
+    }
+    if (matched) lines.push(l);
+  });
+  return uniqueStrings(lines);
+}
+function addMissingProjectTasks(project){
+  var tasks = tasksForProject(project);
+  if (!tasks.length) return 0;
+  var existing = Object.create(null);
+  Array.from(builderStage.querySelectorAll('.node')).forEach(function(n){
+    var shortId = n.getAttribute('data-short');
+    if (shortId) existing[shortId] = 1;
+  });
+  var byTag = Object.create(null);
+  tasks.forEach(function(t){
+    if (!t || existing[t.short]) return;
+    var tag = firstTag(t);
+    var key = keyPT(project, tag);
+    (byTag[key] = byTag[key] || []).push(t);
+  });
+  var added = 0;
+  Object.keys(byTag).forEach(function(key){
+    var parts = key.split('||');
+    var p = parts[0], tag = parts[1];
+    ensureTagArea(p, tag);
+    byTag[key].forEach(function(t){
+      addNodeForTask(t, null, null, {deferLayout:true});
+      added++;
+    });
+    relayoutTag(p, tag);
+    resolveTagOverlaps(p);
+  });
+  if (added){
+    resolveProjectOverlaps();
+    drawLinks();
+    updateConsole();
+    queueInspectorRender(0);
+  }
+  return added;
+}
+function noteInspectorSnapshot(){
+  try{
+    if (window.KyanbasuNotes && typeof window.KyanbasuNotes.selectionSnapshot === 'function'){
+      return window.KyanbasuNotes.selectionSnapshot() || {kind:'none', count:0};
+    }
+  }catch(_){}
+  return {kind:'none', count:0};
+}
+function noteInspectorText(text, fallback){
+  text = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!text) return fallback || 'New note';
+  return text.length > 96 ? text.slice(0, 93) + '...' : text;
+}
+function noteInspectorAge(timestamp, emptyText){
+  timestamp = Number(timestamp) || 0;
+  if (!timestamp) return emptyText || 'Never';
+  var elapsed = Math.max(0, Date.now() - timestamp);
+  var days = Math.floor(elapsed / 86400000);
+  if (days < 1) return 'Today';
+  if (days === 1) return 'Yesterday';
+  return days + ' days ago';
+}
+function noteInspectorTaskRows(refs){
+  refs = Array.isArray(refs) ? refs : [];
+  if (!refs.length) return '<div class="inspectorEmpty"><div>No linked tasks.</div></div>';
+  return '<div class="inspectorList">' + refs.map(function(ref){
+    var meta = [];
+    if (ref.short) meta.push(ref.short);
+    if (ref.project) meta.push(ref.project);
+    return '<div class="inspectorListItem">' +
+      '<strong>'+escapeHtml(ref.desc || ref.uuid || ref.short || 'Linked task')+'</strong>' +
+      (meta.length ? '<div class="inspectorItemMeta">'+escapeHtml(meta.join(' • '))+'</div>' : '') +
+      '</div>';
+  }).join('') + '</div>';
+}
+function noteInspectorRows(notes){
+  notes = Array.isArray(notes) ? notes : [];
+  if (!notes.length) return '<div class="inspectorEmpty"><div>No notes selected.</div></div>';
+  return '<div class="inspectorList">' + notes.slice(0, 8).map(function(note){
+    var meta = [];
+    if (note.bucket) meta.push(note.bucket);
+    if (note.kind && note.kind !== 'note') meta.push(note.kindLabel || note.kind);
+    if (note.status && note.status !== 'open') meta.push(note.statusLabel || note.status);
+    if (note.childCount) meta.push(note.childCount + ' child' + (note.childCount === 1 ? '' : 'ren'));
+    if (note.linkCount) meta.push(note.linkCount + ' link' + (note.linkCount === 1 ? '' : 's'));
+    if (note.taskRefs && note.taskRefs.length) meta.push(note.taskRefs.length + ' task' + (note.taskRefs.length === 1 ? '' : 's'));
+    return '<div class="inspectorListItem"><strong>'+escapeHtml(note.label || 'Note')+'</strong> '+
+      escapeHtml(noteInspectorText(note.content, 'New note')) +
+      (meta.length ? '<div class="inspectorItemMeta">'+escapeHtml(meta.join(' • '))+'</div>' : '') +
+      '</div>';
+  }).join('') + (notes.length > 8 ? '<div class="inspectorItemMeta">'+(notes.length - 8)+' more selected</div>' : '') + '</div>';
+}
+function wireNoteInspectorEditor(note){
+  if (!note || !note.id) return;
+  var editor = document.getElementById('inspectorNoteContent');
+  if (!editor) return;
+  editor.addEventListener('input', function(){
+    try{
+      if (window.KyanbasuNotes && typeof window.KyanbasuNotes.setContent === 'function'){
+        window.KyanbasuNotes.setContent(note.id, editor.value);
+      }
+    }catch(_){}
+  });
+}
+function noteInspectorBucketOptions(notes, allBuckets){
+  notes = Array.isArray(notes) ? notes : (notes ? [notes] : []);
+  return uniqueStrings((allBuckets || []).concat(notes.map(function(note){
+    return note && note.bucket || '(no bucket)';
+  })));
+}
+function noteInspectorBucketInput(note, allBuckets){
+  var buckets = noteInspectorBucketOptions(note, allBuckets);
+  var current = note && note.bucket || '(no bucket)';
+  return '<select id="inspectorNoteBucketSelect" class="inspectorInput">' +
+      buckets.map(function(bucket){ return '<option value="'+escapeHtml(bucket)+'"'+(bucket === current ? ' selected' : '')+'>'+escapeHtml(bucket)+'</option>'; }).join('') +
+      '<option value="__new__">New bucket...</option>' +
+    '</select>' +
+    '<input id="inspectorNoteBucket" class="inspectorInput" type="text" value="'+escapeHtml(current)+'" placeholder="New bucket name" hidden>';
+}
+function noteInspectorBulkBucketInput(notes, allBuckets){
+  notes = Array.isArray(notes) ? notes : [];
+  var selectedBuckets = uniqueStrings(notes.map(function(note){ return note && note.bucket || '(no bucket)'; }));
+  var value = selectedBuckets.length === 1 ? selectedBuckets[0] : '';
+  var buckets = noteInspectorBucketOptions(notes, allBuckets);
+  return '<select id="inspectorNoteBucketSelect" class="inspectorInput">' +
+      (value ? '' : '<option value="" selected disabled>Mixed buckets</option>') +
+      buckets.map(function(bucket){ return '<option value="'+escapeHtml(bucket)+'"'+(bucket === value ? ' selected' : '')+'>'+escapeHtml(bucket)+'</option>'; }).join('') +
+      '<option value="__new__">New bucket...</option>' +
+    '</select>' +
+    '<input id="inspectorNoteBucket" class="inspectorInput" type="text" value="" placeholder="New bucket name" hidden>';
+}
+function wireNoteInspectorBucket(notes){
+  notes = Array.isArray(notes) ? notes : (notes ? [notes] : []);
+  var ids = notes.map(function(note){ return note && note.id; }).filter(Boolean);
+  if (!ids.length) return;
+  var select = document.getElementById('inspectorNoteBucketSelect');
+  var input = document.getElementById('inspectorNoteBucket');
+  if (!select || !input) return;
+  function setInputMode(enabled){
+    input.hidden = !enabled;
+    if (enabled) setTimeout(function(){ try{ input.focus(); input.select(); }catch(_){} }, 0);
+  }
+  function applyBucket(value){
+    if (!String(value || '').trim()) return;
+    try{
+      if (window.KyanbasuNotes && typeof window.KyanbasuNotes.setBucket === 'function'){
+        ids.forEach(function(id){ window.KyanbasuNotes.setBucket(id, value); });
+        queueInspectorRender(0);
+      }
+    }catch(_){}
+  }
+  select.addEventListener('change', function(){
+    if (select.value === '__new__'){
+      input.value = '';
+      setInputMode(true);
+      return;
+    }
+    setInputMode(false);
+    applyBucket(select.value);
+  });
+  input.addEventListener('change', function(){ applyBucket(input.value); });
+  input.addEventListener('keydown', function(ev){
+    if (ev.key === 'Enter'){
+      ev.preventDefault();
+      input.blur();
+      applyBucket(input.value);
+    }
+  });
+}
+function noteInspectorSemanticInput(id, notes, options, field, mixedLabel){
+  notes = Array.isArray(notes) ? notes : (notes ? [notes] : []);
+  options = Array.isArray(options) ? options : [];
+  var values = uniqueStrings(notes.map(function(note){ return note && note[field]; }).filter(Boolean));
+  var current = values.length === 1 ? values[0] : '';
+  return '<select id="'+id+'" class="inspectorInput">' +
+    (current ? '' : '<option value="" selected disabled>'+escapeHtml(mixedLabel || 'Mixed')+'</option>') +
+    options.map(function(option){
+      return '<option value="'+escapeHtml(option.value || '')+'"'+(option.value === current ? ' selected' : '')+'>'+escapeHtml(option.label || option.value || '')+'</option>';
+    }).join('') +
+    '</select>';
+}
+function wireNoteInspectorSemantics(notes){
+  notes = Array.isArray(notes) ? notes : (notes ? [notes] : []);
+  var ids = notes.map(function(note){ return note && note.id; }).filter(Boolean);
+  var api = window.KyanbasuNotes || null;
+  if (!ids.length || !api) return;
+  var kindSelect = document.getElementById('inspectorNoteKind');
+  var statusSelect = document.getElementById('inspectorNoteStatus');
+  if (kindSelect && typeof api.setNoteKind === 'function') kindSelect.addEventListener('change', function(){
+    ids.forEach(function(id){ api.setNoteKind(id, kindSelect.value); });
+    queueInspectorRender(0);
+  });
+  if (statusSelect && typeof api.setNoteStatus === 'function') statusSelect.addEventListener('change', function(){
+    ids.forEach(function(id){ api.setNoteStatus(id, statusSelect.value); });
+    queueInspectorRender(0);
+  });
+}
+function noteInspectorColorSwatches(notes, palette){
+  notes = Array.isArray(notes) ? notes : [];
+  palette = Array.isArray(palette) && palette.length ? palette : [];
+  var explicitColors = uniqueStrings(notes.map(function(note){ return note && note.rawColor; }).filter(Boolean));
+  var colors = uniqueStrings(notes.map(function(note){ return note && note.color; }).filter(Boolean));
+  return '<div class="inspectorSwatches">' +
+    '<button type="button" class="inspectorSwatch inspectorSwatchReset" data-note-color="bucket" aria-label="Use bucket color" aria-pressed="'+(!explicitColors.length ? 'true' : 'false')+'">Bucket</button>' +
+    palette.map(function(color){
+    var active = colors.length === 1 && colors[0] === color;
+    return '<button type="button" class="inspectorSwatch" data-note-color="'+escapeHtml(color)+'" aria-label="Set note color '+escapeHtml(color)+'" aria-pressed="'+(active ? 'true' : 'false')+'" style="background:'+escapeHtml(color)+'"></button>';
+  }).join('') + '</div>';
+}
+function wireNoteInspectorColors(notes){
+  notes = Array.isArray(notes) ? notes : (notes ? [notes] : []);
+  var ids = notes.map(function(note){ return note && note.id; }).filter(Boolean);
+  if (!ids.length) return;
+  var api = window.KyanbasuNotes || null;
+  if (!api || typeof api.setNoteColor !== 'function') return;
+  Array.from(document.querySelectorAll('[data-note-color]')).forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var color = btn.getAttribute('data-note-color') || '';
+      ids.forEach(function(id){ api.setNoteColor(id, color); });
+      queueInspectorRender(0);
+    });
+  });
+}
+function renderNoteInspector(snapshot){
+  var api = window.KyanbasuNotes || null;
+  var selectedNotes = (snapshot && snapshot.selectedNotes) || [];
+  var primaryId = snapshot && snapshot.primary;
+  var primary = selectedNotes.filter(function(n){ return n.id === primaryId; })[0] || selectedNotes[0] || null;
+  if (snapshot && snapshot.kind === 'link' && snapshot.link){
+    var link = snapshot.link;
+    inspectorLocate.disabled = true;
+    inspectorDone.disabled = true;
+    inspectorDelete.disabled = false;
+    inspectorModify.disabled = true;
+    inspectorLocate.textContent = 'Locate';
+    inspectorDone.textContent = 'Relink';
+    inspectorDelete.textContent = 'Unlink';
+    inspectorModify.textContent = 'Details';
+    inspectorTitle.textContent = 'Note link selected';
+    inspectorSub.textContent = (link.fromLabel || 'Note') + ' -> ' + (link.toLabel || 'Note');
+    inspectorBody.innerHTML =
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorChips">' +
+          '<span class="inspectorChip info">'+escapeHtml(link.typeLabel || link.type || 'Related to')+'</span>' +
+          '<span class="inspectorChip">Directional link</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorLabel">Relationship</div>' +
+        '<select id="inspectorNoteLinkType" class="inspectorInput">' +
+          (link.relationOptions || []).map(function(option){
+            return '<option value="'+escapeHtml(option.value || '')+'"'+(option.value === link.type ? ' selected' : '')+'>'+escapeHtml(option.label || option.value || '')+'</option>';
+          }).join('') +
+        '</select>' +
+      '</div>' +
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorLabel">Link annotation</div>' +
+        '<select id="inspectorNoteLinkAnnotationKind" class="inspectorInput">' +
+          (link.annotationKinds || []).map(function(option){
+            var activeKind = link.annotation && link.annotation.kind || 'note';
+            return '<option value="'+escapeHtml(option.value || '')+'"'+(option.value === activeKind ? ' selected' : '')+'>'+escapeHtml(option.label || option.value || '')+'</option>';
+          }).join('') +
+        '</select>' +
+        '<textarea id="inspectorNoteLinkAnnotationText" class="inspectorField" spellcheck="true" placeholder="Add context, a question, or a condition">'+escapeHtml(link.annotation && link.annotation.text || '')+'</textarea>' +
+        '<button id="inspectorNoteLinkAnnotationClear" class="inspectorInput" type="button"'+(link.annotation ? '' : ' disabled')+'>Clear annotation</button>' +
+      '</div>' +
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorLabel">Endpoints</div>' +
+        '<div class="inspectorList">' +
+          '<div class="inspectorListItem"><strong>From '+escapeHtml(link.fromLabel || '')+'</strong><div class="inspectorItemMeta">'+escapeHtml(noteInspectorText(link.fromText, 'New note'))+'</div></div>' +
+          '<div class="inspectorListItem"><strong>To '+escapeHtml(link.toLabel || '')+'</strong><div class="inspectorItemMeta">'+escapeHtml(noteInspectorText(link.toText, 'New note'))+'</div></div>' +
+        '</div>' +
+      '</div>';
+    var linkTypeSelect = document.getElementById('inspectorNoteLinkType');
+    if (linkTypeSelect && api && typeof api.setLinkType === 'function') linkTypeSelect.addEventListener('change', function(){
+      api.setLinkType(link.key, linkTypeSelect.value);
+      queueInspectorRender(0);
+    });
+    var annotationKind = document.getElementById('inspectorNoteLinkAnnotationKind');
+    var annotationText = document.getElementById('inspectorNoteLinkAnnotationText');
+    var annotationClear = document.getElementById('inspectorNoteLinkAnnotationClear');
+    function saveLinkAnnotation(){
+      if (!api || typeof api.setLinkAnnotation !== 'function') return;
+      api.setLinkAnnotation(link.key, {kind:annotationKind && annotationKind.value, text:annotationText && annotationText.value});
+      queueInspectorRender(0);
+    }
+    if (annotationKind) annotationKind.addEventListener('change', function(){ if (annotationText && annotationText.value.trim()) saveLinkAnnotation(); });
+    if (annotationText) annotationText.addEventListener('change', saveLinkAnnotation);
+    if (annotationClear) annotationClear.addEventListener('click', function(){
+      if (api && typeof api.setLinkAnnotation === 'function') api.setLinkAnnotation(link.key, null);
+      queueInspectorRender(0);
+    });
+    return true;
+  }
+  if (!snapshot || snapshot.kind !== 'note' || !selectedNotes.length) return false;
+  var buckets = uniqueStrings(selectedNotes.map(function(n){ return n.bucket || '(no bucket)'; }));
+  var kinds = uniqueStrings(selectedNotes.map(function(n){ return n.kindLabel || n.kind || 'Plain'; }));
+  var statuses = uniqueStrings(selectedNotes.map(function(n){ return n.statusLabel || n.status || 'Open'; }));
+  var links = selectedNotes.reduce(function(total, n){ return total + (n.linkCount || 0); }, 0);
+  var tasks = selectedNotes.reduce(function(total, n){ return total + ((n.taskRefs || []).length); }, 0);
+  var children = selectedNotes.reduce(function(total, n){ return total + (n.childCount || 0); }, 0);
+  inspectorLocate.disabled = !primary;
+  inspectorDone.disabled = !primary;
+  inspectorDelete.disabled = false;
+  inspectorModify.disabled = !(api && (selectedNotes.length === 1 || selectedNotes.length === 2));
+  inspectorLocate.textContent = 'Locate';
+  inspectorDone.textContent = selectedNotes.length === 1 ? 'Child' : 'Tasks';
+  inspectorDelete.textContent = 'Delete';
+  inspectorModify.textContent = selectedNotes.length === 1 ? 'Sibling' : (selectedNotes.length === 2 ? 'Link' : 'Details');
+  inspectorTitle.textContent = selectedNotes.length === 1 ? ((primary.label || 'Note') + ' selected') : (selectedNotes.length + ' notes selected');
+  inspectorSub.textContent = selectedNotes.length === 1 ? noteInspectorText(primary.content, 'New note') : 'Group note selection';
+  inspectorBody.innerHTML =
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorMetrics">' +
+        '<div class="metricCard"><div class="metricValue">'+selectedNotes.length+'</div><div class="metricLabel">Selected</div></div>' +
+        '<div class="metricCard"><div class="metricValue">'+buckets.length+'</div><div class="metricLabel">Buckets</div></div>' +
+        '<div class="metricCard"><div class="metricValue">'+links+'</div><div class="metricLabel">Links</div></div>' +
+        '<div class="metricCard"><div class="metricValue">'+tasks+'</div><div class="metricLabel">Tasks</div></div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorChips">' +
+        buckets.map(function(bucket){ return '<span class="inspectorChip info">'+escapeHtml(bucket)+'</span>'; }).join('') +
+        kinds.map(function(kind){ return '<span class="inspectorChip">'+escapeHtml(kind)+'</span>'; }).join('') +
+        statuses.map(function(status){ return '<span class="inspectorChip '+(status === 'Resolved' ? 'success' : (status === 'Parked' ? 'warn' : ''))+'">'+escapeHtml(status)+'</span>'; }).join('') +
+        (children ? '<span class="inspectorChip">'+children+' child'+(children === 1 ? '' : 'ren')+'</span>' : '') +
+        (primary && primary.collapsed ? '<span class="inspectorChip warn">Collapsed</span>' : '') +
+      '</div>' +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">'+(selectedNotes.length === 1 ? 'Note' : 'Selected notes')+'</div>' +
+      noteInspectorRows(selectedNotes) +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">Bucket</div>' +
+      (selectedNotes.length === 1
+        ? noteInspectorBucketInput(primary, snapshot.buckets || [])
+        : noteInspectorBulkBucketInput(selectedNotes, snapshot.buckets || [])) +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">Thinking role</div>' +
+      noteInspectorSemanticInput('inspectorNoteKind', selectedNotes, snapshot.kindOptions || [], 'kind', 'Mixed roles') +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">Status</div>' +
+      noteInspectorSemanticInput('inspectorNoteStatus', selectedNotes, snapshot.statusOptions || [], 'status', 'Mixed statuses') +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">'+(selectedNotes.length === 1 ? 'Color' : 'Set note color')+'</div>' +
+      noteInspectorColorSwatches(selectedNotes, snapshot.palette || []) +
+    '</div>' +
+    (selectedNotes.length === 1
+      ? '<div class="inspectorGroup">' +
+          '<div class="inspectorLabel">Edit note</div>' +
+          '<textarea id="inspectorNoteContent" class="inspectorField" spellcheck="true">'+escapeHtml(primary.content || '')+'</textarea>' +
+        '</div>'
+      : '') +
+    (selectedNotes.length === 1
+      ? '<div class="inspectorGroup">' +
+          '<div class="inspectorLabel">Review history</div>' +
+          '<dl class="inspectorKV"><dt>Created</dt><dd>'+escapeHtml(noteInspectorAge(primary.createdAt, 'Unknown'))+'</dd><dt>Updated</dt><dd>'+escapeHtml(noteInspectorAge(primary.updatedAt, 'Unknown'))+'</dd><dt>Reviewed</dt><dd>'+escapeHtml(noteInspectorAge(primary.reviewedAt, 'Never reviewed'))+'</dd></dl>' +
+          '<button id="inspectorNoteReviewed" class="inspectorInput" type="button">Mark reviewed</button>' +
+        '</div>'
+      : '') +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">Linked tasks</div>' +
+      noteInspectorTaskRows(primary ? primary.taskRefs : []) +
+    '</div>';
+  wireNoteInspectorBucket(selectedNotes);
+  wireNoteInspectorSemantics(selectedNotes);
+  wireNoteInspectorColors(selectedNotes);
+  if (selectedNotes.length === 1){
+    wireNoteInspectorEditor(primary);
+    var reviewedButton = document.getElementById('inspectorNoteReviewed');
+    if (reviewedButton && api && typeof api.markReviewed === 'function') reviewedButton.addEventListener('click', function(){
+      api.markReviewed(primary.id);
+      queueInspectorRender(0);
+    });
+  }
+  return true;
+}
+function renderInspector(){
+  if (!inspectorPanel || !inspectorBody || !inspectorTitle || !inspectorSub) return;
+  var noteSnapshot = noteInspectorSnapshot();
+  if (noteSnapshot && noteSnapshot.kind && noteSnapshot.kind !== 'none' && renderNoteInspector(noteSnapshot)) return;
+  if (selectedProject){
+    var project = selectedProject;
+    var allTasks = tasksForProject(project);
+    var projectCanvasTasks = canvasTasksForProject(project);
+    var tagsAll = uniqueStrings(allTasks.map(function(t){ return firstTag(t); }));
+    var tagsCanvas = uniqueStrings(projectCanvasTasks.map(function(t){ return firstTag(t); }));
+    var dueCount = allTasks.filter(function(t){ return !!t.due; }).length;
+    var actionable = allTasks.filter(isTaskActionable).length;
+    var hiddenCount = Math.max(0, allTasks.length - projectCanvasTasks.length);
+    var commandsForProject = projectCommandLines(project);
+    inspectorLocate.disabled = false;
+    inspectorDone.disabled = false;
+    inspectorDelete.disabled = false;
+    inspectorModify.disabled = true;
+    inspectorLocate.textContent = 'Locate';
+    inspectorDone.textContent = 'Add missing';
+    inspectorDelete.textContent = 'Remove';
+    inspectorModify.textContent = 'Details';
+    inspectorTitle.textContent = project;
+    inspectorSub.textContent = 'Canvas project summary';
+    inspectorBody.innerHTML =
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorMetrics">' +
+          '<div class="metricCard"><div class="metricValue">'+projectCanvasTasks.length+'</div><div class="metricLabel">On canvas</div></div>' +
+          '<div class="metricCard"><div class="metricValue">'+hiddenCount+'</div><div class="metricLabel">Still in drawer</div></div>' +
+          '<div class="metricCard"><div class="metricValue">'+tagsAll.length+'</div><div class="metricLabel">Tags</div></div>' +
+          '<div class="metricCard"><div class="metricValue">'+dueCount+'</div><div class="metricLabel">With due</div></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorChips">' +
+          '<span class="inspectorChip info">'+allTasks.length+' tasks total</span>' +
+          '<span class="inspectorChip '+(actionable ? 'success' : 'warn')+'">'+actionable+' actionable</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorLabel">Tags On Canvas</div>' +
+        (tagsCanvas.length
+          ? '<div class="inspectorChips">'+tagsCanvas.map(function(t){ return '<span class="inspectorChip">'+escapeHtml(t)+'</span>'; }).join('')+'</div>'
+          : '<div class="inspectorEmpty"><div>No tasks from this project are currently on the canvas.</div></div>') +
+      '</div>' +
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorLabel">Tasks On Canvas</div>' +
+        (projectCanvasTasks.length
+          ? '<div class="inspectorList">'+projectCanvasTasks.slice(0, 6).map(function(t){ return '<div class="inspectorListItem"><strong>'+escapeHtml(t.short)+'</strong> '+escapeHtml(t.desc)+'</div>'; }).join('')+'</div>'
+          : '<div class="inspectorEmpty"><div>Use "Add missing" to bring this project back onto the canvas.</div></div>') +
+      '</div>' +
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorLabel">Pending commands</div>' +
+        (commandsForProject.length
+          ? '<div class="inspectorCode">'+commandsForProject.map(function(line){ return '<pre class="inspectorCodeLine">'+escapeHtml(line)+'</pre>'; }).join('')+'</div>'
+          : '<div class="inspectorEmpty"><div>No staged commands currently affect this project.</div></div>') +
+      '</div>';
+    return;
+  }
+  var nodes = Array.from(selected).filter(function(n){ return n && n.isConnected; });
+  var single = nodes.length === 1 ? nodes[0] : null;
+  var hasSingle = !!single;
+  inspectorLocate.disabled = !nodes.length;
+  inspectorDone.disabled = !hasSingle;
+  inspectorDelete.disabled = !hasSingle;
+  inspectorModify.disabled = !hasSingle;
+  inspectorLocate.textContent = 'Locate';
+  inspectorDone.textContent = 'Done';
+  inspectorDelete.textContent = 'Delete';
+  inspectorModify.textContent = 'Modify';
+  if (!nodes.length){
+    inspectorTitle.textContent = 'Nothing selected';
+    inspectorSub.textContent = 'Select a task card to inspect its placement, dependencies, and staged commands.';
+    inspectorBody.innerHTML =
+      '<div class="inspectorEmpty">' +
+        '<div>Click a task to inspect it.</div>' +
+        '<div>When a task is selected, this panel shows placement, dependency counts, and the exact commands currently staged for it.</div>' +
+      '</div>';
+    return;
+  }
+  if (nodes.length > 1){
+    var tasks = nodes.map(taskForNode).filter(Boolean);
+    var projs = uniqueStrings(tasks.map(function(t){ return t.project || '(no project)'; }));
+    var tags = uniqueStrings(tasks.map(function(t){ return firstTag(t); }));
+    inspectorTitle.textContent = nodes.length + ' tasks selected';
+    inspectorSub.textContent = 'Group selection is active. Drag to move them together, or select a single task for detailed inspection.';
+    inspectorBody.innerHTML =
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorMetrics">' +
+          '<div class="metricCard"><div class="metricValue">'+nodes.length+'</div><div class="metricLabel">Selected</div></div>' +
+          '<div class="metricCard"><div class="metricValue">'+projs.length+'</div><div class="metricLabel">Projects</div></div>' +
+          '<div class="metricCard"><div class="metricValue">'+tags.length+'</div><div class="metricLabel">Tags</div></div>' +
+          '<div class="metricCard"><div class="metricValue">'+tasks.filter(function(t){ return t && t.due; }).length+'</div><div class="metricLabel">With due</div></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorLabel">Projects</div>' +
+        '<div class="inspectorChips">'+projs.map(function(p){ return '<span class="inspectorChip">'+escapeHtml(p)+'</span>'; }).join('')+'</div>' +
+      '</div>' +
+      '<div class="inspectorGroup">' +
+        '<div class="inspectorLabel">Tags</div>' +
+        '<div class="inspectorChips">'+tags.map(function(t){ return '<span class="inspectorChip">'+escapeHtml(t)+'</span>'; }).join('')+'</div>' +
+      '</div>';
+    return;
+  }
+  var task = taskForNode(single);
+  if (!task){
+    inspectorTitle.textContent = 'Selection unavailable';
+    inspectorSub.textContent = 'The selected card is no longer attached to a task.';
+    inspectorBody.innerHTML = '<div class="inspectorEmpty"><div>Select another task card.</div></div>';
+    return;
+  }
+  var shortId = task.short || '';
+  var depends = uniqueStrings((PARENT_DEPS0 && PARENT_DEPS0[shortId]) || []);
+  var blocks = uniqueStrings((CHILD_TO_PARENTS && CHILD_TO_PARENTS[shortId]) || []);
+  var stagedOut = uniqueStrings((window.stagedAdd || []).filter(function(e){ return e && e.from === shortId; }).map(function(e){ return e.to; }));
+  var stagedIn = uniqueStrings((window.stagedAdd || []).filter(function(e){ return e && e.to === shortId; }).map(function(e){ return e.from; }));
+  var chips = inspectorStateChips(task, single);
+  var changes = inspectorChangeItems(task, single);
+  var commands = inspectorCommandLines(task);
+  inspectorTitle.textContent = (task.short || 'Task') + ' selected';
+  inspectorSub.textContent = task.desc || '(no description)';
+  inspectorBody.innerHTML =
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorChips">' +
+        chips.map(function(chip){ return '<span class="inspectorChip '+chip.kind+'">'+escapeHtml(chip.text)+'</span>'; }).join('') +
+      '</div>' +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">Placement</div>' +
+      '<dl class="inspectorKV">' +
+        '<dt>Project</dt><dd>'+escapeHtml(task.project || '(no project)')+'</dd>' +
+        '<dt>Tag</dt><dd>'+escapeHtml(firstTag(task) || '(no tag)')+'</dd>' +
+        '<dt>Due</dt><dd>'+escapeHtml(task.due || 'No due date')+'</dd>' +
+        '<dt>UUID</dt><dd>'+escapeHtml(task.uuid || '')+'</dd>' +
+      '</dl>' +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">Dependencies</div>' +
+      '<div class="inspectorMetrics">' +
+        '<div class="metricCard"><div class="metricValue">'+depends.length+'</div><div class="metricLabel">Depends on</div></div>' +
+        '<div class="metricCard"><div class="metricValue">'+blocks.length+'</div><div class="metricLabel">Blocks</div></div>' +
+        '<div class="metricCard"><div class="metricValue">'+stagedOut.length+'</div><div class="metricLabel">Staged out</div></div>' +
+        '<div class="metricCard"><div class="metricValue">'+stagedIn.length+'</div><div class="metricLabel">Staged in</div></div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">Depends on</div>' +
+      renderDependencyItems(depends, 'This task has no current dependencies.') +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">Blocks</div>' +
+      renderDependencyItems(blocks, 'No tasks currently depend on this task.') +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">Staged dependency changes</div>' +
+      (stagedOut.length || stagedIn.length
+        ? '<div class="inspectorList">' +
+            (stagedOut.length ? '<div class="inspectorListItem"><strong>Adds depends on</strong><div class="inspectorItemMeta">'+escapeHtml(stagedOut.join(', '))+'</div></div>' : '') +
+            (stagedIn.length ? '<div class="inspectorListItem"><strong>Will block</strong><div class="inspectorItemMeta">'+escapeHtml(stagedIn.join(', '))+'</div></div>' : '') +
+          '</div>'
+        : '<div class="inspectorEmpty"><div>No dependency changes are staged for this task.</div></div>') +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">Pending changes</div>' +
+      (changes.length
+        ? '<div class="inspectorList">'+changes.map(function(item){ return '<div class="inspectorListItem">'+escapeHtml(item)+'</div>'; }).join('')+'</div>'
+        : '<div class="inspectorEmpty"><div>No task-specific changes staged yet.</div></div>') +
+    '</div>' +
+    '<div class="inspectorGroup">' +
+      '<div class="inspectorLabel">Pending commands</div>' +
+      (commands.length
+        ? '<div class="inspectorCode">'+commands.map(function(line){ return '<pre class="inspectorCodeLine">'+escapeHtml(line)+'</pre>'; }).join('')+'</div>'
+        : '<div class="inspectorEmpty"><div>No commands generated for this task yet.</div></div>') +
+    '</div>';
+}
+function triggerInspectorAction(kind){
+  var noteSnapshot = noteInspectorSnapshot();
+  if (noteSnapshot && noteSnapshot.kind && noteSnapshot.kind !== 'none'){
+    var api = window.KyanbasuNotes || null;
+    if (!api) return;
+    if (noteSnapshot.kind === 'link'){
+      if (kind === 'delete' && typeof api.deleteSelectedLink === 'function') api.deleteSelectedLink();
+      queueInspectorRender(0);
+      return;
+    }
+    var primary = noteSnapshot.primary;
+    if (kind === 'locate' && primary && typeof api.focusSearchResult === 'function'){ api.focusSearchResult(primary); return; }
+    if (kind === 'done'){
+      if ((noteSnapshot.count || 0) === 1 && primary && typeof api.createChildNote === 'function') api.createChildNote(primary);
+      else if (typeof api.stageSelectedNotesAsTasks === 'function') api.stageSelectedNotesAsTasks();
+      queueInspectorRender(40);
+      return;
+    }
+    if (kind === 'modify'){
+      if ((noteSnapshot.count || 0) === 1 && primary && typeof api.createSiblingNote === 'function') api.createSiblingNote(primary);
+      else if ((noteSnapshot.count || 0) === 2 && typeof api.linkSelectedNotes === 'function') api.linkSelectedNotes();
+      queueInspectorRender(40);
+      return;
+    }
+    if (kind === 'delete' && typeof api.deleteSelectedNotes === 'function'){
+      api.deleteSelectedNotes();
+      queueInspectorRender(40);
+      return;
+    }
+    return;
+  }
+  if (selectedProject){
+    if (kind === 'locate'){ centerProjectIntoView(selectedProject); return; }
+    if (kind === 'done'){
+      var added = addMissingProjectTasks(selectedProject);
+      try{ if (typeof showToast === 'function') showToast(added ? ('Added '+added+' task'+(added===1?'':'s')+' from "'+selectedProject+'".') : ('No missing tasks for "'+selectedProject+'".')); }catch(_){}
+      return;
+    }
+    if (kind === 'delete'){
+      removeProjectFromCanvas(selectedProject);
+      return;
+    }
+    return;
+  }
+  var node = primarySelectedNode();
+  if (!node) return;
+  if (kind === 'locate'){ centerNodeIntoView(node); return; }
+  var selector = kind === 'done' ? '.btnDone' : (kind === 'delete' ? '.btnDel' : '.btnMod');
+  var btn = node.querySelector(selector);
+  if (btn) btn.click();
+  queueInspectorRender(40);
+}
+if (inspectorLocate) inspectorLocate.addEventListener('click', function(){ triggerInspectorAction('locate'); });
+if (inspectorDone) inspectorDone.addEventListener('click', function(){ triggerInspectorAction('done'); });
+if (inspectorDelete) inspectorDelete.addEventListener('click', function(){ triggerInspectorAction('delete'); });
+if (inspectorModify) inspectorModify.addEventListener('click', function(){ triggerInspectorAction('modify'); });
+
+/* ===== Selection & node dragging ===== */
+var selected = new Set();
+var contextSelectionState = {kind:'none'};
+function contextActionButton(action, label, danger){
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.setAttribute('data-context-action', action);
+  btn.textContent = label;
+  if (danger) btn.className = 'danger';
+  return btn;
+}
+function renderContextSelectionBar(){
+  if (!contextSelectionBar || !contextSelectionLabel || !contextSelectionActions) return;
+  var state = contextSelectionState || {kind:'none'};
+  contextSelectionActions.innerHTML = '';
+  if (!state.kind || state.kind === 'none' || !state.count){
+    contextSelectionBar.hidden = true;
+    contextSelectionLabel.textContent = '';
+    return;
+  }
+  contextSelectionBar.hidden = false;
+  contextSelectionLabel.textContent = state.label || (state.count + ' selected');
+  var actions = [];
+  if (state.kind === 'task'){
+    actions.push(['locate', 'Locate']);
+    actions.push(['done', 'Done']);
+    if (state.count === 1) actions.push(['modify', 'Modify']);
+    actions.push(['delete', 'Delete', true]);
+  } else if (state.kind === 'note'){
+    if (state.count === 1){
+      actions.push(['note-focus-branch', 'Focus branch']);
+      actions.push(['note-focus-bucket', 'Focus bucket']);
+      actions.push(['note-child', 'Child']);
+      actions.push(['note-sibling', 'Sibling']);
+      if (state.hasChildren) actions.push(['note-collapse', state.collapsed ? 'Expand' : 'Collapse']);
+    }
+    if (state.focus && state.focus.kind && state.focus.kind !== 'none') actions.push(['note-focus-clear', 'Show all']);
+    if (state.count === 2) actions.push(['note-link', 'Link']);
+    actions.push(['note-task', state.count === 1 ? 'Create task' : 'Create tasks']);
+    actions.push(['note-delete', 'Delete', true]);
+  } else if (state.kind === 'link'){
+    actions.push(['link-delete', 'Unlink', true]);
+  }
+  actions.forEach(function(item){ contextSelectionActions.appendChild(contextActionButton(item[0], item[1], item[2])); });
+}
+function updateContextSelection(state){
+  contextSelectionState = state && state.kind ? state : {kind:'none'};
+  renderContextSelectionBar();
+}
+function publishTaskSelection(){
+  updateContextSelection(selected.size ? {kind:'task', count:selected.size, label:selected.size + ' task' + (selected.size === 1 ? '' : 's') + ' selected'} : {kind:'none'});
+}
+function runTaskContextAction(action){
+  var nodes = Array.from(selected).filter(function(n){ return n && n.isConnected; });
+  if (!nodes.length) return;
+  if (action === 'locate'){ centerNodeIntoView(nodes[0]); return; }
+  if (action === 'modify'){ triggerInspectorAction('modify'); return; }
+  var selector = action === 'done' ? '.btnDone' : (action === 'delete' ? '.btnDel' : '');
+  if (!selector) return;
+  nodes.forEach(function(node){ var btn = node.querySelector(selector); if (btn) btn.click(); });
+  queueInspectorRender(40);
+}
+if (contextSelectionActions) contextSelectionActions.addEventListener('click', function(ev){
+  var btn = ev.target && ev.target.closest ? ev.target.closest('[data-context-action]') : null;
+  if (!btn) return;
+  var action = btn.getAttribute('data-context-action');
+  if (action === 'locate' || action === 'done' || action === 'modify' || action === 'delete'){
+    runTaskContextAction(action);
+    return;
+  }
+  var api = window.KyanbasuNotes;
+  if (!api) return;
+  var state = contextSelectionState || {};
+  if (action === 'note-child') api.createChildNote(state.primary);
+  else if (action === 'note-sibling') api.createSiblingNote(state.primary);
+  else if (action === 'note-focus-branch') api.focusBranch(state.primary);
+  else if (action === 'note-focus-bucket') api.focusBucket(state.bucket);
+  else if (action === 'note-focus-clear') api.clearFocus();
+  else if (action === 'note-collapse') api.toggleCollapse(state.primary);
+  else if (action === 'note-link') api.linkSelectedNotes();
+  else if (action === 'note-task') api.stageSelectedNotesAsTasks();
+  else if (action === 'note-delete') api.deleteSelectedNotes();
+  else if (action === 'link-delete') api.deleteSelectedLink();
+});
+window.KyanbasuContextBar = {update:updateContextSelection, state:function(){ return contextSelectionState; }};
+function clearSelection(keepNotes){
+  selected.forEach(function(n){ n.classList.remove('selected');});
+  selected.clear();
+  clearProjectSelection(true);
+  if (!keepNotes && window.KyanbasuNotes && typeof window.KyanbasuNotes.clearSelection === 'function') window.KyanbasuNotes.clearSelection(true);
+  publishTaskSelection();
+  queueInspectorRender(0);
+}
+function selectNode(n){
+  clearProjectSelection(true);
+  if (window.KyanbasuNotes && typeof window.KyanbasuNotes.clearSelection === 'function') window.KyanbasuNotes.clearSelection(true);
+  n.classList.add('selected');
+  selected.add(n);
+  publishTaskSelection();
+  queueInspectorRender(0);
+}
+
+function makeDraggable(node){
+  var dragging=false, group=false, sx=0, sy=0, start=[];
+  node.addEventListener('mousedown', function(e){
+    if (e.button!==0) return;
+    if (e.target && e.target.closest && e.target.closest('.nodeActions, .depHandle, button, input, textarea, select, [contenteditable="true"]')) return;
+    if (removeMode && removeMode.checked) return;
+    if (!node.classList.contains('selected')){ clearSelection(); selectNode(node); }
+    dragging = true; group = (selected.size>1);
+    sx = e.clientX; sy = e.clientY;
+    start = [];
+    (group?selected:new Set([node])).forEach(function(n){
+      start.push({n:n, x: parseInt(n.style.left||"0",10), y: parseInt(n.style.top||"0",10)});
+    });
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', function(e){
+    if(!dragging) return;
+    var dx = (e.clientX - sx)/ZSCALE, dy = (e.clientY - sy)/ZSCALE;
+    for (var i=0;i<start.length;i++){
+      var sp = start[i];
+      sp.n.style.left = ((sp.x+dx)|0)+"px";
+      sp.n.style.top  = ((sp.y+dy)|0)+"px";
+    }
+  });
+  document.addEventListener('mouseup', function(e){
+    if(!dragging) return; dragging = false;
+    for (var i=0;i<start.length;i++){
+      var n = start[i].n;
+      var shortId = n.getAttribute('data-short');
+      var t = TASK_BY_SHORT[shortId]; if(!t) continue;
+      var oldProj = t.project || "(no project)";
+      var oldTag  = firstTag(t);
+      var cx = parseInt(n.style.left||"0",10) + (n.offsetWidth/2);
+      var cy = parseInt(n.style.top ||"0",10) + (n.offsetHeight/2);
+      var hit = areaAtPoint(cx, cy);
+
+    if (hit && hit.type==='tag'){
+        var ta = hit.area;
+        if (ta.project !== oldProj){
+          t.project = ta.project; n.setAttribute('data-proj', t.project);
+        }
+        if (ta.tag !== oldTag){
+          t.tags = (ta.tag==="(no tag)") ? [] : [ta.tag];
+          n.setAttribute('data-tag', ta.tag);
+        }
+        relayoutTag(ta.project, ta.tag);
+      } else if (hit && hit.type==='project'){
+        if (hit.project !== oldProj){
+          t.project = hit.project; n.setAttribute('data-proj', t.project);
+          // reflow its current tag area under the new project, if present
+          relayoutTag(t.project, firstTag(t));
+        }
+      } else {
+        if (oldProj !== "(no project)"){
+          t.project = "(no project)"; n.setAttribute('data-proj', t.project);
+          relayoutTag("(no project)", firstTag(t));
+        }
+      }
+    }
+    settleCanvasAgainstNotes();
+    updateConsole();
+    drawLinks();
+    queueInspectorRender(0);
+  });
+}
+
+/* ===== Tag bubble dragging (snapshot + project-at-point) ===== */
+var dragTag = null, dragTagStart = null, dragTagNodes = null;
+function startTagDrag(e, ta){
+  e.preventDefault();
+  dragTag = ta;
+  dragTagStart = { sx:e.clientX, sy:e.clientY, x:ta.x, y:ta.y };
+  // snapshot node positions at start
+  dragTagNodes = nodesForTag(ta.project, ta.tag).map(function(n){
+    return { n:n, x: parseInt(n.style.left||"0",10), y: parseInt(n.style.top||"0",10) };
+  });
+  document.addEventListener('mousemove', onTagMove);
+  document.addEventListener('mouseup', onTagUp, { once:true });
+}
+function onTagMove(e){
+  if (!dragTag) return;
+  var dx = (e.clientX - dragTagStart.sx)/ZSCALE, dy = (e.clientY - dragTagStart.sy)/ZSCALE;
+  var nx = dragTagStart.x + dx, ny = dragTagStart.y + dy;
+  dragTag.x = nx; dragTag.y = ny;
+  if (dragTag.el){ dragTag.el.style.left = (nx|0)+"px"; dragTag.el.style.top = (ny|0)+"px"; }
+  if (dragTag.labelEl){ dragTag.labelEl.style.left = ((nx + 14)|0)+"px"; dragTag.labelEl.style.top = ((ny + 14)|0)+"px"; }
+  dragTagNodes.forEach(function(sp){
+    sp.n.style.left = ((sp.x + dx)|0) + "px";
+    sp.n.style.top  = ((sp.y + dy)|0) + "px";
+  });
+}
+function onTagUp(e){
+  document.removeEventListener('mousemove', onTagMove);
+  if (!dragTag) return;
+  var cx = dragTag.x + dragTag.w/2, cy = dragTag.y + 20;
+  var newProj = projectAtPoint(cx, cy) || "(no project)";
+  var oldProj = dragTag.project;
+
+  if (newProj !== oldProj){
+    renameTagAreaKey(oldProj, dragTag.tag, newProj);
+    var items = dragTagNodes.map(function(sp){ return sp.n; });
+    items.forEach(function(n){
+      var t = TASK_BY_SHORT[n.getAttribute('data-short')];
+      if (!t) return;
+      t.project = newProj;
+      n.setAttribute('data-proj', newProj);
+    });
+    updateProjectBoundsFromTags(oldProj);
+    updateProjectBoundsFromTags(newProj);
+  }
+  ensureProjectArea(newProj);
+  recomputeAreasAndTags();
+  relayoutTag(newProj, dragTag.tag);           // also resolves overlaps
+  resolveProjectOverlaps();
+  settleCanvasAgainstNotes();
+
+  dragTag = null; dragTagStart = null; dragTagNodes = null;
+  updateConsole();
+  queueInspectorRender(0);
+}
+
+/* ===== Project bubble dragging (snapshot) ===== */
+var dragProj = null, dragProjStart = null, dragProjTags = null, dragProjNodes = null, dragProjName = null;
+function startProjectDrag(e, pa){
+  e.preventDefault();
+  dragProj = pa;
+  dragProjMoved = false;
+  dragProjStart = { sx:e.clientX, sy:e.clientY, x:pa.x, y:pa.y };
+  dragProjName = getProjName(pa);
+  // snapshot child tags & nodes
+  dragProjTags = [];
+  dragProjNodes = [];
+  tagAreas.forEach(function(ta){
+    if (ta.project !== dragProjName) return;
+    dragProjTags.push({ ta:ta, x:ta.x, y:ta.y });
+    nodesForTag(ta.project, ta.tag).forEach(function(n){
+      dragProjNodes.push({ n:n, x: parseInt(n.style.left||"0",10), y: parseInt(n.style.top||"0",10) });
+    });
+  });
+  document.addEventListener('mousemove', onProjMove);
+  document.addEventListener('mouseup', onProjUp, { once:true });
+}
+function onProjMove(e){
+  if (!dragProj) return;
+  var dx = (e.clientX - dragProjStart.sx)/ZSCALE, dy = (e.clientY - dragProjStart.sy)/ZSCALE;
+  if (Math.abs(dx) > 2 || Math.abs(dy) > 2) dragProjMoved = true;
+  var nx = dragProjStart.x + dx, ny = dragProjStart.y + dy;
+  dragProj.x = nx; dragProj.y = ny;
+  if (dragProj.el){ dragProj.el.style.left = (nx|0)+"px"; dragProj.el.style.top = (ny|0)+"px"; }
+  if (dragProj.labelEl){ dragProj.labelEl.style.left = ((nx + 14)|0)+"px"; dragProj.labelEl.style.top = ((ny + 14)|0)+"px"; }
+
+  dragProjTags.forEach(function(sp){
+    sp.ta.x = sp.x + dx; sp.ta.y = sp.y + dy;
+    if (sp.ta.el){ sp.ta.el.style.left=(sp.ta.x|0)+"px"; sp.ta.el.style.top=(sp.ta.y|0)+"px"; }
+    if (sp.ta.labelEl){ sp.ta.labelEl.style.left=((sp.ta.x + 14)|0)+"px"; sp.ta.labelEl.style.top=((sp.ta.y + 14)|0)+"px"; }
+  });
+  dragProjNodes.forEach(function(sp){
+    sp.n.style.left = ((sp.x + dx)|0) + "px";
+    sp.n.style.top  = ((sp.y + dy)|0) + "px";
+  });
+}
+function onProjUp(e){
+  document.removeEventListener('mousemove', onProjMove);
+  // snap against other projects if overlapping
+  resolveProjectOverlaps();
+  settleCanvasAgainstNotes();
+  if (dragProjMoved) lastProjectDragAt = Date.now();
+  dragProj = null; dragProjStart = null; dragProjTags = null; dragProjNodes = null; dragProjName = null;
+  dragProjMoved = false;
+  queueInspectorRender(0);
+}
+
+/* ===== Helpers ===== */
+function getProjName(pa){
+  for (const [k,v] of projectAreas){ if (v===pa) return k; }
+  return "(no project)";
+}
+
+/* ===== Add nodes ===== */
+function addNodeForTask(task, cx, cy, opts){
+  opts = opts || {};
+  var proj = task.project || "(no project)";
+  var tag  = firstTag(task);
+  ensureProjectArea(proj);
+  ensureTagArea(proj, tag);
+  recomputeAreasAndTags();
+
+  var node = document.createElement('div');
+  node.className="node" + (task.has_depends ? " hasDeps" : " ready");
+  var dueLabel = taskDueLabel(task);
+  var meta = '<div class="nodeMeta">' +
+    '<span class="nodeChip project">'+escapeHtml(proj)+'</span>' +
+    '<span class="nodeChip tag">'+escapeHtml(tag)+'</span>' +
+    (dueLabel ? '<span class="nodeChip due">'+escapeHtml(dueLabel)+'</span>' : '') +
+    '</div>';
+  node.innerHTML =
+    '<div class="nodeTop"><span class="nodeStatePill">'+escapeHtml(taskStatusLabel(task))+'</span></div>' +
+    '<div class="title">'+escapeHtml(task.desc)+'</div>' +
+    meta;
+  node.setAttribute('data-short', task.short);
+  if (task.uuid) node.setAttribute('data-uuid', task.uuid);
+  node.setAttribute('data-proj', proj);
+  node.setAttribute('data-tag', tag);
+  builderStage.appendChild(node);
+
+  if (cx != null && cy != null){
+    node.style.left = (cx|0)+"px";
+    node.style.top  = (cy|0)+"px";
+  } else if (!opts.deferLayout){
+    relayoutTag(proj, tag);
+  }
+
+  makeDraggable(node);
+  try{queueVirt&&queueVirt();}catch(e){} // Tw Patch hook
+  try{ attachDepHandleToNode(node); }catch(_){ }
+  queueInspectorRender(0);
+  return node;
+}
+
+function addToBuilder(task, cx, cy){
+  var r = builderStage.getBoundingClientRect();
+  var x = (cx!=null? (cx - r.left)/ZSCALE : null);
+  var y = (cy!=null? (cy - r.top )/ZSCALE : null);
+  var n = addNodeForTask(task, x, y);
+  try{ attachDepHandleToNode(n); }catch(_){ }
+// If we placed with explicit coordinates, still normalize into the grid:
+  if (x!=null && y!=null){
+    relayoutTag(task.project || "(no project)", firstTag(task));
+  }
+  settleCanvasAgainstNotes();
+  updateConsole();
+  drawLinks();
+  return n;
+}
+
+/* ===== Marquee selection ===== */
+var marquee=null, mStart=null;
+builderStage.addEventListener('mousedown', function(e){
+  if (e.button!==0) return;
+  if (e.target.closest('.node')) return;
+  if (e.target.closest('.tcNoteLink, .tcNoteLinkHit, .tcNoteLinkAnnotation, .tcNoteLinkAnnotationAdd')) return;
+  if (e.target.closest('.projAreaLabel') || e.target.closest('.tagAreaLabel') || e.target.closest('.tagAddBtn')) return;
+  clearSelection();
+  var rect = builderStage.getBoundingClientRect();
+  mStart = {x:(e.clientX-rect.left)/ZSCALE, y:(e.clientY-rect.top)/ZSCALE};
+  marquee = document.createElement('div');
+  marquee.className="marquee";
+  marquee.style.left = mStart.x+"px"; marquee.style.top = mStart.y+"px";
+  marquee.style.width="0px"; marquee.style.height="0px";
+  builderStage.appendChild(marquee);
+});
+document.addEventListener('mousemove', function(e){
+  if (!marquee) return;
+  var rect = builderStage.getBoundingClientRect();
+  var x = (e.clientX-rect.left)/ZSCALE, y=(e.clientY-rect.top)/ZSCALE;
+  var w = x - mStart.x, h=y - mStart.y;
+  marquee.style.left = (w<0? x : mStart.x)+"px";
+  marquee.style.top  = (h<0? y : mStart.y)+"px";
+  marquee.style.width = Math.abs(w)+"px";
+  marquee.style.height= Math.abs(h)+"px";
+});
+document.addEventListener('mouseup', function(e){
+  if(!marquee) return;
+  var mx = parseFloat(marquee.style.left), my=parseFloat(marquee.style.top);
+  var mw = parseFloat(marquee.style.width), mh=parseFloat(marquee.style.height);
+  var nodes = builderStage.querySelectorAll('.node');
+  for (var i=0;i<nodes.length;i++){
+    var n = nodes[i];
+    var nx = parseInt(n.style.left,10)||0, ny=parseInt(n.style.top,10)||0;
+    var nw = n.offsetWidth, nh=n.offsetHeight;
+    if (nx < mx+mw && nx+nw > mx && ny < my+mh && ny+nh > my){ selectNode(n); }
+  }
+  marquee.remove(); marquee=null; mStart=null;
+});
+
+/* ===== Viewer ===== */
+function isDependentShort(shortId){
+  if (!shortId) return false;
+  if (PARENT_DEPS0 && PARENT_DEPS0[shortId] && PARENT_DEPS0[shortId].length) return true;
+  if (CHILD_TO_PARENTS && CHILD_TO_PARENTS[shortId] && CHILD_TO_PARENTS[shortId].length) return true;
+  return false;
+}
+function viewerNotesSortMode(){
+  try{
+    var v = localStorage.getItem('kyanbasu:viewer:notes-sort');
+    v = v || 'id';
+    return v === 'bucket' ? 'bucket' : 'id';
+  }catch(_){ return 'id'; }
+}
+function setViewerNotesSortMode(mode){
+  mode = mode === 'bucket' ? 'bucket' : 'id';
+  try{ localStorage.setItem('kyanbasu:viewer:notes-sort', mode); }catch(_){}
+  renderViewer();
+}
+function viewerSection(titleText, countText, top){
+  var section=document.createElement('div');
+  section.className="viewerSection";
+  section.style.top=(top|0)+"px";
+  var head=document.createElement('div');
+  head.className="viewerSectionHead";
+  var title=document.createElement('div');
+  title.className="viewerSectionTitle";
+  title.textContent=titleText;
+  var count=document.createElement('div');
+  count.className="viewerSectionCount";
+  count.textContent=countText;
+  head.appendChild(title);
+  head.appendChild(count);
+  section.appendChild(head);
+  viewerStage.appendChild(section);
+  return section;
+}
+function viewerSectionBottom(section){
+  if (!section) return 40;
+  return (parseInt(section.style.top || '0', 10) || 0) + (section.offsetHeight || 0);
+}
+function addViewerNoteSortControls(section, mode, focusState, lensState){
+  if (!section) return;
+  var actions=document.createElement('div');
+  actions.className='viewerSectionActions';
+  actions.setAttribute('aria-label', 'Sort notes');
+  [['id', 'ID'], ['bucket', 'Bucket']].forEach(function(pair){
+    var btn=document.createElement('button');
+    btn.type='button';
+    btn.className='viewerSortBtn' + (mode === pair[0] ? ' active' : '');
+    btn.textContent=pair[1];
+    btn.setAttribute('data-viewer-note-sort', pair[0]);
+    btn.addEventListener('click', function(){ setViewerNotesSortMode(pair[0]); });
+    actions.appendChild(btn);
+  });
+  if (focusState && focusState.kind && focusState.kind !== 'none'){
+    var clear=document.createElement('button');
+    clear.type='button';
+    clear.className='viewerSortBtn';
+    clear.textContent='Show all';
+    clear.addEventListener('click', function(){
+      if (window.KyanbasuNotes && typeof window.KyanbasuNotes.clearFocus === 'function') window.KyanbasuNotes.clearFocus();
+    });
+    actions.appendChild(clear);
+  }
+  if (lensState && lensState.kind === 'lens'){
+    var clearLens=document.createElement('button');
+    clearLens.type='button';
+    clearLens.className='viewerSortBtn';
+    clearLens.textContent='Clear lens';
+    clearLens.addEventListener('click', function(){
+      if (window.KyanbasuNotes && typeof window.KyanbasuNotes.clearLens === 'function') window.KyanbasuNotes.clearLens();
+    });
+    actions.appendChild(clearLens);
+  }
+  var head = section.querySelector('.viewerSectionHead');
+  if (head && head.nextSibling) section.insertBefore(actions, head.nextSibling);
+  else section.appendChild(actions);
+}
+function renderViewerTasks(section, depTasks){
+  if (!depTasks.length){
+    var empty=document.createElement('div');
+    empty.className = "viewerEmpty";
+    empty.textContent="No dependent tasks.";
+    section.appendChild(empty);
+    return;
+  }
+  var byProj={}, i;
+  for(i=0;i<depTasks.length;i++){
+    var p=depTasks[i].project||"(no project)";
+    if(!byProj[p]) byProj[p]=[];
+    byProj[p].push(depTasks[i]);
+  }
+  var cols=document.createElement('div');
+  cols.className="viewerColumns";
+  section.appendChild(cols);
+  var keys=Object.keys(byProj).sort();
+  for(i=0;i<keys.length;i++){
+    var col=document.createElement('div');
+    col.className = "viewerColumn";
+    var title=document.createElement('div');
+    title.className = "viewerTitle";
+    title.textContent=keys[i]+" ("+byProj[keys[i]].length+")";
+    col.appendChild(title);
+    var arr=byProj[keys[i]];
+    for(var k=0;k<arr.length;k++){
+      var it=document.createElement('div');
+      it.className = "viewerItem";
+      it.innerHTML =
+        '<div class="short"><span class="drawerBadge">'+escapeHtml(arr[k].short)+'</span></div>' +
+        '<div class="desc">'+escapeHtml(arr[k].desc)+'</div>' +
+        '<div class="meta">'+escapeHtml((arr[k].project||"(no project)")+' • '+firstTag(arr[k]))+'</div>';
+      col.appendChild(it);
+    }
+    cols.appendChild(col);
+  }
+}
+function appendViewerNote(outlineEl, item){
+  var row=document.createElement('div');
+  row.className="viewerNote";
+  row.style.marginLeft=Math.min(180, (item.depth || 0) * 24) + "px";
+  row.setAttribute('data-note-id', item.id || '');
+  try{
+    if (window.KyanbasuNotes && typeof window.KyanbasuNotes.selectedNotes === 'function' && window.KyanbasuNotes.selectedNotes().indexOf(item.id) !== -1) row.classList.add('selected');
+  }catch(_){}
+  row.innerHTML =
+    '<button type="button" class="viewerNoteToggle" title="Collapse branch"></button>' +
+    '<div class="viewerNoteCode"></div>' +
+    '<div class="viewerNoteText" contenteditable="true" spellcheck="true"></div>' +
+    '<div class="viewerNoteSemantics"></div>' +
+    '<div class="viewerNoteBucket"></div>';
+  row.querySelector('.viewerNoteCode').textContent=item.label || '';
+  var textEl = row.querySelector('.viewerNoteText');
+  textEl.textContent=item.content || 'New note';
+  var toggle = row.querySelector('.viewerNoteToggle');
+  var hasChildren = !!(item.children && item.children.length);
+  toggle.disabled = !hasChildren;
+  toggle.textContent = item.collapsed ? '>' : 'v';
+  toggle.title = item.collapsed ? 'Expand branch' : 'Collapse branch';
+  toggle.addEventListener('click', function(ev){
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (window.KyanbasuNotes && typeof window.KyanbasuNotes.toggleCollapse === 'function'){
+      window.KyanbasuNotes.toggleCollapse(item.id);
+      renderViewer();
+    }
+  });
+  textEl.addEventListener('focus', function(){
+    if (window.KyanbasuNotes && typeof window.KyanbasuNotes.selectNote === 'function') window.KyanbasuNotes.selectNote(item.id);
+  });
+  textEl.addEventListener('input', function(){
+    if (window.KyanbasuNotes && typeof window.KyanbasuNotes.setContent === 'function') window.KyanbasuNotes.setContent(item.id, textEl.textContent);
+  });
+  textEl.addEventListener('keydown', function(ev){
+    if (ev.key === 'Escape'){
+      ev.preventDefault();
+      textEl.blur();
+      return;
+    }
+    if (ev.key === 'Enter' && !ev.shiftKey){
+      ev.preventDefault();
+      var sibling = window.KyanbasuNotes && window.KyanbasuNotes.createSiblingNote(item.id, 'New branch', '');
+      renderViewer();
+      if (sibling) focusViewerNoteEditor(sibling.id);
+    } else if (ev.key === 'Tab' && !ev.shiftKey){
+      ev.preventDefault();
+      var child = window.KyanbasuNotes && window.KyanbasuNotes.createChildNote(item.id, 'New branch', '');
+      renderViewer();
+      if (child) focusViewerNoteEditor(child.id);
+    }
+  });
+  row.addEventListener('click', function(ev){
+    if (ev.target.closest('.viewerNoteText, .viewerNoteToggle')) return;
+    if (window.KyanbasuNotes && typeof window.KyanbasuNotes.selectNote === 'function') window.KyanbasuNotes.selectNote(item.id, !!(ev.shiftKey || ev.ctrlKey || ev.metaKey));
+  });
+  var semantics = row.querySelector('.viewerNoteSemantics');
+  if (item.kind && item.kind !== 'note'){
+    var kind = document.createElement('span');
+    kind.className = 'viewerNoteSemantic';
+    kind.textContent = item.kindLabel || item.kind;
+    semantics.appendChild(kind);
+  }
+  if (item.status && item.status !== 'open'){
+    var status = document.createElement('span');
+    status.className = 'viewerNoteSemantic ' + item.status;
+    status.textContent = item.statusLabel || item.status;
+    semantics.appendChild(status);
+  }
+  var annotations = Array.isArray(item.annotations) ? item.annotations : [];
+  annotations.slice(0, 2).forEach(function(annotation){
+    var chip = document.createElement('span');
+    chip.className = 'viewerNoteSemantic annotation ' + (annotation.kind || 'note');
+    var icon = annotation.kind === 'question' ? '?' : (annotation.kind === 'condition' ? '!' : 'i');
+    chip.textContent = icon + ' ' + (annotation.text || 'Annotation');
+    chip.title = (annotation.kindLabel || 'Note') + ' · ' + (annotation.relation || 'Related to') + (annotation.otherLabel ? ' ' + annotation.otherLabel : '') + ': ' + (annotation.text || '');
+    semantics.appendChild(chip);
+  });
+  if (annotations.length > 2){
+    var more = document.createElement('span');
+    more.className = 'viewerNoteSemantic';
+    more.textContent = '+' + (annotations.length - 2);
+    more.title = (annotations.length - 2) + ' more relationship annotation' + (annotations.length - 2 === 1 ? '' : 's');
+    semantics.appendChild(more);
+  }
+  row.querySelector('.viewerNoteBucket').textContent=item.bucket || '(no bucket)';
+  outlineEl.appendChild(row);
+  if (item.collapsed) return;
+  (item.children || []).forEach(function(child){ appendViewerNote(outlineEl, child); });
+}
+function focusViewerNoteEditor(id){
+  setTimeout(function(){
+    var editor=document.querySelector('#viewerStage .viewerNote[data-note-id="'+String(id || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"')+'"] .viewerNoteText');
+    if (!editor) return;
+    editor.focus();
+    try{
+      var range=document.createRange();
+      range.selectNodeContents(editor);
+      var selection=window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }catch(_){}
+  }, 0);
+}
+function renderViewerNotes(section, outline){
+  if (!outline.length){
+    var empty=document.createElement('div');
+    empty.className = "viewerEmpty";
+    empty.textContent="No planning notes.";
+    section.appendChild(empty);
+    return;
+  }
+  var box=document.createElement('div');
+  box.className="viewerOutline";
+  outline.forEach(function(item){ appendViewerNote(box, item); });
+  section.appendChild(box);
+}
+function sortedViewerOutline(outline, mode){
+  outline = Array.isArray(outline) ? outline.slice() : [];
+  if (mode === 'bucket'){
+    outline.sort(function(a, b){
+      var ab = String(a.bucket || '').localeCompare(String(b.bucket || ''));
+      if (ab !== 0) return ab;
+      return String(a.label || '').localeCompare(String(b.label || ''));
+    });
+  }
+  return outline;
+}
+function renderViewer(){
+  viewerStage.innerHTML="";
+  var depTasks = [];
+  for (var i=0;i<TASKS.length;i++){
+    var t=TASKS[i];
+    if (isDependentShort(t.short)) depTasks.push(t);
+  }
+  var outline = [];
+  if (window.KyanbasuNotes && typeof window.KyanbasuNotes.visibleOutline === "function"){
+    outline = window.KyanbasuNotes.visibleOutline();
+  } else if (window.KyanbasuNotes && typeof window.KyanbasuNotes.outline === "function"){
+    outline = window.KyanbasuNotes.outline();
+  }
+  var noteFocus = window.KyanbasuNotes && typeof window.KyanbasuNotes.focusState === 'function' ? window.KyanbasuNotes.focusState() : {kind:'none'};
+  var noteLens = window.KyanbasuNotes && typeof window.KyanbasuNotes.lensState === 'function' ? window.KyanbasuNotes.lensState() : {kind:'none'};
+  var sortMode = viewerNotesSortMode();
+  outline = sortedViewerOutline(outline, sortMode);
+  var tasksSection=viewerSection("Tasks", depTasks.length + " dependent", 40);
+  renderViewerTasks(tasksSection, depTasks);
+  var notesTop = viewerSectionBottom(tasksSection) + 44;
+  var notesTitle = noteFocus && noteFocus.kind !== 'none' ? "Notes · " + (noteFocus.kind === 'branch' ? 'Branch ' : 'Bucket ') + noteFocus.label : "Notes";
+  if (noteLens && noteLens.kind === 'lens') notesTitle += " · " + noteLens.label;
+  var notesSection=viewerSection(notesTitle, outline.length + " root" + (outline.length === 1 ? "" : "s"), notesTop);
+  addViewerNoteSortControls(notesSection, sortMode, noteFocus, noteLens);
+  renderViewerNotes(notesSection, outline);
+}
+
+/* ===== Zoom ===== */
+function applyZoom(){
+  var v = parseInt(zoom.value,10) || 100;
+  ZSCALE = v / 100.0;
+  builderStage.style.transform = "scale(" + ZSCALE + ")";
+  viewerStage.style.transform  = "scale(" + ZSCALE + ")";
+  zoomPct.textContent = v + "%";
+}
+zoom.addEventListener('input', applyZoom);
+applyZoom();
+
+/* ===== FAB actions ===== */
+fab.addEventListener('click', function(){ fabMenu.classList.toggle('hidden'); });
+document.addEventListener('click', function(e){
+  if (e.target===fab || fabMenu.contains(e.target)) return;
+  fabMenu.classList.add('hidden');
+});
+
+function uniqueByProject(){
+  var set={}, arr=[];
+  for (var i=0;i<TASKS.length;i++){
+    var p=TASKS[i].project||"(no project)";
+    if(!set[p]){ set[p]=1; arr.push(p); }
+  }
+  arr.sort();
+  return arr;
+}
+function uniqueTagsForProject(project){
+  var set={"(no tag)":1}, arr=["(no tag)"];
+  for (var i=0;i<TASKS.length;i++){
+    var t=TASKS[i];
+    if ((t.project||"(no project)")===project){
+      var tag = firstTag(t);
+      if(!set[tag]){ set[tag]=1; arr.append ? 0 : 0; } // no-op placeholder (keep linter happy)
+    }
+  }
+  // Manual to avoid accidental mutation above:
+  set={"(no tag)":1}; arr=["(no tag)"];
+  for (var i2=0;i2<TASKS.length;i2++){
+    var tt=TASKS[i2];
+    if ((tt.project||"(no project)")===project){
+      var tg = firstTag(tt);
+      if(!set[tg]){ set[tg]=1; arr.push(tg); }
+    }
+  }
+  return arr;
+}
+
+function addProjectTasks(projName){
+  var tags = uniqueTagsForProject(projName);
+  ensureProjectArea(projName);
+  for (var i=0;i<tags.length;i++){ ensureTagArea(projName, tags[i]); }
+  recomputeAreasAndTags();
+
+  // Add nodes with deferred layout
+  var added=0;
+  for (var i2=0;i2<TASKS.length;i2++){
+    var t=TASKS[i2];
+    if ((t.project||"(no project)")===projName){ addNodeForTask(t, null, null, {deferLayout:true}); added++; }
+  }
+  // Single relayout pass per tag + resolve overlaps
+  for (var i3=0;i3<tags.length;i3++){ relayoutTag(projName, tags[i3]); }
+  resolveTagOverlaps(projName);
+  resolveProjectOverlaps();
+  settleCanvasAgainstNotes();
+  drawLinks();
+  updateConsole();
+  return added;
+}
+
+function addFilteredTasks(){
+  var f=parseQuery(q ? q.value : "");
+  var projectsOnCanvas = new Set();
+  projectAreas.forEach(function(_,proj){ projectsOnCanvas.add(proj); });
+  if (projectsOnCanvas.size===0){ alert("No projects on canvas. Add a project first."); return 0; }
+  var added=0, skipped=0;
+  var byPT = {};
+  for (var i=0;i<TASKS.length;i++){
+    var t=TASKS[i];
+    if(!matches(t,f)) continue;
+    if (hideHasDeps && hideHasDeps.checked && t.has_depends) continue;
+    var p = t.project || "(no project)";
+    if (!projectsOnCanvas.has(p)){ skipped++; continue; }
+    var tag = firstTag(t);
+    var k = keyPT(p, tag);
+    (byPT[k] = byPT[k] || []).push(t);
+  }
+  Object.keys(byPT).forEach(function(k){
+    var parts = k.split("||"); var p = parts[0], tag = parts[1];
+    ensureTagArea(p, tag);
+    byPT[k].forEach(function(t){ addNodeForTask(t, null, null, {deferLayout:true}); added++; });
+    relayoutTag(p, tag);
+    resolveTagOverlaps(p);
+  });
+  resolveProjectOverlaps();
+  settleCanvasAgainstNotes();
+  if (skipped>0){ alert("Skipped "+skipped+" task(s) from projects not on the canvas."); }
+  drawLinks();
+  updateConsole();
+  return added;
+}
+
+fabAddProject.addEventListener('click', function(){
+  fabMenu.classList.add('hidden');
+  var projs = uniqueByProject();
+  var msg = "Choose project to add:\n" + projs.map(function(p,idx){return (idx+1)+") "+p;}).join("\n");
+  var choice = prompt(msg, "1");
+  if (choice==null) return;
+  var idx = parseInt(choice,10)-1;
+  if (!isFinite(idx) || idx<0 || idx>=projs.length){ alert("Invalid selection"); return; }
+  var p = projs[idx];
+  var n = addProjectTasks(p);
+  alert("Added "+n+" tasks from project '"+p+"'");
+});
+fabAddFiltered.addEventListener('click', function(){
+  fabMenu.classList.add('hidden');
+  var n = addFilteredTasks();
+  if (n>0) alert("Added "+n+" task(s) from current filter to existing projects.");
+});
+fabAddNew.addEventListener('click', function(){
+  fabMenu.classList.add('hidden');
+  var desc = prompt("New task description:", "");
+  if (!desc) return;
+  var projs = uniqueByProject();
+  var defProj = projs[0] || "(no project)";
+  var project = prompt("Project (existing or new):", defProj) || "(no project)";
+  var tagsIn = prompt("Tags (comma-separated):", "")||"";
+  var tags = tagsIn.split(",").map(function(s){return s.trim();}).filter(function(s){return s;});
+  var uuid = "new-"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  var t = { uuid:uuid, short:uuid.slice(0,8), desc:desc, project:project, tags:tags, has_depends:false };
+  TASKS.push(t); TASK_BY_SHORT[t.short]=t;
+  renderList();
+  if (projectAreas.has(project)){
+    ensureTagArea(project, firstTag(t));
+    addToBuilder(t, null, null);
+  } else {
+    alert("Task created. Add the project (“"+project+"”) to the canvas to place it.");
+  }
+  updateConsole();
+});
+
+/* ===== Command builder + console ===== */
+function buildCommands(){
+  try{
+    if (window.KyanbasuCommands && typeof window.KyanbasuCommands.rawRuntimeText === 'function'){
+      return window.KyanbasuCommands.rawRuntimeText(window);
+    }
+  }catch(_){}
+  return "";
+}
+function updateConsole(){ consoleText.value = buildCommands(); }
+var __baseUpdateConsole = updateConsole;
+updateConsole = function(){
+  var rv = __baseUpdateConsole.apply(this, arguments);
+  queueInspectorRender(20);
+  return rv;
+};
+copyBtn.addEventListener('click', async function(){
+  var cmds = buildCommands();
+  if (!cmds){ alert("No changes to copy."); return; }
+  try{ await navigator.clipboard.writeText(cmds); alert("Commands copied ("+cmds.split("\\n").length+" line(s))."); }
+  catch(e){ prompt("Copy these commands:", cmds); }
+});
+copyBtn2.addEventListener('click', function(){ copyBtn.click(); });
+toggleConsole.addEventListener('click', function(){ consolePanel.classList.toggle('open'); });
+
+/* ===== Lines (placeholder) ===== */
+function drawLinks(){ builderLinks.innerHTML = ""; }
+
+/* ===== Boot ===== */
+function initFromDATA(opts){
+  try {
+    var D = window.DATA || {};
+    var skipInitialPlacement = !!(opts && opts.skipInitialPlacement);
+    if (!BASE_DATA_SNAPSHOT){
+      BASE_DATA_SNAPSHOT = cloneJSON(D);
+    }
+    TASKS       = Array.isArray(D.tasks) ? D.tasks.slice() : [];
+    TASK_BY_SHORT = {}; INIT_MAIN_TAG = {}; INIT_PROJECT  = {};
+    for (var i=0;i<TASKS.length;i++){
+      TASK_BY_SHORT[TASKS[i].short]=TASKS[i];
+      INIT_MAIN_TAG[TASKS[i].short] = firstTag(TASKS[i]) || "(no tag)";
+      INIT_PROJECT[TASKS[i].short]  = TASKS[i].project || "(no project)";
+    }
+    var G = (D.graph && typeof D.graph === "object") ? D.graph : {};
+    PARENT_DEPS0     = (G.parent_current_deps && typeof G.parent_current_deps === "object") ? G.parent_current_deps : {};
+    CHILD_TO_PARENTS = (G.child_to_parents && typeof G.child_to_parents === "object") ? G.child_to_parents : {};
+
+    if (parsedBadge) parsedBadge.textContent = "Parsed: " + TASKS.length;
+    if (hideHasDeps) hideHasDeps.checked = false;
+    if (q) q.value = "";
+
+    renderList();
+    
+    // __EXISTING_SOLID_V3B__ boot edges inside init
+    try {
+      var G2 = (D.graph && typeof D.graph === 'object') ? D.graph : {};
+      window.EXIST_EDGES = (G2 && Array.isArray(G2.edges)) ? G2.edges.slice() : [];
+    } catch(_){ window.EXIST_EDGES = []; }
+    try { if (typeof refreshDepHandleLetters === 'function') refreshDepHandleLetters(); } catch(_){}
+    try { if (typeof drawLinks === 'function') drawLinks(); } catch(_){}
+projectAreas = new Map(); tagAreas = new Map(); // EMPTY canvas
+    recomputeAreasAndTags();
+    setMode('builder');
+
+    collapseDrawer();  // start hidden
+    // this helps to pre-load projects in the canvas when they are submitted as arguments to the script
+    if (!skipInitialPlacement && D && Array.isArray(D.init_projects) && D.init_projects.length) {
+      // De-dupe while preserving order-ish
+      var seen = Object.create(null);
+      var wanted = D.init_projects.filter(function(p){
+        p = (p || "(no project)");
+        if (seen[p]) return false; seen[p] = 1; return true;
+      });
+
+      var addedAny = false;
+      for (var i = 0; i < wanted.length; i++) {
+        try {
+          var n = addProjectTasks(wanted[i]);
+          if (n > 0) addedAny = true;
+        } catch(_) {}
+      }
+      try { resolveProjectOverlaps(); } catch(_){}
+      try { drawLinks(); } catch(_){}
+    }
+
+    // --- Auto-place filtered tasks (from -f/--filter) as if added from the drawer
+    try {
+      var D = window.DATA || {};
+      if (!skipInitialPlacement && D && Array.isArray(D.init_task_uuids) && D.init_task_uuids.length) {
+        // 1) map uuid->task
+        var byUuid = window.UUID2TASK || (function(){
+          var m = Object.create(null);
+          (window.TASKS || []).forEach(function(t){ if (t && t.uuid) m[t.uuid] = t; });
+          return m;
+        })();
+
+        // 2) already placed?
+        var already = Object.create(null);
+        Array.prototype.forEach.call(
+          document.querySelectorAll('#builderStage .node'),
+          function(n){
+            var u = n.getAttribute('data-uuid') || n.getAttribute('data-short');
+            if (u) already[u] = 1;
+          }
+        );
+
+        // 3) group by Project/Tag & ensure bubbles first
+        var groups = Object.create(null);
+        var projectsNeeded = Object.create(null);
+        D.init_task_uuids.forEach(function(u){
+          var t = byUuid[u];
+          if (!t) return;
+          var id = String(t.uuid || t.short || '');
+          if (already[id]) return;
+          var p = t.project || '(no project)';
+          var tag = (t.tags && t.tags.length ? t.tags[0] : '(no tag)');
+          (groups[p+'||'+tag] = groups[p+'||'+tag] || []).push(t);
+          (projectsNeeded[p] = projectsNeeded[p] || new Set()).add(tag);
+        });
+
+        var keys = Object.keys(groups);
+        if (!keys.length) { /* nothing to place */ }
+        else {
+          Object.keys(projectsNeeded).forEach(function(p){
+            ensureProjectArea(p);
+            projectsNeeded[p].forEach(function(tag){ ensureTagArea(p, tag); });
+          });
+          recomputeAreasAndTags();
+
+          // 4) append all nodes (deferLayout=true) — no relayout yet
+          keys.forEach(function(k){
+            groups[k].forEach(function(t){
+              addNodeForTask(t, null, null, {deferLayout:true});
+            });
+          });
+
+          // 5) relayout AFTER paint so offsetHeight is correct
+          var doRelayout = function(){
+            try {
+              keys.forEach(function(k){
+                var parts = k.split('||'); var p = parts[0], tag = parts[1];
+                relayoutTag(p, tag);
+                resolveTagOverlaps(p);
+              });
+              resolveProjectOverlaps();
+              drawLinks();
+            } catch(e){ console.log('[auto-place] relayout error', e); }
+          };
+          requestAnimationFrame(function(){ requestAnimationFrame(doRelayout); });
+        }
+      }
+    } catch(e){ console.log('[auto-place] error', e); }
+
+
+
+    updateConsole();
+    queueInspectorRender(0);
+  } catch (e) { console.log('[Kyanbasu] initFromDATA error', e); }
+}
+document.addEventListener('twdata', function(){ initFromDATA(); }, { once:true });
+window.addEventListener('load', function(){ if (window.DATA_READY) initFromDATA(); }, { once:true });
+if(q) q.addEventListener('input', renderList);
+if(hideHasDeps) hideHasDeps.addEventListener('change', renderList);
+</script>
+
+
+</body></html>

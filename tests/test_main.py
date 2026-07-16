@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import taskcanvas.app as TaskCanvas
+import kyanbasu.app as Kyanbasu
 
 
 def _task(uuid: str, desc: str, project: str = "Work", depends=None, due=None):
@@ -23,27 +23,14 @@ def _task(uuid: str, desc: str, project: str = "Work", depends=None, due=None):
 
 
 class TestMainFlow(unittest.TestCase):
-    def test_logger_prefers_kyanbasu_log_level(self):
-        original_level = TaskCanvas.LOGGER.level
+    def test_logger_uses_kyanbasu_log_level(self):
+        original_level = Kyanbasu.LOGGER.level
         try:
-            with patch.dict(
-                TaskCanvas.os.environ,
-                {"KYANBASU_LOG_LEVEL": "ERROR", "TASKCANVAS_LOG_LEVEL": "DEBUG"},
-                clear=True,
-            ):
-                logger = TaskCanvas._build_logger()
+            with patch.dict(Kyanbasu.os.environ, {"KYANBASU_LOG_LEVEL": "ERROR"}, clear=True):
+                logger = Kyanbasu._build_logger()
             self.assertEqual(logger.level, logging.ERROR)
         finally:
-            TaskCanvas.LOGGER.setLevel(original_level)
-
-    def test_logger_accepts_legacy_taskcanvas_log_level(self):
-        original_level = TaskCanvas.LOGGER.level
-        try:
-            with patch.dict(TaskCanvas.os.environ, {"TASKCANVAS_LOG_LEVEL": "WARNING"}, clear=True):
-                logger = TaskCanvas._build_logger()
-            self.assertEqual(logger.level, logging.WARNING)
-        finally:
-            TaskCanvas.LOGGER.setLevel(original_level)
+            Kyanbasu.LOGGER.setLevel(original_level)
 
     def test_main_merges_selector_and_filter_placements(self):
         all_tasks = [
@@ -59,26 +46,26 @@ class TestMainFlow(unittest.TestCase):
             return filtered_tasks if filter_str else all_tasks
 
         with tempfile.TemporaryDirectory() as tmp:
-            out_html = Path(tmp) / "TaskCanvas.html"
-            with patch.object(TaskCanvas, "OUT_HTML", out_html), patch.object(
-                TaskCanvas, "fetch_tasks", side_effect=fake_fetch
+            out_html = Path(tmp) / "Kyanbasu.html"
+            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+                Kyanbasu, "fetch_tasks", side_effect=fake_fetch
             ), patch.object(
-                TaskCanvas, "build_payload", return_value={"tasks": [], "graph": {}}
+                Kyanbasu, "build_payload", return_value={"tasks": [], "graph": {}}
             ), patch.object(
-                TaskCanvas, "run_project_selector", return_value=["FromSelector"]
+                Kyanbasu, "run_project_selector", return_value=["FromSelector"]
             ), patch.object(
-                TaskCanvas,
+                Kyanbasu,
                 "_load_runtime_html",
                 return_value="<html><head></head><body><!-- INLINE_PAYLOAD_HERE --></body></html>",
             ), patch.object(
-                TaskCanvas, "_find_bg_file", return_value=None
+                Kyanbasu, "_find_bg_file", return_value=None
             ), patch.object(
-                TaskCanvas, "open_file"
+                Kyanbasu, "open_file"
             ) as mock_open, patch.object(
-                TaskCanvas.sys,
+                Kyanbasu.sys,
                 "argv",
                 [
-                    "TaskCanvas.py",
+                    "Kyanbasu.py",
                     "--filter",
                     "project:Work +P1",
                     "--selector",
@@ -86,7 +73,7 @@ class TestMainFlow(unittest.TestCase):
                     "Home",
                 ],
             ):
-                rc = TaskCanvas.main()
+                rc = Kyanbasu.main()
 
             self.assertEqual(rc, 0)
             self.assertEqual(calls, [None, "project:Work +P1"])
@@ -108,17 +95,17 @@ class TestMainFlow(unittest.TestCase):
             raise ValueError("Invalid --filter expression: No closing quotation")
 
         with tempfile.TemporaryDirectory() as tmp:
-            out_html = Path(tmp) / "TaskCanvas.html"
-            with patch.object(TaskCanvas, "OUT_HTML", out_html), patch.object(
-                TaskCanvas, "fetch_tasks", side_effect=fake_fetch
+            out_html = Path(tmp) / "Kyanbasu.html"
+            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+                Kyanbasu, "fetch_tasks", side_effect=fake_fetch
             ), patch.object(
-                TaskCanvas, "_load_runtime_html"
+                Kyanbasu, "_load_runtime_html"
             ) as mock_html_loader, patch.object(
-                TaskCanvas, "open_file"
+                Kyanbasu, "open_file"
             ) as mock_open, patch.object(
-                TaskCanvas.sys, "argv", ["TaskCanvas.py", "--filter", "project:\"broken"]
+                Kyanbasu.sys, "argv", ["Kyanbasu.py", "--filter", "project:\"broken"]
             ):
-                rc = TaskCanvas.main()
+                rc = Kyanbasu.main()
 
             self.assertEqual(rc, 2)
             self.assertFalse(out_html.exists())
@@ -127,15 +114,15 @@ class TestMainFlow(unittest.TestCase):
 
     def test_main_returns_error_on_missing_filter_value(self):
         with tempfile.TemporaryDirectory() as tmp:
-            out_html = Path(tmp) / "TaskCanvas.html"
-            with patch.object(TaskCanvas, "OUT_HTML", out_html), patch.object(
-                TaskCanvas, "fetch_tasks"
+            out_html = Path(tmp) / "Kyanbasu.html"
+            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+                Kyanbasu, "fetch_tasks"
             ) as mock_fetch, patch.object(
-                TaskCanvas, "open_file"
+                Kyanbasu, "open_file"
             ) as mock_open, patch.object(
-                TaskCanvas.sys, "argv", ["TaskCanvas.py", "--filter"]
+                Kyanbasu.sys, "argv", ["Kyanbasu.py", "--filter"]
             ):
-                rc = TaskCanvas.main()
+                rc = Kyanbasu.main()
 
             self.assertEqual(rc, 2)
             self.assertFalse(out_html.exists())
@@ -144,17 +131,17 @@ class TestMainFlow(unittest.TestCase):
 
     def test_main_returns_error_on_missing_bg_value(self):
         with tempfile.TemporaryDirectory() as tmp:
-            out_html = Path(tmp) / "TaskCanvas.html"
-            with patch.object(TaskCanvas, "OUT_HTML", out_html), patch.object(
-                TaskCanvas, "fetch_tasks", return_value=[]
+            out_html = Path(tmp) / "Kyanbasu.html"
+            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+                Kyanbasu, "fetch_tasks", return_value=[]
             ), patch.object(
-                TaskCanvas, "_find_bg_file"
+                Kyanbasu, "_find_bg_file"
             ) as mock_find_bg, patch.object(
-                TaskCanvas, "open_file"
+                Kyanbasu, "open_file"
             ) as mock_open, patch.object(
-                TaskCanvas.sys, "argv", ["TaskCanvas.py", "--bg"]
+                Kyanbasu.sys, "argv", ["Kyanbasu.py", "--bg"]
             ):
-                rc = TaskCanvas.main()
+                rc = Kyanbasu.main()
 
             self.assertEqual(rc, 2)
             self.assertFalse(out_html.exists())
@@ -163,21 +150,21 @@ class TestMainFlow(unittest.TestCase):
 
     def test_main_returns_error_on_template_load_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
-            out_html = Path(tmp) / "TaskCanvas.html"
-            with patch.object(TaskCanvas, "OUT_HTML", out_html), patch.object(
-                TaskCanvas, "fetch_tasks", return_value=[]
+            out_html = Path(tmp) / "Kyanbasu.html"
+            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+                Kyanbasu, "fetch_tasks", return_value=[]
             ), patch.object(
-                TaskCanvas, "build_payload", return_value={"tasks": [], "graph": {}}
+                Kyanbasu, "build_payload", return_value={"tasks": [], "graph": {}}
             ), patch.object(
-                TaskCanvas,
+                Kyanbasu,
                 "_load_runtime_html",
                 side_effect=RuntimeError("template load failed"),
             ), patch.object(
-                TaskCanvas, "open_file"
+                Kyanbasu, "open_file"
             ) as mock_open, patch.object(
-                TaskCanvas.sys, "argv", ["TaskCanvas.py"]
+                Kyanbasu.sys, "argv", ["Kyanbasu.py"]
             ):
-                rc = TaskCanvas.main()
+                rc = Kyanbasu.main()
 
             self.assertEqual(rc, 1)
             self.assertFalse(out_html.exists())
@@ -185,17 +172,17 @@ class TestMainFlow(unittest.TestCase):
 
     def test_main_succeeds_even_if_auto_open_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
-            out_html = Path(tmp) / "TaskCanvas.html"
-            with patch.object(TaskCanvas, "OUT_HTML", out_html), patch.object(
-                TaskCanvas, "fetch_tasks", return_value=[]
+            out_html = Path(tmp) / "Kyanbasu.html"
+            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+                Kyanbasu, "fetch_tasks", return_value=[]
             ), patch.object(
-                TaskCanvas, "_find_bg_file", return_value=None
+                Kyanbasu, "_find_bg_file", return_value=None
             ), patch.object(
-                TaskCanvas, "open_file", return_value=False
+                Kyanbasu, "open_file", return_value=False
             ), patch.object(
-                TaskCanvas.sys, "argv", ["TaskCanvas.py"]
+                Kyanbasu.sys, "argv", ["Kyanbasu.py"]
             ):
-                rc = TaskCanvas.main()
+                rc = Kyanbasu.main()
 
             self.assertEqual(rc, 0)
             self.assertTrue(out_html.exists())
@@ -212,17 +199,17 @@ class TestMainFlow(unittest.TestCase):
         ]
 
         with tempfile.TemporaryDirectory() as tmp:
-            out_html = Path(tmp) / "TaskCanvas.html"
-            with patch.object(TaskCanvas, "OUT_HTML", out_html), patch.object(
-                TaskCanvas, "fetch_tasks", return_value=tasks
+            out_html = Path(tmp) / "Kyanbasu.html"
+            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+                Kyanbasu, "fetch_tasks", return_value=tasks
             ), patch.object(
-                TaskCanvas, "_find_bg_file", return_value=None
+                Kyanbasu, "_find_bg_file", return_value=None
             ), patch.object(
-                TaskCanvas, "open_file"
+                Kyanbasu, "open_file"
             ), patch.object(
-                TaskCanvas.sys, "argv", ["TaskCanvas.py"]
+                Kyanbasu.sys, "argv", ["Kyanbasu.py"]
             ):
-                rc = TaskCanvas.main()
+                rc = Kyanbasu.main()
 
             self.assertEqual(rc, 0)
             self.assertTrue(out_html.exists())
@@ -271,17 +258,17 @@ class TestMainFlow(unittest.TestCase):
 
     def test_main_generates_distinct_reset_and_clear_canvas_paths(self):
         with tempfile.TemporaryDirectory() as tmp:
-            out_html = Path(tmp) / "TaskCanvas.html"
-            with patch.object(TaskCanvas, "OUT_HTML", out_html), patch.object(
-                TaskCanvas, "fetch_tasks", return_value=[]
+            out_html = Path(tmp) / "Kyanbasu.html"
+            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+                Kyanbasu, "fetch_tasks", return_value=[]
             ), patch.object(
-                TaskCanvas, "_find_bg_file", return_value=None
+                Kyanbasu, "_find_bg_file", return_value=None
             ), patch.object(
-                TaskCanvas, "open_file"
+                Kyanbasu, "open_file"
             ), patch.object(
-                TaskCanvas.sys, "argv", ["TaskCanvas.py"]
+                Kyanbasu.sys, "argv", ["Kyanbasu.py"]
             ):
-                rc = TaskCanvas.main()
+                rc = Kyanbasu.main()
 
             self.assertEqual(rc, 0)
             html = out_html.read_text(encoding="utf-8")
@@ -294,17 +281,17 @@ class TestMainFlow(unittest.TestCase):
         tasks = [_task("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "Alpha", project="Home")]
 
         with tempfile.TemporaryDirectory() as tmp:
-            out_html = Path(tmp) / "TaskCanvas.html"
-            with patch.object(TaskCanvas, "OUT_HTML", out_html), patch.object(
-                TaskCanvas, "fetch_tasks", return_value=tasks
+            out_html = Path(tmp) / "Kyanbasu.html"
+            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+                Kyanbasu, "fetch_tasks", return_value=tasks
             ), patch.object(
-                TaskCanvas, "_find_bg_file", return_value=None
+                Kyanbasu, "_find_bg_file", return_value=None
             ), patch.object(
-                TaskCanvas, "open_file"
+                Kyanbasu, "open_file"
             ), patch.object(
-                TaskCanvas.sys, "argv", ["TaskCanvas.py"]
+                Kyanbasu.sys, "argv", ["Kyanbasu.py"]
             ):
-                rc = TaskCanvas.main()
+                rc = Kyanbasu.main()
 
             self.assertEqual(rc, 0)
             html = out_html.read_text(encoding="utf-8")
@@ -312,17 +299,17 @@ class TestMainFlow(unittest.TestCase):
 
     def test_main_places_dependency_lines_between_bubbles_and_labels(self):
         with tempfile.TemporaryDirectory() as tmp:
-            out_html = Path(tmp) / "TaskCanvas.html"
-            with patch.object(TaskCanvas, "OUT_HTML", out_html), patch.object(
-                TaskCanvas, "fetch_tasks", return_value=[]
+            out_html = Path(tmp) / "Kyanbasu.html"
+            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+                Kyanbasu, "fetch_tasks", return_value=[]
             ), patch.object(
-                TaskCanvas, "_find_bg_file", return_value=None
+                Kyanbasu, "_find_bg_file", return_value=None
             ), patch.object(
-                TaskCanvas, "open_file"
+                Kyanbasu, "open_file"
             ), patch.object(
-                TaskCanvas.sys, "argv", ["TaskCanvas.py"]
+                Kyanbasu.sys, "argv", ["Kyanbasu.py"]
             ):
-                rc = TaskCanvas.main()
+                rc = Kyanbasu.main()
 
             self.assertEqual(rc, 0)
             html = out_html.read_text(encoding="utf-8")
@@ -334,17 +321,17 @@ class TestMainFlow(unittest.TestCase):
 
     def test_main_generates_dependency_details_for_task_inspector(self):
         with tempfile.TemporaryDirectory() as tmp:
-            out_html = Path(tmp) / "TaskCanvas.html"
-            with patch.object(TaskCanvas, "OUT_HTML", out_html), patch.object(
-                TaskCanvas, "fetch_tasks", return_value=[]
+            out_html = Path(tmp) / "Kyanbasu.html"
+            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+                Kyanbasu, "fetch_tasks", return_value=[]
             ), patch.object(
-                TaskCanvas, "_find_bg_file", return_value=None
+                Kyanbasu, "_find_bg_file", return_value=None
             ), patch.object(
-                TaskCanvas, "open_file"
+                Kyanbasu, "open_file"
             ), patch.object(
-                TaskCanvas.sys, "argv", ["TaskCanvas.py"]
+                Kyanbasu.sys, "argv", ["Kyanbasu.py"]
             ):
-                rc = TaskCanvas.main()
+                rc = Kyanbasu.main()
 
             self.assertEqual(rc, 0)
             html = out_html.read_text(encoding="utf-8")

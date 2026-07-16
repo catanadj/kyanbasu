@@ -1,0 +1,47 @@
+<script id="FEATURE_SHORTIFY_RENDER_V1">(function(){
+  if (window.__SHORTIFY_RENDER__) return; window.__SHORTIFY_RENDER__=true;
+  function uuidToShort(uuid){
+    try{
+      if (window.KyanbasuCommands && typeof window.KyanbasuCommands.uuidToShort === 'function'){
+        return window.KyanbasuCommands.uuidToShort(window, uuid);
+      }
+    }catch(_){}
+    try{
+      if (!uuid) return "";
+      if (window.TASKS) for (var i=0;i<TASKS.length;i++) if (TASKS[i]?.uuid===uuid) return TASKS[i].short||uuid;
+      if (window.TASK_BY_SHORT){ for (var k in TASK_BY_SHORT) if (TASK_BY_SHORT[k]?.uuid===uuid) return k; }
+    }catch(_){}
+    return uuid;
+  }
+  function shortifyText(txt){
+    try{
+      if (window.KyanbasuCommands && typeof window.KyanbasuCommands.shortifyText === 'function'){
+        return window.KyanbasuCommands.shortifyText(txt, window);
+      }
+    }catch(_){}
+    if (!txt) return txt;
+    return String(txt).replace(/\b([0-9a-f]{8}-[0-9a-f-]{13,})\b/ig, function(m){ return uuidToShort(m) || m; });
+  }
+  if (typeof window.updateConsole === 'function' && !window.updateConsole.__shortifyWrap){
+    var _u = window.updateConsole;
+    window.updateConsole = function(){
+      var rv = _u.apply(this, arguments);
+      try{ var el = document.getElementById('consoleText'); if (el && typeof el.value === 'string') el.value = shortifyText(el.value); }catch(_){}
+      return rv;
+    };
+    window.updateConsole.__shortifyWrap = true;
+  }
+  ['__depsOverlayRender','renderStagedOverlay'].forEach(function(fn){
+    if (typeof window[fn] === 'function' && !window[fn].__shortifyWrap){
+      var orig = window[fn];
+      window[fn] = function(){
+        var rv = orig.apply(this, arguments);
+        try{ var pre = document.getElementById('depCmdPre'); if (pre && typeof pre.textContent === 'string') pre.textContent = shortifyText(pre.textContent); }catch(_){}
+        return rv;
+      };
+      window[fn].__shortifyWrap = true;
+    }
+  });
+  try{ if (typeof updateConsole==='function') updateConsole(); }catch(_){}
+  try{ if (typeof __depsOverlayRender==='function') __depsOverlayRender(); }catch(_){}
+})();</script>

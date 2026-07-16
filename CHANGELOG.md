@@ -5,6 +5,17 @@ versioning from the `0.2.0` release onward.
 
 ## [Unreleased]
 
+### Changed
+
+- The implementation now lives entirely in the `kyanbasu` Python package.
+- The Python distribution is named `kyanbasu` and generated workspaces are
+  written to `Kyanbasu.html`.
+
+### Removed
+
+- The TaskCanvas command, wrapper, package, environment variables, browser API
+  aliases, storage migration, background aliases, and import formats.
+
 ## [0.2.0] - 2026-07-16
 
 ### Added

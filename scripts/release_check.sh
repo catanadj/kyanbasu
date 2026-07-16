@@ -2,7 +2,7 @@
 set -euo pipefail
 
 echo "[release-check] Running compile checks..."
-python3 -m compileall -q Kyanbasu.py TaskCanvas.py kyanbasu taskcanvas tests
+python3 -m compileall -q Kyanbasu.py kyanbasu tests
 
 echo "[release-check] Running unit tests..."
 python3 -m unittest discover -s tests -v
@@ -20,9 +20,8 @@ python3 -m pip wheel --no-build-isolation --no-deps --wheel-dir "$wheel_dir" .
 echo "[release-check] Smoke testing wheel..."
 python3 -m pip install --no-deps --target "$install_dir" "$wheel_dir"/*.whl
 primary_version="$(cd /tmp && PYTHONPATH="$install_dir" "$install_dir/bin/kyanbasu" --version)"
-legacy_version="$(cd /tmp && PYTHONPATH="$install_dir" "$install_dir/bin/taskcanvas" --version)"
-test "$primary_version" = "Kyanbasu 0.2.0"
-test "$legacy_version" = "taskcanvas 0.2.0"
+test "$primary_version" = "Kyanbasu 0.3.0"
+(cd /tmp && PYTHONPATH="$install_dir" python3 -c "from kyanbasu.app import _load_runtime_html; assert 'Kyanbasu' in _load_runtime_html()")
 
 if ! command -v task >/dev/null 2>&1; then
   echo "[release-check] ERROR: Taskwarrior binary ('task') is required for integration checks."
@@ -31,6 +30,6 @@ if ! command -v task >/dev/null 2>&1; then
 fi
 
 echo "[release-check] Running Taskwarrior integration tests..."
-TASKCANVAS_RUN_INTEGRATION=1 python3 -m unittest tests.test_task_io_integration -v
+KYANBASU_RUN_INTEGRATION=1 python3 -m unittest tests.test_task_io_integration -v
 
 echo "[release-check] OK"

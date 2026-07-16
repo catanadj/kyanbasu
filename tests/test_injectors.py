@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from taskcanvas.injectors import (
+from kyanbasu.injectors import (
     _append_remove_mode,
     _find_bg_file,
     inject_hover_console_features,
@@ -105,7 +105,7 @@ class TestInjectors(unittest.TestCase):
         twice = inject_command_preflight(once)
         self.assertEqual(twice.count("COMMANDS_CORE_V1"), 1)
         self.assertEqual(twice.count("FEATURE_COMMAND_PREFLIGHT_V1"), 1)
-        self.assertIn("window.TaskCanvasCommands", twice)
+        self.assertIn("window.KyanbasuCommands", twice)
         self.assertIn("function shQuote", twice)
         self.assertIn("function shellQuoteTaskLine", twice)
         self.assertIn("function dependencyLines", twice)
@@ -118,38 +118,26 @@ class TestInjectors(unittest.TestCase):
         self.assertEqual(twice.count("FEATURE_RUNTIME_DIAGNOSTICS_V1"), 1)
         self.assertIn("window.addEventListener('error'", twice)
         self.assertIn("window.addEventListener('unhandledrejection'", twice)
-        self.assertIn("window.TaskCanvasPerfReport", twice)
+        self.assertIn("window.KyanbasuPerfReport", twice)
         self.assertIn("MutationObserver", twice)
         self.assertIn("requestAnimationFrame", twice)
 
     def test_find_bg_file_prefers_base_dir_candidates(self):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
-            bg = base / "taskcanvas-bg.jpg"
+            bg = base / "kyanbasu-bg.jpg"
             bg.write_bytes(b"img")
             found = _find_bg_file(None, base_dir=base)
             self.assertEqual(found, bg)
 
-    def test_find_bg_file_prefers_kyanbasu_name_over_legacy_name(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            base = Path(tmp)
-            primary = base / "kyanbasu-bg.jpg"
-            legacy = base / "taskcanvas-bg.jpg"
-            primary.write_bytes(b"primary")
-            legacy.write_bytes(b"legacy")
-
-            found = _find_bg_file(None, base_dir=base)
-
-            self.assertEqual(found, primary)
-
     def test_find_bg_file_skips_demo_dir_by_default(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            package_dir = root / "taskcanvas"
+            package_dir = root / "kyanbasu"
             demo_dir = root / "demo"
             package_dir.mkdir()
             demo_dir.mkdir()
-            bg = demo_dir / "taskcanvas-bg.jpg"
+            bg = demo_dir / "kyanbasu-bg.jpg"
             bg.write_bytes(b"img")
 
             found = _find_bg_file(None, base_dir=package_dir)
@@ -159,11 +147,11 @@ class TestInjectors(unittest.TestCase):
     def test_find_bg_file_searches_demo_dir_when_enabled(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            package_dir = root / "taskcanvas"
+            package_dir = root / "kyanbasu"
             demo_dir = root / "demo"
             package_dir.mkdir()
             demo_dir.mkdir()
-            bg = demo_dir / "taskcanvas-bg.jpg"
+            bg = demo_dir / "kyanbasu-bg.jpg"
             bg.write_bytes(b"img")
 
             found = _find_bg_file(None, base_dir=package_dir, include_demo=True)
@@ -175,7 +163,7 @@ class TestInjectors(unittest.TestCase):
             root = Path(tmp)
             src = root / "src.jpg"
             src.write_bytes(b"fake-image")
-            out_html = root / "dist" / "TaskCanvas.html"
+            out_html = root / "dist" / "Kyanbasu.html"
             out_html.parent.mkdir(parents=True, exist_ok=True)
 
             logs = []

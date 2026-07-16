@@ -1,6 +1,6 @@
 import unittest
 
-from taskcanvas.runtime_support import inject_body, inject_body_once, inject_head, inject_head_once
+from kyanbasu.runtime_support import inject_body, inject_body_once, inject_head, inject_head_once
 
 
 class TestRuntimeSupport(unittest.TestCase):

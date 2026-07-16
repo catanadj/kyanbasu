@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from taskcanvas.project_selector import _unique_projects, run_project_selector
+from kyanbasu.project_selector import _unique_projects, run_project_selector
 
 
 class TestProjectSelector(unittest.TestCase):

@@ -6,14 +6,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from taskcanvas.task_io import fetch_tasks
+from kyanbasu.task_io import fetch_tasks
 
 
 class TestTaskIOIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        if os.environ.get("TASKCANVAS_RUN_INTEGRATION") != "1":
-            raise unittest.SkipTest("Set TASKCANVAS_RUN_INTEGRATION=1 to run integration tests.")
+        if os.environ.get("KYANBASU_RUN_INTEGRATION") != "1":
+            raise unittest.SkipTest("Set KYANBASU_RUN_INTEGRATION=1 to run integration tests.")
         cls.task_bin = shutil.which("task")
         if not cls.task_bin:
             raise unittest.SkipTest("Taskwarrior binary ('task') not found.")

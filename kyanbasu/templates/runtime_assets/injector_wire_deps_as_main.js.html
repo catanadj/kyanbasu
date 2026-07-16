@@ -1,0 +1,131 @@
+<script id="__ONLY_DEPS_CONSOLE_JS__">
+(function(){
+  if (window.__ONLY_DEPS_CONSOLE__) return; window.__ONLY_DEPS_CONSOLE__ = true;
+
+  function $(sel, root){ return (root||document).querySelector(sel); }
+  function $all(sel, root){ return Array.prototype.slice.call((root||document).querySelectorAll(sel)); }
+
+  // Guard: only allow programmatic console toggles right after pressing the Console button or 'D'
+  var ALLOW_TOGGLE_UNTIL = 0;
+  function allowToggleBriefly(){
+    ALLOW_TOGGLE_UNTIL = Date.now() + 600; // 600ms window
+  }
+  function toggleAllowed(){
+    return Date.now() <= ALLOW_TOGGLE_UNTIL;
+  }
+
+  function ensureOverlay(){
+    var ol = document.getElementById('depCmdOverlay');
+    if (!ol){
+      var wrap = document.createElement('div');
+      wrap.innerHTML =
+        '<div id="depCmdOverlay" class="" style="position:fixed;right:18px;bottom:18px;z-index:100000;max-width:50vw;max-height:44vh;background:#0b1220;color:#e6eef9;border:1px solid #243247;border-radius:10px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.35)">' +
+        '  <div class="hdr" style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#0e1626;border-bottom:1px solid #243247">' +
+        '    <b style="font:12px ui-monospace,monospace">Console</b><div style="flex:1"></div>' +
+        '    <button id="depCmdHideBtn" style="all:unset;border:1px solid #2a3a54;padding:2px 6px;border-radius:6px;cursor:pointer;color:#9cc2ff">Hide</button>' +
+        '  </div>' +
+        '  <pre id="depCmdPre" style="margin:0;padding:10px;white-space:pre;max-height:36vh;overflow:auto;font:12px ui-monospace,monospace"></pre>' +
+        '</div>';
+      document.body.appendChild(wrap.firstChild);
+      ol = document.getElementById('depCmdOverlay');
+      var hideBtn = document.getElementById('depCmdHideBtn');
+      if (hideBtn) hideBtn.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); hideOverlay(); }, true);
+    }else{
+      ol.classList.remove('hidden');
+      ol.style.display = 'block';
+    }
+    return ol;
+  }
+  function overlayVisible(){
+    var ol = $('#depCmdOverlay'); if (!ol) return false;
+    return !(ol.classList.contains('hidden') || ol.style.display === 'none');
+  }
+  function showOverlay(){ var ol = ensureOverlay(); ol.classList.remove('hidden'); ol.style.display = 'block'; refreshOverlayText(); }
+  function hideOverlay(){ var ol = ensureOverlay(); ol.classList.add('hidden'); ol.style.display = 'none'; }
+  function toggleOverlay(){ if (overlayVisible()) hideOverlay(); else showOverlay(); }
+
+  // Strict Console button matching: only specific selectors
+  var CONSOLE_BTN_SELECTOR = '#toggleConsole, #consoleBtn, [data-action="toggle-console"], .toggle-console, .console-btn, button[aria-label="Console"]';
+
+  // Intercept ONLY clicks on actual Console buttons (via closest on strict selector)
+  document.addEventListener('click', function(e){
+    var btn = (e.target && e.target.closest) ? e.target.closest(CONSOLE_BTN_SELECTOR) : null;
+    if (!btn) return;
+    try{ e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); }catch(_){}
+    allowToggleBriefly();
+    toggleOverlay();
+  }, true); // capture
+
+  // Redirect common global toggles, but obey the guard
+  function overrideIfFunc(name){
+    try{
+      var f = window[name];
+      if (typeof f === 'function'){
+        window[name] = function(){
+          if (!toggleAllowed()) return; // ignore stray programmatic toggles
+          try{ return toggleOverlay(); }catch(_){}
+        };
+      }
+    }catch(_){}
+  }
+  ['toggleConsole','toggleMainConsole','toggleCommands','showConsolePanel','hideConsolePanel'].forEach(overrideIfFunc);
+
+  // 'D' key toggles deps overlay and opens guard window
+  document.addEventListener('keydown', function(e){
+    var k = (e.key||'').toLowerCase();
+    if (k==='d' && !e.metaKey && !e.ctrlKey && !e.altKey){
+      e.preventDefault(); e.stopPropagation();
+      allowToggleBriefly();
+      toggleOverlay();
+    }
+  }, true);
+
+  // Keep overlay text in sync with buildCommands()
+  function getAllCommands(){
+    try{
+      if (window.KyanbasuCommands && typeof window.KyanbasuCommands.runtimeCommandText === 'function'){
+        return window.KyanbasuCommands.runtimeCommandText(window, {short:true});
+      }
+    }catch(_){}
+    try{
+      if (typeof window.buildCommands==='function'){
+        var txt = String(window.buildCommands()||'');
+        if (window.KyanbasuCommands && typeof window.KyanbasuCommands.shortifyText === 'function'){
+          return window.KyanbasuCommands.shortifyText(txt, window);
+        }
+        return shortenUUIDs(txt);
+      }
+    }catch(_){}
+    return '';
+  }
+  function setText(el, text){
+    if (!el) return;
+    if ('value' in el) el.value = text;
+    else if ('textContent' in el) el.textContent = text;
+    else el.innerText = text;
+  }
+  function refreshOverlayText(){
+    var pre = document.getElementById('depCmdPre');
+    var txt = getAllCommands();
+    if (pre && txt!=null) setText(pre, txt);
+    try{
+      var ta = document.getElementById('consoleText');
+      if (ta && typeof ta.value === 'string' && txt != null) ta.value = txt;
+    }catch(_){}
+  }
+  (function hookUpdateConsole(){
+    var _upd = window.updateConsole;
+    window.updateConsole = function(){
+      try{ if (typeof _upd==='function') _upd.apply(this, arguments); }catch(_){}
+      try{ refreshOverlayText(); }catch(_){}
+    };
+  })();
+
+  // Initial state
+  ensureOverlay();
+  showOverlay();
+  setTimeout(refreshOverlayText, 60);
+  setTimeout(refreshOverlayText, 300);
+  setTimeout(refreshOverlayText, 1200);
+})();
+</script>

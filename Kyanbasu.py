@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from taskcanvas import app
+from kyanbasu import app
 
 
 def main(argv=None):

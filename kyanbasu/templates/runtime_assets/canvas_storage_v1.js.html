@@ -1,0 +1,113 @@
+<script id="FEATURE_CANVAS_STORAGE_V1">
+(function(){
+  if (window.KyanbasuStorage) return;
+
+  var PREFIX = 'kyanbasu:workspace:v1:';
+  var SNAPSHOT_LIMIT = 5;
+
+  function fnv1a(text){
+    var hash = 2166136261 >>> 0;
+    text = String(text || '');
+    for (var i=0; i<text.length; i++){
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(16);
+  }
+
+  function workspaceId(){
+    try{
+      var embedded = window.DATA && String(window.DATA.workspace_id || '').trim();
+      if (embedded) return embedded.replace(/[^a-zA-Z0-9._-]/g, '-').slice(0, 80);
+    }catch(_){}
+    try{
+      if (window.location && window.location.pathname) return 'path-' + fnv1a(window.location.pathname);
+    }catch(_){}
+    return 'fallback';
+  }
+
+  function storageKey(area){
+    return PREFIX + workspaceId() + ':' + String(area || 'state');
+  }
+
+  function snapshotKey(area){
+    return storageKey(area) + ':snapshots';
+  }
+
+  function parse(raw, fallback){
+    if (raw == null || raw === '') return fallback;
+    try{ return JSON.parse(raw); }catch(_){ return fallback; }
+  }
+
+  function getRaw(area){
+    var stableKey = storageKey(area);
+    try{
+      return localStorage.getItem(stableKey);
+    }catch(_){ return null; }
+  }
+
+  function snapshots(area){
+    try{
+      var key = snapshotKey(area);
+      var raw = localStorage.getItem(key);
+      var rows = parse(raw, []);
+      return Array.isArray(rows) ? rows : [];
+    }catch(_){ return []; }
+  }
+
+  function saveSnapshot(area, raw){
+    if (raw == null) return true;
+    try{
+      var rows = snapshots(area);
+      if (rows.length && rows[0] && rows[0].raw === raw) return true;
+      rows.unshift({savedAt:Date.now(), raw:raw});
+      if (rows.length > SNAPSHOT_LIMIT) rows.length = SNAPSHOT_LIMIT;
+      localStorage.setItem(snapshotKey(area), JSON.stringify(rows));
+      return true;
+    }catch(_){ return false; }
+  }
+
+  function setRaw(area, raw, options){
+    options = options || {};
+    var key = storageKey(area);
+    try{
+      var current = localStorage.getItem(key);
+      if (current === raw) return true;
+      if (options.snapshot && current != null) saveSnapshot(area, current);
+      localStorage.setItem(key, raw);
+      return true;
+    }catch(_){ return false; }
+  }
+
+  function getJSON(area, fallback){
+    return parse(getRaw(area), fallback);
+  }
+
+  function setJSON(area, value, options){
+    try{ return setRaw(area, JSON.stringify(value), options); }
+    catch(_){ return false; }
+  }
+
+  function restoreSnapshot(area, index){
+    var rows = snapshots(area);
+    index = parseInt(index, 10) || 0;
+    if (index < 0 || index >= rows.length || !rows[index] || typeof rows[index].raw !== 'string') return null;
+    var raw = rows[index].raw;
+    if (!setRaw(area, raw, {snapshot:true})) return null;
+    return parse(raw, null);
+  }
+
+  var api = {
+    version: 1,
+    workspaceId: workspaceId,
+    key: storageKey,
+    getRaw: getRaw,
+    setRaw: setRaw,
+    getJSON: getJSON,
+    setJSON: setJSON,
+    snapshots: snapshots,
+    restoreSnapshot: restoreSnapshot
+  };
+  window.KyanbasuStorage = api;
+})();
+</script>

@@ -1,0 +1,293 @@
+<script id="FEATURE_DEPENDENCY_INTERACTIONS_V1">
+(function(){
+  if (window.__DEPENDENCY_INTERACTIONS_V1__) return;
+  window.__DEPENDENCY_INTERACTIONS_V1__ = true;
+
+  function $(sel, root){ return (root || document).querySelector(sel); }
+  function stage(){ return $('#builderStage'); }
+  function linksSvg(){ return $('#builderLinks'); }
+  function z(){ return (typeof window.ZSCALE === 'number' && window.ZSCALE) ? window.ZSCALE : 1; }
+  function escAttr(s){ return String(s || '').replace(/"/g, '\\"'); }
+  function nodeElByShort(short){ return $('#builderStage [data-short="' + escAttr(short) + '"]'); }
+
+  function rectByShort(short){
+    var st = stage(), el = nodeElByShort(short);
+    if (!st || !el) return null;
+    var r = el.getBoundingClientRect(), sr = st.getBoundingClientRect(), zz = z();
+    return {x:(r.left - sr.left) / zz, y:(r.top - sr.top) / zz, w:r.width / zz, h:r.height / zz};
+  }
+  function aRight(short){ var r = rectByShort(short); return r ? {x:r.x + r.w, y:r.y + r.h / 2} : null; }
+  function aTop(short){ var r = rectByShort(short); return r ? {x:r.x + r.w / 2, y:r.y} : null; }
+  function cubic(a, b){
+    var g = 40;
+    return "M " + a.x + " " + a.y + " C " + (a.x + g) + " " + a.y + ", " + b.x + " " + Math.max(b.y - g, 0) + ", " + b.x + " " + b.y;
+  }
+  function ensureArrowMarker(){
+    var svg = linksSvg(); if (!svg) return;
+    var defs = svg.querySelector('defs');
+    if (!defs){
+      defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+      svg.insertBefore(defs, svg.firstChild);
+    }
+    if (!svg.querySelector('#depArrow')){
+      var m = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+      m.setAttribute('id', 'depArrow');
+      m.setAttribute('viewBox', '0 0 10 10');
+      m.setAttribute('refX', '8');
+      m.setAttribute('refY', '5');
+      m.setAttribute('markerWidth', '6');
+      m.setAttribute('markerHeight', '6');
+      m.setAttribute('orient', 'auto-start-reverse');
+      var p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      p.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z');
+      p.setAttribute('fill', '#9ecbff');
+      m.appendChild(p);
+      defs.appendChild(m);
+    }
+  }
+  function ensureEdgeGradient(svg, id, a, b){
+    if (!svg || !a || !b) return null;
+    var defs = svg.querySelector('defs');
+    if (!defs){
+      defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+      svg.insertBefore(defs, svg.firstChild);
+    }
+    var grad = svg.querySelector('#' + id);
+    if (!grad){
+      grad = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+      grad.setAttribute('id', id);
+      defs.appendChild(grad);
+    }
+    grad.setAttribute('gradientUnits', 'userSpaceOnUse');
+    grad.setAttribute('x1', String(a.x));
+    grad.setAttribute('y1', String(a.y));
+    grad.setAttribute('x2', String(b.x));
+    grad.setAttribute('y2', String(b.y));
+    while (grad.firstChild) grad.removeChild(grad.firstChild);
+    var s1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    s1.setAttribute('offset', '0%');
+    s1.setAttribute('stop-color', '#5d7fca');
+    s1.setAttribute('stop-opacity', '.42');
+    var s2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    s2.setAttribute('offset', '72%');
+    s2.setAttribute('stop-color', '#9ecbff');
+    s2.setAttribute('stop-opacity', '.82');
+    var s3 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+    s3.setAttribute('offset', '100%');
+    s3.setAttribute('stop-color', '#d0ecff');
+    s3.setAttribute('stop-opacity', '1');
+    grad.appendChild(s1);
+    grad.appendChild(s2);
+    grad.appendChild(s3);
+    return grad;
+  }
+
+  function ensureStagedAdd(){
+    return (window.stagedAdd = Array.isArray(window.stagedAdd) ? window.stagedAdd : []);
+  }
+
+  function wireHandle(handle){
+    if (!handle || handle.__depInteractionWired) return;
+    if (!handle.dataset.short && handle.getAttribute('data-short')) handle.dataset.short = handle.getAttribute('data-short');
+    handle.addEventListener('mousedown', onHandleDown);
+    handle.__depInteractionWired = true;
+  }
+
+  window.attachDepHandleToNode = window.attachDepHandleToNode || function(nodeEl){
+    if (!nodeEl || nodeEl.querySelector('.depHandle')) return;
+    var s = nodeEl.getAttribute('data-short');
+    if (!s) return;
+    var h = document.createElement('div');
+    h.className = 'depHandle';
+    h.dataset.short = s;
+    h.setAttribute('data-short', s);
+    h.textContent = '-';
+    wireHandle(h);
+    nodeEl.appendChild(h);
+  };
+
+  function wireExistingHandles(){
+    var handles = document.querySelectorAll('#builderStage [data-short] > .depHandle');
+    for (var i=0;i<handles.length;i++) wireHandle(handles[i]);
+  }
+
+  var depDrag = null;
+
+  function onHandleDown(e){
+    e.stopPropagation();
+    e.preventDefault();
+    if (e.button !== 0) return;
+    var s = e.currentTarget.dataset.short || e.currentTarget.getAttribute('data-short');
+    depDrag = { fromShort:s, temp:null };
+    e.currentTarget.classList.add('dragging');
+    document.addEventListener('mousemove', onHandleMove);
+    document.addEventListener('mouseup', onHandleUp, {once:true});
+  }
+
+  function onHandleMove(e){
+    if (!depDrag) return;
+    var st = stage(), svg = linksSvg();
+    if (!st || !svg) return;
+    var r = st.getBoundingClientRect(), zz = z();
+    var a = aRight(depDrag.fromShort);
+    if (!a) return;
+    var mx = (e.clientX - r.left) / zz, my = (e.clientY - r.top) / zz;
+    if (!depDrag.temp){
+      depDrag.temp = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      depDrag.temp.setAttribute('stroke', '#9ecbff');
+      depDrag.temp.setAttribute('stroke-width', '2');
+      depDrag.temp.setAttribute('fill', 'none');
+      depDrag.temp.setAttribute('stroke-dasharray', '6 6');
+      depDrag.temp.style.pointerEvents = 'none';
+      svg.appendChild(depDrag.temp);
+    }
+    depDrag.temp.setAttribute('d', cubic(a, {x:mx, y:my}));
+  }
+
+  window.depCreatesCycle = window.depCreatesCycle || function(fromShort, toShort){
+    try{
+      var edges = [];
+      if (Array.isArray(window.EXIST_EDGES)) edges = edges.concat(window.EXIST_EDGES);
+      if (Array.isArray(window.stagedAdd)) edges = edges.concat(window.stagedAdd);
+      var adj = Object.create(null);
+      edges.forEach(function(e){
+        if (e && e.from && e.to) (adj[e.from] || (adj[e.from] = [])).push(e.to);
+      });
+      (adj[fromShort] || (adj[fromShort] = [])).push(toShort);
+      var stack = [toShort], seen = Object.create(null);
+      while (stack.length){
+        var u = stack.pop();
+        if (u === fromShort) return true;
+        if (seen[u]) continue;
+        seen[u] = true;
+        (adj[u] || []).forEach(function(v){ stack.push(v); });
+      }
+    }catch(_){}
+    return false;
+  };
+
+  function onHandleUp(e){
+    var h = document.querySelector('.depHandle.dragging');
+    if (h) h.classList.remove('dragging');
+    document.removeEventListener('mousemove', onHandleMove);
+    if (depDrag && depDrag.temp) depDrag.temp.remove();
+
+    var under = document.elementFromPoint(e.clientX, e.clientY);
+    var tgt = under && under.closest && under.closest('#builderStage [data-short]');
+    var toShort = tgt ? tgt.getAttribute('data-short') : null;
+    var fromShort = depDrag && depDrag.fromShort;
+    depDrag = null;
+    if (!fromShort || !toShort || fromShort === toShort) return;
+
+    if (typeof window.depCreatesCycle === 'function' && window.depCreatesCycle(fromShort, toShort)){
+      try{ if (typeof window.toastMsg === 'function') window.toastMsg('Blocked - cycle'); }catch(_){}
+      return;
+    }
+
+    try{
+      var staged = ensureStagedAdd();
+      if (!staged.some(function(edge){ return edge && edge.from === fromShort && edge.to === toShort; })){
+        staged.push({from:fromShort, to:toShort});
+      }
+    }catch(_){}
+    try{ if (typeof window.drawLinks === 'function') window.drawLinks(); }catch(_){}
+    try{ if (typeof window.updateConsole === 'function') window.updateConsole(); }catch(_){}
+  }
+
+  function renderStagedOverlay(){
+    var svg = linksSvg();
+    if (!svg) return;
+    var g = svg.querySelector('#depStagedOverlay');
+    if (!g){
+      g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('id', 'depStagedOverlay');
+      svg.appendChild(g);
+    }
+    while (g.firstChild) g.removeChild(g.firstChild);
+    ensureStagedAdd().forEach(function(edge, index){
+      if (!edge || !edge.from || !edge.to) return;
+      var direction = window.KyanbasuEdgeDirection;
+      var blockerRect = rectByShort(edge.to), dependentRect = rectByShort(edge.from);
+      var points = direction && direction.connectionPoints && blockerRect && dependentRect ? direction.connectionPoints(blockerRect, dependentRect) : null;
+      var a = points ? points.source : aRight(edge.to), b = points ? points.target : aTop(edge.from);
+      if (!a || !b) return;
+      var p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      p.setAttribute('class', 'dep-edge staged');
+      p.setAttribute('d', cubic(a, b));
+      ensureEdgeGradient(svg, 'depGradStaged' + index, a, b);
+      p.style.stroke = 'url(#depGradStaged' + index + ')';
+      p.setAttribute('stroke-width', '2');
+      p.setAttribute('fill', 'none');
+      p.setAttribute('stroke-dasharray', '6 6');
+      p.setAttribute('data-from', String(edge.from));
+      p.setAttribute('data-to', String(edge.to));
+      p.setAttribute('data-direction-from', String(edge.to));
+      p.setAttribute('data-direction-to', String(edge.from));
+      g.appendChild(p);
+      if (direction && direction.decorate) direction.decorate(g, p, {prefix:'dep', key:String(edge.from)+'::'+String(edge.to)});
+    });
+  }
+
+  window.renderStagedOverlay = renderStagedOverlay;
+
+  if (!window.__depInteractionDrawHooked){
+    var originalDrawLinks = window.drawLinks;
+    window.drawLinks = function(){
+      try{ if (typeof originalDrawLinks === 'function') originalDrawLinks.apply(this, arguments); }catch(_){}
+      try{ renderStagedOverlay(); }catch(_){}
+      try{ if (typeof window.refreshDepHandleLetters === 'function') window.refreshDepHandleLetters(); }catch(_){}
+    };
+    window.__depInteractionDrawHooked = true;
+  }
+
+  (function observeMoves(){
+    var st = stage();
+    if (!st || st.__depInteractionMoveObs) return;
+    var raf = false;
+    function rerender(){
+      if (raf) return;
+      raf = true;
+      requestAnimationFrame(function(){
+        raf = false;
+        try{ renderStagedOverlay(); }catch(_){}
+      });
+    }
+    function touchesTaskNode(n){
+      return !!(n && n.nodeType === 1 && (
+        (n.matches && n.matches('.node[data-short], [data-short].node')) ||
+        (n.querySelector && n.querySelector('.node[data-short], [data-short].node'))
+      ));
+    }
+    var obs = new MutationObserver(function(records){
+      for (var i=0;i<records.length;i++){
+        var rec = records[i], name = rec.attributeName;
+        if (rec.type === 'childList'){
+          var changed = false;
+          for (var a=0;a<rec.addedNodes.length;a++){ if (touchesTaskNode(rec.addedNodes[a])){ changed = true; break; } }
+          for (var r=0;!changed && r<rec.removedNodes.length;r++){ if (touchesTaskNode(rec.removedNodes[r])){ changed = true; break; } }
+          if (!changed) continue;
+          wireExistingHandles();
+          rerender();
+          break;
+        }
+        if (rec.type === 'attributes' && (name === 'style' || name === 'transform') && rec.target && rec.target.classList && rec.target.classList.contains('node')){
+          rerender();
+          break;
+        }
+      }
+    });
+    try{
+      obs.observe(st, {subtree:true, childList:true, attributes:true, attributeFilter:['style', 'transform']});
+      st.__depInteractionMoveObs = obs;
+    }catch(_){}
+    window.addEventListener('resize', rerender, {passive:true});
+  })();
+
+  setTimeout(function(){
+    try{ wireExistingHandles(); }catch(_){}
+    try{ renderStagedOverlay(); }catch(_){}
+    try{ if (typeof window.refreshDepHandleLetters === 'function') window.refreshDepHandleLetters(); }catch(_){}
+  }, 0);
+  setTimeout(function(){ try{ wireExistingHandles(); }catch(_){} }, 160);
+})();
+</script>

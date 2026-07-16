@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from taskcanvas.runtime_html import build_runtime_html
+from kyanbasu.runtime_html import build_runtime_html
 
 
 class TestBrowserE2E(unittest.TestCase):
@@ -35,7 +35,7 @@ class TestBrowserE2E(unittest.TestCase):
 
     def _run_html_harness(self, html):
         with tempfile.TemporaryDirectory() as tmp:
-            p = Path(tmp) / "TaskCanvas.e2e.html"
+            p = Path(tmp) / "Kyanbasu.e2e.html"
             p.write_text(html, encoding="utf-8")
             try:
                 out = subprocess.run(
@@ -63,7 +63,7 @@ class TestBrowserE2E(unittest.TestCase):
             return m.group(1)
 
     def test_build_commands_shell_quotes_new_task_description_and_modifiers(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -102,8 +102,8 @@ window.addEventListener('load', function(){
         self.assertIn("'project:Work' '+safe'", cmds)
         self.assertIn("'hello; world $(id) O'\"'\"'Reilly'", cmds)
 
-    def test_taskcanvas_commands_core_normalizes_command_matrix(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+    def test_kyanbasu_commands_core_normalizes_command_matrix(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -120,7 +120,7 @@ window.addEventListener('load', function(){
       "task def done",
       "task add Review O'Reilly $(id) project:Work +safe"
     ].join("\\n");
-    var res = window.TaskCanvasCommands.normalize(raw);
+    var res = window.KyanbasuCommands.normalize(raw);
     var pre = document.createElement('pre');
     pre.id = 'e2e-out';
     pre.textContent = JSON.stringify({text:res.text, warnings:res.warnings});
@@ -149,7 +149,7 @@ window.addEventListener('load', function(){
         self.assertTrue(any("Conflicting terminal actions for task def" in w for w in warnings))
 
     def test_runtime_diagnostics_reports_perf_hot_paths(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -158,7 +158,7 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      if (typeof window.TaskCanvasPerfReset === 'function') window.TaskCanvasPerfReset();
+      if (typeof window.KyanbasuPerfReset === 'function') window.KyanbasuPerfReset();
       if (typeof updateConsole === 'function') updateConsole();
       if (typeof drawLinks === 'function') drawLinks();
       requestAnimationFrame(function(){});
@@ -167,10 +167,10 @@ window.addEventListener('load', function(){
       marker.id = 'perfMutationProbe';
       document.body.appendChild(marker);
       setTimeout(function(){
-        var snap = window.TaskCanvasPerfReport();
+        var snap = window.KyanbasuPerfReport();
         var out = {
-          hasDiagnostics: typeof window.TaskCanvasDiagnostics === 'function',
-          hasPerfReport: typeof window.TaskCanvasPerfReport === 'function',
+          hasDiagnostics: typeof window.KyanbasuDiagnostics === 'function',
+          hasPerfReport: typeof window.KyanbasuPerfReport === 'function',
           functions: snap.perfSummary.topFunctions.map(function(x){ return x.name; }),
           timerCalls: snap.perfSummary.topTimers.reduce(function(n, x){ return n + x.calls; }, 0),
           hasRafMetrics: !!snap.perfSummary.raf && typeof snap.perfSummary.raf.fired === 'number',
@@ -206,7 +206,7 @@ window.addEventListener('load', function(){
         self.assertGreaterEqual(result["observersCreated"], 1, msg=json.dumps(result))
 
     def test_console_utility_runtimes_wire_toast_normalize_and_copy(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -263,7 +263,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["copied"], "task one\ntask two")
 
     def test_focus_and_project_add_tag_runtimes_dedupe_and_add_multiple_tags(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps(
             {
                 "tasks": [
@@ -338,7 +338,7 @@ window.addEventListener('load', function(){
         self.assertIn("Skipped: old (already exists)", result["toast"])
 
     def test_review_changes_runtime_groups_staged_command_core_output(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps(
             {
                 "tasks": [
@@ -405,7 +405,7 @@ window.addEventListener('load', function(){
       if (typeof updateConsole === 'function') updateConsole();
       document.getElementById('reviewChangesBtn').click();
       setTimeout(function(){
-        var current = window.TaskCanvasReview.current();
+        var current = window.KyanbasuReview.current();
         var panel = document.getElementById('reviewChangesPanel');
         var copyBtn = document.getElementById('reviewCopyBtn');
         var downloadBtn = document.getElementById('reviewDownloadBtn');
@@ -507,7 +507,7 @@ window.addEventListener('load', function(){
         self.assertIn("task add 'Review panel task'", result["raw"])
 
     def test_review_changes_preflight_blocks_invalid_staged_commands(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps(
             {
                 "tasks": [
@@ -551,7 +551,7 @@ window.addEventListener('load', function(){
       if (typeof updateConsole === 'function') updateConsole();
       document.getElementById('reviewChangesBtn').click();
       setTimeout(function(){
-        var current = window.TaskCanvasReview.current();
+        var current = window.KyanbasuReview.current();
         var panel = document.getElementById('reviewChangesPanel');
         var copyBtn = document.getElementById('reviewCopyBtn');
         var downloadBtn = document.getElementById('reviewDownloadBtn');
@@ -603,7 +603,7 @@ window.addEventListener('load', function(){
         self.assertIn("Empty modify command", result["text"])
 
     def test_done_delete_toggle_does_not_duplicate_console_commands(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps(
             {
                 "tasks": [
@@ -666,7 +666,7 @@ window.addEventListener('load', function(){
         self.assertRegex(final_lines[0], r"^task '?[0-9a-f-]+'? done$")
 
     def test_task_hover_buttons_do_not_start_card_drag_and_can_be_clicked(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps(
             {
                 "tasks": [
@@ -731,7 +731,7 @@ window.addEventListener('load', function(){
         self.assertRegex(result["text"], r"task '?[0-9a-f-]+'? done")
 
     def test_canvas_storage_key_is_stable_and_snapshots_are_bounded_and_restorable(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps(
             {
                 "workspace_id": "storage-contract",
@@ -746,7 +746,7 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var storage = window.TaskCanvasStorage;
+      var storage = window.KyanbasuStorage;
       var keyBefore = storage.key('probe');
       for (var i=1; i<=8; i++) storage.setJSON('probe', {value:i}, {snapshot:true});
       var historyBeforeRestore = storage.snapshots('probe').map(function(row){
@@ -786,11 +786,11 @@ window.addEventListener('load', function(){
         self.assertEqual(result["restored"], 3)
         self.assertEqual(result["current"], 3)
 
-    def test_kyanbasu_storage_migrates_legacy_workspace_and_snapshots(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+    def test_kyanbasu_storage_uses_canonical_workspace_and_snapshots(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps(
             {
-                "workspace_id": "storage-migration",
+                "workspace_id": "storage-canonical",
                 "tasks": [],
                 "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
             }
@@ -798,8 +798,8 @@ window.addEventListener('load', function(){
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
         prelude = """
 <script id="E2E_KYANBASU_STORAGE_PRELUDE">
-localStorage.setItem('taskcanvas:workspace:v1:storage-migration:probe', JSON.stringify({value:41}));
-localStorage.setItem('taskcanvas:workspace:v1:storage-migration:probe:snapshots', JSON.stringify([{savedAt:1, raw:'{"value":40}'}]));
+localStorage.setItem('kyanbasu:workspace:v1:storage-canonical:probe', JSON.stringify({value:41}));
+localStorage.setItem('kyanbasu:workspace:v1:storage-canonical:probe:snapshots', JSON.stringify([{savedAt:1, raw:'{"value":40}'}]));
 </script>
 """
         html = html.replace("<body>", "<body>" + prelude, 1)
@@ -817,10 +817,7 @@ window.addEventListener('load', function(){
         key:key,
         value:value && value.value,
         historyValue:history[0] && JSON.parse(history[0].raw).value,
-        migratedFrom:localStorage.getItem(key + ':migrated-from'),
-        snapshotsMigratedFrom:localStorage.getItem(key + ':snapshots:migrated-from'),
-        legacyNewOnly:localStorage.getItem(storage.legacyKey('new-only')),
-        aliases:window.KyanbasuStorage === window.TaskCanvasStorage
+        newOnly:storage.getJSON('new-only', null).value
       };
       var pre = document.createElement('pre');
       pre.id = 'e2e-out';
@@ -843,16 +840,10 @@ window.addEventListener('load', function(){
         self.assertTrue(result["key"].startswith("kyanbasu:workspace:v1:"), msg=json.dumps(result))
         self.assertEqual(result["value"], 41, msg=json.dumps(result))
         self.assertEqual(result["historyValue"], 40, msg=json.dumps(result))
-        self.assertEqual(result["migratedFrom"], "taskcanvas:workspace:v1:storage-migration:probe")
-        self.assertEqual(
-            result["snapshotsMigratedFrom"],
-            "taskcanvas:workspace:v1:storage-migration:probe:snapshots",
-        )
-        self.assertIsNone(result["legacyNewOnly"])
-        self.assertTrue(result["aliases"])
+        self.assertEqual(result["newOnly"], 42)
 
-    def test_kyanbasu_browser_apis_alias_legacy_taskcanvas_apis(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+    def test_kyanbasu_browser_apis_are_available(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
         harness = """
@@ -862,20 +853,10 @@ window.addEventListener('load', function(){
     try{
       var suffixes = ['Commands','ConsoleEditor','ContextBar','DependencyEdges','Diagnostics','EdgeDirection','LayoutPersist','Navigator','Notes','NotesCore','PerfReport','PerfReset','QuickAdd','Review','Storage','Workbenches'];
       var missing = suffixes.filter(function(suffix){
-        return !window['Kyanbasu' + suffix] || window['Kyanbasu' + suffix] !== window['TaskCanvas' + suffix];
+        return !window['Kyanbasu' + suffix] || window['Kyanbasu' + suffix] !== window['Kyanbasu' + suffix];
       });
-      var original = window.TaskCanvasNotes;
-      var replacement = {probe:true};
-      window.KyanbasuNotes = replacement;
-      var primaryUpdatesLegacy = window.TaskCanvasNotes === replacement;
-      window.TaskCanvasNotes = original;
-      var legacyUpdatesPrimary = window.KyanbasuNotes === original;
       var out = {
-        missing:missing,
-        primaryUpdatesLegacy:primaryUpdatesLegacy,
-        legacyUpdatesPrimary:legacyUpdatesPrimary,
-        apiVersion:window.Kyanbasu && window.Kyanbasu.apiVersion,
-        legacyNamespace:window.Kyanbasu && window.Kyanbasu.legacyNamespace
+        missing:missing
       };
       var pre = document.createElement('pre');
       pre.id = 'e2e-out';
@@ -896,13 +877,9 @@ window.addEventListener('load', function(){
         self.assertNotIn("ERR:", raw)
         result = json.loads(raw)
         self.assertEqual(result["missing"], [], msg=json.dumps(result))
-        self.assertTrue(result["primaryUpdatesLegacy"], msg=json.dumps(result))
-        self.assertTrue(result["legacyUpdatesPrimary"], msg=json.dumps(result))
-        self.assertEqual(result["apiVersion"], 1)
-        self.assertEqual(result["legacyNamespace"], "TaskCanvas")
 
     def test_canvas_notes_runtime_creates_links_and_stays_out_of_commands(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -911,12 +888,12 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var a = window.TaskCanvasNotes.createNote(260, 220, "Plan", "Break work down");
-      var b = window.TaskCanvasNotes.createNote(560, 250, "Step 1", "Trace current flow");
-      window.TaskCanvasNotes.linkNotes(a.id, b.id);
-      window.TaskCanvasNotes.save();
-      window.TaskCanvasNotes.setContent(b.id, 'Updated step');
-      window.TaskCanvasNotes.save();
+      var a = window.KyanbasuNotes.createNote(260, 220, "Plan", "Break work down");
+      var b = window.KyanbasuNotes.createNote(560, 250, "Step 1", "Trace current flow");
+      window.KyanbasuNotes.linkNotes(a.id, b.id);
+      window.KyanbasuNotes.save();
+      window.KyanbasuNotes.setContent(b.id, 'Updated step');
+      window.KyanbasuNotes.save();
       if (typeof updateConsole === 'function') updateConsole();
       setTimeout(function(){
         var out = {
@@ -929,27 +906,27 @@ window.addEventListener('load', function(){
           directionSources: document.querySelectorAll('#tcNoteLinksLayer .tcNoteDirectionSource').length,
           directionArrows: document.querySelectorAll('#tcNoteLinksLayer .tcNoteDirectionArrow').length,
           directionChevrons: document.querySelectorAll('#tcNoteLinksLayer .tcNoteDirectionChevron').length,
-          apiNotes: window.TaskCanvasNotes.notes().length,
-          apiLinks: window.TaskCanvasNotes.links().length,
-          coreVersion: window.TaskCanvasNotesCore && window.TaskCanvasNotesCore.version,
-          rejectsSelfChild: !window.TaskCanvasNotesCore.validateLink(
+          apiNotes: window.KyanbasuNotes.notes().length,
+          apiLinks: window.KyanbasuNotes.links().length,
+          coreVersion: window.KyanbasuNotesCore && window.KyanbasuNotesCore.version,
+          rejectsSelfChild: !window.KyanbasuNotesCore.validateLink(
             {from:a.id, to:a.id, type:'child'},
             [],
-            {notes:window.TaskCanvasNotes.notes()}
+            {notes:window.KyanbasuNotes.notes()}
           ).ok,
-          legacyContent: window.TaskCanvasNotesCore.normalizeNote(
+          legacyContent: window.KyanbasuNotesCore.normalizeNote(
             {id:'legacy', title:'Old title', body:'Old body'},
             {}
           ).content,
-          legacyKind: window.TaskCanvasNotesCore.normalizeNote({id:'legacy-kind', content:'Legacy'}, {}).kind,
-          legacyStatus: window.TaskCanvasNotesCore.normalizeNote({id:'legacy-status', content:'Legacy'}, {}).status,
-          unknownRelation: window.TaskCanvasNotesCore.normalizeRelation('not-a-relation'),
-          firstContent: window.TaskCanvasNotes.notes()[0] && window.TaskCanvasNotes.notes()[0].content,
-          hasTitleKey: window.TaskCanvasNotes.notes().some(function(n){ return Object.prototype.hasOwnProperty.call(n, 'title'); }),
+          legacyKind: window.KyanbasuNotesCore.normalizeNote({id:'legacy-kind', content:'Legacy'}, {}).kind,
+          legacyStatus: window.KyanbasuNotesCore.normalizeNote({id:'legacy-status', content:'Legacy'}, {}).status,
+          unknownRelation: window.KyanbasuNotesCore.normalizeRelation('not-a-relation'),
+          firstContent: window.KyanbasuNotes.notes()[0] && window.KyanbasuNotes.notes()[0].content,
+          hasTitleKey: window.KyanbasuNotes.notes().some(function(n){ return Object.prototype.hasOwnProperty.call(n, 'title'); }),
           console: (document.getElementById('consoleText') || {}).value || "",
           savedKeys: Object.keys(localStorage).filter(function(k){ return k.indexOf('kyanbasu:workspace:v1:') === 0; }).length,
-          storageKey: window.TaskCanvasStorage.key('notes'),
-          snapshotCount: window.TaskCanvasStorage.snapshots('notes').length
+          storageKey: window.KyanbasuStorage.key('notes'),
+          snapshotCount: window.KyanbasuStorage.snapshots('notes').length
         };
         var pre = document.createElement('pre');
         pre.id = 'e2e-out';
@@ -995,7 +972,7 @@ window.addEventListener('load', function(){
         self.assertGreaterEqual(result["snapshotCount"], 1)
 
     def test_canvas_notes_roles_and_statuses_render_edit_search_and_export(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -1004,32 +981,32 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var note = window.TaskCanvasNotes.createNote(260, 220, 'What is blocking delivery?', '', 'Planning');
-      window.TaskCanvasNotes.setNoteKind(note.id, 'question');
-      window.TaskCanvasNotes.setNoteStatus(note.id, 'resolved');
-      window.TaskCanvasNotes.selectNote(note.id);
+      var note = window.KyanbasuNotes.createNote(260, 220, 'What is blocking delivery?', '', 'Planning');
+      window.KyanbasuNotes.setNoteKind(note.id, 'question');
+      window.KyanbasuNotes.setNoteStatus(note.id, 'resolved');
+      window.KyanbasuNotes.selectNote(note.id);
       setTimeout(function(){
         var kindSelect = document.getElementById('inspectorNoteKind');
         var statusSelect = document.getElementById('inspectorNoteStatus');
         var before = {
           kind:kindSelect && kindSelect.value,
           status:statusSelect && statusSelect.value,
-          questionSearch:window.TaskCanvasNotes.searchNotes('question'),
-          resolvedSearch:window.TaskCanvasNotes.searchNotes('resolved')
+          questionSearch:window.KyanbasuNotes.searchNotes('question'),
+          resolvedSearch:window.KyanbasuNotes.searchNotes('resolved')
         };
         kindSelect.value = 'decision';
         kindSelect.dispatchEvent(new Event('change', {bubbles:true}));
-        window.TaskCanvasNotes.setNoteStatus(note.id, 'parked');
+        window.KyanbasuNotes.setNoteStatus(note.id, 'parked');
         setTimeout(function(){
           var card = document.querySelector('.tcNoteNode[data-note-id="'+note.id+'"]');
-          var exported = window.TaskCanvasNotes.exportData();
+          var exported = window.KyanbasuNotes.exportData();
           document.getElementById('tabViewer').click();
           setTimeout(function(){
             var viewerSemantics = Array.prototype.slice.call(document.querySelectorAll('#viewerStage .viewerNoteSemantic')).map(function(el){ return el.textContent; });
             var out = {
               before:before,
-              kind:window.TaskCanvasNotes.notes()[0].kind,
-              status:window.TaskCanvasNotes.notes()[0].status,
+              kind:window.KyanbasuNotes.notes()[0].kind,
+              status:window.KyanbasuNotes.notes()[0].status,
               cardKind:(card.querySelector('.tcNoteKindBadge') || {}).textContent || '',
               cardStatus:(card.querySelector('.tcNoteStatusBadge') || {}).title || '',
               exportedVersion:exported.version,
@@ -1072,7 +1049,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["viewerSemantics"], ["Decision", "Parked"])
 
     def test_canvas_notes_selects_and_unlinks_canvas_link(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -1081,9 +1058,9 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var a = window.TaskCanvasNotes.createNote(260, 220, "Plan", "");
-      var b = window.TaskCanvasNotes.createNote(560, 250, "Step 1", "");
-      window.TaskCanvasNotes.linkNotes(a.id, b.id);
+      var a = window.KyanbasuNotes.createNote(260, 220, "Plan", "");
+      var b = window.KyanbasuNotes.createNote(560, 250, "Step 1", "");
+      window.KyanbasuNotes.linkNotes(a.id, b.id);
       setTimeout(function(){
         var path = document.querySelector('#tcNoteLinksLayer path.tcNoteLinkHit');
         path.dispatchEvent(new MouseEvent('click', {bubbles:true, cancelable:true}));
@@ -1097,7 +1074,7 @@ window.addEventListener('load', function(){
               selectedBefore: selectedBefore,
               toolbarBefore: toolbarBefore,
               selectedNotesBefore: selectedNotesBefore,
-              linksAfter: window.TaskCanvasNotes.links().length,
+              linksAfter: window.KyanbasuNotes.links().length,
               pathsAfter: document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink').length,
               toolbarAfter: !!document.getElementById('tcNoteLinkToolbar'),
               console: (document.getElementById('consoleText') || {}).value || ""
@@ -1132,7 +1109,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "", msg=json.dumps(result))
 
     def test_canvas_notes_drag_handle_creates_link(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -1141,9 +1118,9 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var a = window.TaskCanvasNotes.createNote(260, 220, "Plan", "");
-      var b = window.TaskCanvasNotes.createNote(620, 250, "Step 1", "");
-      window.TaskCanvasNotes.selectNote(a.id);
+      var a = window.KyanbasuNotes.createNote(260, 220, "Plan", "");
+      var b = window.KyanbasuNotes.createNote(620, 250, "Step 1", "");
+      window.KyanbasuNotes.selectNote(a.id);
       setTimeout(function(){
         var handle = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"] .tcNoteLinkHandle');
         var target = document.querySelector('.tcNoteNode[data-note-id="'+b.id+'"]');
@@ -1165,7 +1142,7 @@ window.addEventListener('load', function(){
           clientY:tr.top + tr.height / 2
         }));
         setTimeout(function(){
-          var links = window.TaskCanvasNotes.links();
+          var links = window.KyanbasuNotes.links();
           var out = {
             links: links.length,
             from: links[0] && links[0].from,
@@ -1208,7 +1185,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "", msg=json.dumps(result))
 
     def test_canvas_notes_relinks_selected_link_endpoint(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -1217,10 +1194,10 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var a = window.TaskCanvasNotes.createNote(260, 220, "Plan", "");
-      var b = window.TaskCanvasNotes.createNote(620, 250, "Step 1", "");
-      var c = window.TaskCanvasNotes.createNote(620, 430, "Step 2", "");
-      window.TaskCanvasNotes.linkNotes(a.id, b.id);
+      var a = window.KyanbasuNotes.createNote(260, 220, "Plan", "");
+      var b = window.KyanbasuNotes.createNote(620, 250, "Step 1", "");
+      var c = window.KyanbasuNotes.createNote(620, 430, "Step 2", "");
+      window.KyanbasuNotes.linkNotes(a.id, b.id);
       setTimeout(function(){
         var path = document.querySelector('#tcNoteLinksLayer path.tcNoteLinkHit');
         path.dispatchEvent(new MouseEvent('click', {bubbles:true, cancelable:true}));
@@ -1245,7 +1222,7 @@ window.addEventListener('load', function(){
             clientY:tr.top + tr.height / 2
           }));
           setTimeout(function(){
-            var links = window.TaskCanvasNotes.links();
+            var links = window.KyanbasuNotes.links();
             var out = {
               links: links.length,
               fromUnchanged: links[0] && links[0].from === a.id,
@@ -1287,7 +1264,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "", msg=json.dumps(result))
 
     def test_canvas_notes_creates_edits_searches_and_exports_semantic_links(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -1296,33 +1273,33 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var source = window.TaskCanvasNotes.createNote(220, 240, 'Profiling evidence', '');
-      var target = window.TaskCanvasNotes.createNote(620, 240, 'Disable idle observers', '');
-      window.TaskCanvasNotes.selectNote(source.id);
-      window.TaskCanvasNotes.selectNote(target.id, true);
+      var source = window.KyanbasuNotes.createNote(220, 240, 'Profiling evidence', '');
+      var target = window.KyanbasuNotes.createNote(620, 240, 'Disable idle observers', '');
+      window.KyanbasuNotes.selectNote(source.id);
+      window.KyanbasuNotes.selectNote(target.id, true);
       setTimeout(function(){
         var createType = document.querySelector('.tcNoteLinkCreateType');
         var createOptions = Array.prototype.slice.call(createType.options).map(function(option){ return option.value; });
         createType.value = 'supports';
         document.querySelector('.tcNoteLinkPrimary').click();
         setTimeout(function(){
-          var beforeLink = window.TaskCanvasNotes.links()[0];
+          var beforeLink = window.KyanbasuNotes.links()[0];
           var baseSelect = document.getElementById('inspectorNoteLinkType');
           var before = {
             type:beforeLink && beforeLink.type,
             createOptions:createOptions,
             floatingType:(document.querySelector('#tcNoteLinkInspector .tcNoteLinkTypeSelect') || {}).value || '',
             inspectorType:baseSelect && baseSelect.value,
-            supportsSearch:window.TaskCanvasNotes.searchNotes('supports'),
-            supportedBySearch:window.TaskCanvasNotes.searchNotes('supported by'),
+            supportsSearch:window.KyanbasuNotes.searchNotes('supports'),
+            supportedBySearch:window.KyanbasuNotes.searchNotes('supported by'),
             pathType:(document.querySelector('#tcNoteLinksLayer .tcNoteLink') || {}).getAttribute('data-type') || ''
           };
           baseSelect.value = 'challenges';
           baseSelect.dispatchEvent(new Event('change', {bubbles:true}));
           setTimeout(function(){
-            var link = window.TaskCanvasNotes.links()[0];
+            var link = window.KyanbasuNotes.links()[0];
             var path = document.querySelector('#tcNoteLinksLayer .tcNoteLink');
-            var exported = window.TaskCanvasNotes.exportData();
+            var exported = window.KyanbasuNotes.exportData();
             var out = {
               before:before,
               type:link && link.type,
@@ -1332,8 +1309,8 @@ window.addEventListener('load', function(){
               toolbarType:(document.querySelector('.tcNoteLinkToolbarType') || {}).textContent || '',
               exportedVersion:exported.version,
               exportedType:exported.links[0] && exported.links[0].type,
-              relationLabel:window.TaskCanvasNotesCore.relationLabel('challenges', false),
-              inverseLabel:window.TaskCanvasNotesCore.relationLabel('challenges', true)
+              relationLabel:window.KyanbasuNotesCore.relationLabel('challenges', false),
+              inverseLabel:window.KyanbasuNotesCore.relationLabel('challenges', true)
             };
             var pre = document.createElement('pre');
             pre.id = 'e2e-out';
@@ -1374,7 +1351,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["inverseLabel"], "Challenged by")
 
     def test_canvas_note_link_mouse_sequence_opens_selection_inspector(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -1383,16 +1360,16 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var from = TaskCanvasNotes.createNote(180, 220, 'Source note', '', 'Research', {skipAutoLayout:true});
-      var to = TaskCanvasNotes.createNote(620, 260, 'Target note', '', 'Planning', {skipAutoLayout:true});
-      TaskCanvasNotes.linkNotes(from.id, to.id, 'supports');
+      var from = KyanbasuNotes.createNote(180, 220, 'Source note', '', 'Research', {skipAutoLayout:true});
+      var to = KyanbasuNotes.createNote(620, 260, 'Target note', '', 'Planning', {skipAutoLayout:true});
+      KyanbasuNotes.linkNotes(from.id, to.id, 'supports');
       var path = document.querySelector('#tcNoteLinksLayer path.tcNoteLinkHit');
       path.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, cancelable:true, button:0}));
       path.dispatchEvent(new MouseEvent('mouseup', {bubbles:true, cancelable:true, button:0}));
       path.dispatchEvent(new MouseEvent('click', {bubbles:true, cancelable:true, button:0}));
       setTimeout(function(){
         var out = {
-          selection:TaskCanvasNotes.selectionSnapshot(),
+          selection:KyanbasuNotes.selectionSnapshot(),
           inspectorTitle:(document.getElementById('inspectorTitle') || {}).textContent || '',
           annotationEditor:!!document.getElementById('inspectorNoteLinkAnnotationText'),
           selectedPath:document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink.selected').length
@@ -1422,7 +1399,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["selectedPath"], 1, msg=json.dumps(result))
 
     def test_canvas_note_link_annotations_render_edit_round_trip_and_clear(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -1431,12 +1408,12 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var from = TaskCanvasNotes.createNote(180, 220, 'Evidence', '', 'Research', {skipAutoLayout:true});
-      var to = TaskCanvasNotes.createNote(620, 260, 'Decision', '', 'Planning', {skipAutoLayout:true});
-      TaskCanvasNotes.linkNotes(from.id, to.id, 'supports');
-      var link = TaskCanvasNotes.links()[0];
+      var from = KyanbasuNotes.createNote(180, 220, 'Evidence', '', 'Research', {skipAutoLayout:true});
+      var to = KyanbasuNotes.createNote(620, 260, 'Decision', '', 'Planning', {skipAutoLayout:true});
+      KyanbasuNotes.linkNotes(from.id, to.id, 'supports');
+      var link = KyanbasuNotes.links()[0];
       var key = [link.from, link.to, link.type].join('::');
-      TaskCanvasNotes.setLinkAnnotation(key, {kind:'question', text:'Is this evidence current?'});
+      KyanbasuNotes.setLinkAnnotation(key, {kind:'question', text:'Is this evidence current?'});
       var badge = document.querySelector('#tcNoteLinksLayer .tcNoteLinkAnnotation');
       var initial = {
         badges:document.querySelectorAll('#tcNoteLinksLayer .tcNoteLinkAnnotation').length,
@@ -1453,9 +1430,9 @@ window.addEventListener('load', function(){
         kindInput.value = 'condition';
         kindInput.dispatchEvent(new Event('change', {bubbles:true}));
         setTimeout(function(){
-          var exported = TaskCanvasNotes.exportData();
+          var exported = KyanbasuNotes.exportData();
           var exportedAnnotation = exported.links[0].annotation;
-          TaskCanvasNotes.importData(exported);
+          KyanbasuNotes.importData(exported);
           var importedBadge = document.querySelector('#tcNoteLinksLayer .tcNoteLinkAnnotation');
           importedBadge.dispatchEvent(new MouseEvent('click', {bubbles:true, cancelable:true}));
           setTimeout(function(){
@@ -1464,14 +1441,14 @@ window.addEventListener('load', function(){
             setTimeout(function(){
               var out = {
                 initial:initial,
-                selectedKind:TaskCanvasNotes.selectionSnapshot().kind,
+                selectedKind:KyanbasuNotes.selectionSnapshot().kind,
                 exportedVersion:exported.version,
                 exportedAnnotation:exportedAnnotation,
                 importedKind:importedBadge.getAttribute('data-kind'),
                 importedLabel:(importedBadge.querySelector('.tcNoteLinkAnnotationLabel') || {}).textContent || '',
                 badgesAfterClear:document.querySelectorAll('#tcNoteLinksLayer .tcNoteLinkAnnotation').length,
-                annotationAfterClear:TaskCanvasNotes.links()[0].annotation || null,
-                exportedHasAnnotation:Object.prototype.hasOwnProperty.call(TaskCanvasNotes.exportData().links[0], 'annotation')
+                annotationAfterClear:KyanbasuNotes.links()[0].annotation || null,
+                exportedHasAnnotation:Object.prototype.hasOwnProperty.call(KyanbasuNotes.exportData().links[0], 'annotation')
               };
               var pre = document.createElement('pre');
               pre.id = 'e2e-out';
@@ -1510,7 +1487,7 @@ window.addEventListener('load', function(){
         self.assertFalse(result["exportedHasAnnotation"], msg=json.dumps(result))
 
     def test_canvas_note_link_inline_annotation_interactions(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -1519,10 +1496,10 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var from = TaskCanvasNotes.createNote(180, 220, 'Source', '', 'Research', {skipAutoLayout:true});
-      var to = TaskCanvasNotes.createNote(620, 260, 'Target', '', 'Planning', {skipAutoLayout:true});
-      TaskCanvasNotes.linkNotes(from.id, to.id, 'supports');
-      TaskCanvasNotes.clearSelection();
+      var from = KyanbasuNotes.createNote(180, 220, 'Source', '', 'Research', {skipAutoLayout:true});
+      var to = KyanbasuNotes.createNote(620, 260, 'Target', '', 'Planning', {skipAutoLayout:true});
+      KyanbasuNotes.linkNotes(from.id, to.id, 'supports');
+      KyanbasuNotes.clearSelection();
       var hit = document.querySelector('#tcNoteLinksLayer path.tcNoteLinkHit');
       var visual = document.querySelector('#tcNoteLinksLayer path.tcNoteLink');
       var add = document.querySelector('#tcNoteLinksLayer .tcNoteLinkAnnotationAdd');
@@ -1545,7 +1522,7 @@ window.addEventListener('load', function(){
         text.value = 'What evidence supports this?';
         text.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true, cancelable:true}));
         setTimeout(function(){
-          var saved = TaskCanvasNotes.links()[0].annotation;
+          var saved = KyanbasuNotes.links()[0].annotation;
           var badge = document.querySelector('#tcNoteLinksLayer .tcNoteLinkAnnotation');
           var inspectorText = document.getElementById('inspectorNoteLinkAnnotationText');
           badge.dispatchEvent(new MouseEvent('dblclick', {bubbles:true, cancelable:true, button:0, detail:2}));
@@ -1555,7 +1532,7 @@ window.addEventListener('load', function(){
             editText.value = 'This edit should be cancelled';
             editText.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true, cancelable:true}));
             setTimeout(function(){
-              var current = TaskCanvasNotes.links()[0].annotation;
+              var current = KyanbasuNotes.links()[0].annotation;
               var active = document.activeElement;
               var out = {
                 hover:hover,
@@ -1566,7 +1543,7 @@ window.addEventListener('load', function(){
                 editorClosed:!document.getElementById('tcNoteLinkAnnotationEditor'),
                 cancelPreserved:current && current.text,
                 focusReturned:!!active && active.classList.contains('tcNoteLinkHit'),
-                selected:TaskCanvasNotes.selectionSnapshot().kind,
+                selected:KyanbasuNotes.selectionSnapshot().kind,
                 console:(document.getElementById('consoleText') || {}).value || ''
               };
               var pre = document.createElement('pre');
@@ -1607,7 +1584,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "")
 
     def test_canvas_note_link_annotations_are_zoom_aware_and_searchable(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -1616,18 +1593,18 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var source = TaskCanvasNotes.createNote(180, 220, 'Deployment evidence', '', 'Research', {skipAutoLayout:true});
-      var target = TaskCanvasNotes.createNote(620, 260, 'Release decision', '', 'Planning', {skipAutoLayout:true});
-      var unrelated = TaskCanvasNotes.createNote(980, 260, 'Meeting notes', '', 'Planning', {skipAutoLayout:true});
-      TaskCanvasNotes.linkNotes(source.id, target.id, 'supports');
-      var link = TaskCanvasNotes.links()[0];
+      var source = KyanbasuNotes.createNote(180, 220, 'Deployment evidence', '', 'Research', {skipAutoLayout:true});
+      var target = KyanbasuNotes.createNote(620, 260, 'Release decision', '', 'Planning', {skipAutoLayout:true});
+      var unrelated = KyanbasuNotes.createNote(980, 260, 'Meeting notes', '', 'Planning', {skipAutoLayout:true});
+      KyanbasuNotes.linkNotes(source.id, target.id, 'supports');
+      var link = KyanbasuNotes.links()[0];
       var key = [link.from, link.to, link.type].join('::');
-      TaskCanvasNotes.setLinkAnnotation(key, {kind:'question', text:'What deployment risk remains?'});
-      var textMatches = TaskCanvasNotes.searchNotes('deployment risk');
-      var kindMatches = TaskCanvasNotes.searchNotes('annotation:question');
-      var fieldMatches = TaskCanvasNotes.searchNotes('annotation:"deployment risk"');
-      var hasMatches = TaskCanvasNotes.searchNotes('has:annotations');
-      var outline = TaskCanvasNotes.outline();
+      KyanbasuNotes.setLinkAnnotation(key, {kind:'question', text:'What deployment risk remains?'});
+      var textMatches = KyanbasuNotes.searchNotes('deployment risk');
+      var kindMatches = KyanbasuNotes.searchNotes('annotation:question');
+      var fieldMatches = KyanbasuNotes.searchNotes('annotation:"deployment risk"');
+      var hasMatches = KyanbasuNotes.searchNotes('has:annotations');
+      var outline = KyanbasuNotes.outline();
       var outlineById = {};
       function collect(items){
         (items || []).forEach(function(item){ outlineById[item.id] = item; collect(item.children); });
@@ -1717,7 +1694,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "")
 
     def test_canvas_notes_link_inspector_manages_selected_note_links(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -1726,10 +1703,10 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var a = window.TaskCanvasNotes.createNote(260, 220, "Plan", "");
-      var b = window.TaskCanvasNotes.createNote(620, 250, "Step 1", "");
-      window.TaskCanvasNotes.linkNotes(a.id, b.id);
-      window.TaskCanvasNotes.selectNote(a.id);
+      var a = window.KyanbasuNotes.createNote(260, 220, "Plan", "");
+      var b = window.KyanbasuNotes.createNote(620, 250, "Step 1", "");
+      window.KyanbasuNotes.linkNotes(a.id, b.id);
+      window.KyanbasuNotes.selectNote(a.id);
       setTimeout(function(){
         var panel = document.getElementById('tcNoteLinkInspector');
         var relink = panel && panel.querySelector('.tcNoteLinkMini:not(.danger)');
@@ -1753,7 +1730,7 @@ window.addEventListener('load', function(){
               selectedBefore: before.selectedPaths,
               selectedAfterRelink: selectedAfterRelink,
               endpointsAfterRelink: endpointsAfterRelink,
-              linksAfterRemove: window.TaskCanvasNotes.links().length,
+              linksAfterRemove: window.KyanbasuNotes.links().length,
               panelAfterRemove: !!panel && !panel.hidden,
               console: (document.getElementById('consoleText') || {}).value || ""
             };
@@ -1789,7 +1766,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "", msg=json.dumps(result))
 
     def test_canvas_notes_link_inspector_links_two_selected_notes(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -1798,23 +1775,23 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var a = window.TaskCanvasNotes.createNote(260, 220, "Plan", "");
-      var b = window.TaskCanvasNotes.createNote(620, 250, "Step 1", "");
-      window.TaskCanvasNotes.selectNote(a.id);
-      window.TaskCanvasNotes.selectNote(b.id, true);
+      var a = window.KyanbasuNotes.createNote(260, 220, "Plan", "");
+      var b = window.KyanbasuNotes.createNote(620, 250, "Step 1", "");
+      window.KyanbasuNotes.selectNote(a.id);
+      window.KyanbasuNotes.selectNote(b.id, true);
       setTimeout(function(){
         var panel = document.getElementById('tcNoteLinkInspector');
         var button = panel && panel.querySelector('.tcNoteLinkPrimary');
         var before = {
           visible: !!panel && !panel.hidden,
-          selected: window.TaskCanvasNotes.selectedNotes().length,
+          selected: window.KyanbasuNotes.selectedNotes().length,
           picked: panel ? panel.querySelectorAll('.tcNoteLinkPicked').length : 0,
           text: panel ? panel.textContent : "",
           disabled: button ? button.disabled : true
         };
         button.click();
         setTimeout(function(){
-          var links = window.TaskCanvasNotes.links();
+          var links = window.KyanbasuNotes.links();
           var out = {
             visible: before.visible,
             selected: before.selected,
@@ -1824,7 +1801,7 @@ window.addEventListener('load', function(){
             links: links.length,
             fromA: links[0] && links[0].from === a.id,
             toB: links[0] && links[0].to === b.id,
-            selectedAfter: window.TaskCanvasNotes.selectedNotes().length,
+            selectedAfter: window.KyanbasuNotes.selectedNotes().length,
             selectedPath: document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink.selected').length,
             console: (document.getElementById('consoleText') || {}).value || ""
           };
@@ -1861,7 +1838,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "", msg=json.dumps(result))
 
     def test_canvas_note_mode_click_places_note_at_clicked_position(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -1870,7 +1847,7 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      window.TaskCanvasNotes.createNote(760, 220, "Existing", "", "Planning");
+      window.KyanbasuNotes.createNote(760, 220, "Existing", "", "Planning");
       var stage = document.getElementById('builderStage');
       var noteBtn = document.getElementById('noteModeBtn');
       var sr = stage.getBoundingClientRect();
@@ -1883,7 +1860,7 @@ window.addEventListener('load', function(){
         clientY:sr.top + target.y
       }));
       setTimeout(function(){
-        var notes = window.TaskCanvasNotes.notes();
+        var notes = window.KyanbasuNotes.notes();
         var created = notes.filter(function(n){ return n.content === 'New note'; })[0];
         var out = {
           notes: notes.length,
@@ -1916,7 +1893,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["notFarRight"], msg=json.dumps(result))
 
     def test_canvas_notes_import_export_round_trips_json_without_commands(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -1926,7 +1903,7 @@ window.addEventListener('load', function(){
   setTimeout(function(){
     try{
       var imported = {
-        kind: 'taskcanvas.notes',
+        kind: 'kyanbasu.notes',
         version: 1,
         notes: [
           {id:'root-note', x:180, y:220, title:'Imported root', body:'Legacy body', bucket:'Planning', collapsed:true},
@@ -1937,11 +1914,11 @@ window.addEventListener('load', function(){
           {from:'missing-note', to:'child-note', type:'manual'}
         ]
       };
-      var result = window.TaskCanvasNotes.importJSON(JSON.stringify(imported));
-      var exported = JSON.parse(window.TaskCanvasNotes.exportJSON());
+      var result = window.KyanbasuNotes.importJSON(JSON.stringify(imported));
+      var exported = JSON.parse(window.KyanbasuNotes.exportJSON());
       if (typeof updateConsole === 'function') updateConsole();
       setTimeout(function(){
-        var notes = window.TaskCanvasNotes.notes();
+        var notes = window.KyanbasuNotes.notes();
         var out = {
           importButton: !!document.getElementById('noteImportBtn'),
           exportButton: !!document.getElementById('noteExportBtn'),
@@ -1997,7 +1974,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "")
 
     def test_canvas_notes_groups_visible_notes_by_bucket(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -2006,13 +1983,13 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var a = window.TaskCanvasNotes.createNote(180, 220, "One", "", "Planning");
-      var b = window.TaskCanvasNotes.createNote(480, 260, "Two", "", "Planning");
-      var c = window.TaskCanvasNotes.createNote(820, 240, "Three", "", "Delivery");
+      var a = window.KyanbasuNotes.createNote(180, 220, "One", "", "Planning");
+      var b = window.KyanbasuNotes.createNote(480, 260, "Two", "", "Planning");
+      var c = window.KyanbasuNotes.createNote(820, 240, "Three", "", "Delivery");
       var initialBucketCount = document.querySelectorAll('.tcNoteBucket').length;
       var bucketLabels = Array.prototype.slice.call(document.querySelectorAll('.tcNoteBucketTitle')).map(function(el){ return el.textContent; });
       var noteLabel = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"] .tcNoteBucketLabel');
-      window.TaskCanvasNotes.setBucket(c.id, "Planning");
+      window.KyanbasuNotes.setBucket(c.id, "Planning");
       setTimeout(function(){
         var out = {
           bucketCount: initialBucketCount,
@@ -2052,7 +2029,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["mergedBucketNotes"], 3)
 
     def test_canvas_notes_separates_overlapping_bucket_areas(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -2061,8 +2038,8 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      window.TaskCanvasNotes.importJSON(JSON.stringify({
-        kind:'taskcanvas.notes',
+      window.KyanbasuNotes.importJSON(JSON.stringify({
+        kind:'kyanbasu.notes',
         version:1,
         notes:[
           {id:'plan-note', x:220, y:240, content:'Plan', bucket:'Planning'},
@@ -2112,7 +2089,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["noteInsideBucket"], msg=json.dumps(result))
 
     def test_canvas_notes_repel_away_from_bucket_boxes_when_created(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -2121,8 +2098,8 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var anchor = window.TaskCanvasNotes.createNote(180, 220, "Anchor", "", "Planning");
-      var mover = window.TaskCanvasNotes.createNote(410, 220, "Mover", "", "Delivery");
+      var anchor = window.KyanbasuNotes.createNote(180, 220, "Anchor", "", "Planning");
+      var mover = window.KyanbasuNotes.createNote(410, 220, "Mover", "", "Delivery");
       setTimeout(function(){
         var bucket = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
         var note = document.querySelector('.tcNoteNode[data-note-id="'+mover.id+'"]');
@@ -2160,7 +2137,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["bucketLabel"], "Planning")
 
     def test_canvas_notes_dragging_note_into_bucket_reassigns_it(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -2169,8 +2146,8 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var target = window.TaskCanvasNotes.createNote(520, 260, "Bucket note", "", "Planning");
-      var moving = window.TaskCanvasNotes.createNote(120, 260, "Move me", "", "(no bucket)");
+      var target = window.KyanbasuNotes.createNote(520, 260, "Bucket note", "", "Planning");
+      var moving = window.KyanbasuNotes.createNote(120, 260, "Move me", "", "(no bucket)");
       var movingEl = document.querySelector('.tcNoteNode[data-note-id="'+moving.id+'"]');
       var head = movingEl.querySelector('.tcNoteHead');
       var targetEl = document.querySelector('.tcNoteNode[data-note-id="'+target.id+'"]');
@@ -2189,7 +2166,7 @@ window.addEventListener('load', function(){
       fire(document, 'mousemove', t.left + t.width / 2, t.top + t.height / 2);
       fire(document, 'mouseup', t.left + t.width / 2, t.top + t.height / 2);
       setTimeout(function(){
-        var notes = window.TaskCanvasNotes.notes();
+        var notes = window.KyanbasuNotes.notes();
         var moved = notes.filter(function(n){ return n.content === 'Move me'; })[0];
         var out = {
           movedBucket: moved && moved.bucket,
@@ -2220,7 +2197,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["bucketLabel"], "Planning")
 
     def test_canvas_notes_renames_bucket_from_header(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -2229,13 +2206,13 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var a = window.TaskCanvasNotes.createNote(180, 240, "Alpha", "", "Planning");
-      var b = window.TaskCanvasNotes.createNote(460, 240, "Beta", "", "Planning");
+      var a = window.KyanbasuNotes.createNote(180, 240, "Alpha", "", "Planning");
+      var b = window.KyanbasuNotes.createNote(460, 240, "Beta", "", "Planning");
       var bucketBtn = document.querySelector('.tcNoteBucketTitle');
       window.prompt = function(){ return 'Roadmap'; };
       bucketBtn.click();
       setTimeout(function(){
-        var notes = window.TaskCanvasNotes.notes();
+        var notes = window.KyanbasuNotes.notes();
         var out = {
           renamedCount: notes.filter(function(n){ return n.bucket === 'Roadmap'; }).length,
           bucketLabel: (document.querySelector('.tcNoteBucketTitle') || {}).textContent || "",
@@ -2265,7 +2242,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["noteHeader"], "Roadmap")
 
     def test_canvas_notes_collapses_and_expands_bucket(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -2274,9 +2251,9 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      window.TaskCanvasNotes.createNote(180, 220, "One", "", "Planning");
-      window.TaskCanvasNotes.createNote(480, 260, "Two", "", "Planning");
-      window.TaskCanvasNotes.createNote(820, 240, "Three", "", "Delivery");
+      window.KyanbasuNotes.createNote(180, 220, "One", "", "Planning");
+      window.KyanbasuNotes.createNote(480, 260, "Two", "", "Planning");
+      window.KyanbasuNotes.createNote(820, 240, "Three", "", "Delivery");
       var toggle = document.querySelector('.tcNoteBucket[data-bucket="Planning"] .tcNoteBucketToggle');
       toggle.click();
       setTimeout(function(){
@@ -2322,7 +2299,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["bucketCount"], 2)
 
     def test_canvas_notes_drag_bucket_moves_all_notes_in_bucket(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -2331,9 +2308,9 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var a = window.TaskCanvasNotes.createNote(180, 220, "One", "", "Planning");
-      var b = window.TaskCanvasNotes.createNote(480, 260, "Two", "", "Planning");
-      var c = window.TaskCanvasNotes.createNote(820, 240, "Three", "", "Delivery");
+      var a = window.KyanbasuNotes.createNote(180, 220, "One", "", "Planning");
+      var b = window.KyanbasuNotes.createNote(480, 260, "Two", "", "Planning");
+      var c = window.KyanbasuNotes.createNote(820, 240, "Three", "", "Delivery");
       var bucket = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
       var head = bucket.querySelector('.tcNoteBucketHead');
       var before = {
@@ -2361,7 +2338,7 @@ window.addEventListener('load', function(){
       fire(document, 'mouseup', r.left + 168, r.top + 108);
       setTimeout(function(){
         var bucketAfter = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
-        var notes = window.TaskCanvasNotes.notes();
+        var notes = window.KyanbasuNotes.notes();
         var notesByContent = {};
         notes.forEach(function(n){ notesByContent[n.content] = n; });
         var out = {
@@ -2399,7 +2376,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["bucketLabel"], "Planning")
 
     def test_canvas_notes_dragged_bucket_holds_drop_position_and_displaces_neighbors(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -2408,9 +2385,9 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      window.TaskCanvasNotes.createNote(180, 240, "Left", "", "Left bucket");
-      window.TaskCanvasNotes.createNote(650, 240, "Right", "", "Right bucket");
-      var draggedNote = window.TaskCanvasNotes.createNote(1220, 240, "Dragged", "", "Dragged bucket");
+      window.KyanbasuNotes.createNote(180, 240, "Left", "", "Left bucket");
+      window.KyanbasuNotes.createNote(650, 240, "Right", "", "Right bucket");
+      var draggedNote = window.KyanbasuNotes.createNote(1220, 240, "Dragged", "", "Dragged bucket");
       var leftBefore = document.querySelector('.tcNoteBucket[data-bucket="Left bucket"]').getBoundingClientRect();
       var rightBefore = document.querySelector('.tcNoteBucket[data-bucket="Right bucket"]').getBoundingClientRect();
       var dragged = document.querySelector('.tcNoteBucket[data-bucket="Dragged bucket"]');
@@ -2475,7 +2452,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "")
 
     def test_canvas_notes_moves_bucket_without_moving_notes_and_round_trips_layout(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -2484,9 +2461,9 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var a = window.TaskCanvasNotes.createNote(180, 220, "One", "", "Planning");
-      var b = window.TaskCanvasNotes.createNote(480, 260, "Two", "", "Planning");
-      var c = window.TaskCanvasNotes.createNote(820, 240, "Three", "", "Delivery");
+      var a = window.KyanbasuNotes.createNote(180, 220, "One", "", "Planning");
+      var b = window.KyanbasuNotes.createNote(480, 260, "Two", "", "Planning");
+      var c = window.KyanbasuNotes.createNote(820, 240, "Three", "", "Delivery");
       var bucket = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
       var head = bucket.querySelector('.tcNoteBucketHead');
       var aEl = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]');
@@ -2519,8 +2496,8 @@ window.addEventListener('load', function(){
       fire(document, 'mousemove', r.left + 190, r.top + 120);
       fire(document, 'mouseup', r.left + 190, r.top + 120);
       setTimeout(function(){
-        var exported = window.TaskCanvasNotes.exportData();
-        window.TaskCanvasNotes.importJSON(JSON.stringify(exported));
+        var exported = window.KyanbasuNotes.exportData();
+        window.KyanbasuNotes.importJSON(JSON.stringify(exported));
         setTimeout(function(){
         var bucketAfter = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
         var aAfter = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]');
@@ -2569,7 +2546,7 @@ window.addEventListener('load', function(){
         self.assertGreater(result["reloadedTop"], 0)
 
     def test_canvas_notes_follow_toggle_moves_notes_with_bucket_and_persists(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -2578,8 +2555,8 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var a = window.TaskCanvasNotes.createNote(180, 220, "One", "", "Planning");
-      var b = window.TaskCanvasNotes.createNote(480, 260, "Two", "", "Planning");
+      var a = window.KyanbasuNotes.createNote(180, 220, "One", "", "Planning");
+      var b = window.KyanbasuNotes.createNote(480, 260, "Two", "", "Planning");
       var bucket = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
       var followBtn = bucket.querySelector('.tcNoteBucketFollow');
       var head = bucket.querySelector('.tcNoteBucketHead');
@@ -2608,8 +2585,8 @@ window.addEventListener('load', function(){
       fire(document, 'mousemove', r.left + 152, r.top + 92);
       fire(document, 'mouseup', r.left + 152, r.top + 92);
       setTimeout(function(){
-        var exported = window.TaskCanvasNotes.exportData();
-        window.TaskCanvasNotes.importJSON(JSON.stringify(exported));
+        var exported = window.KyanbasuNotes.exportData();
+        window.KyanbasuNotes.importJSON(JSON.stringify(exported));
         setTimeout(function(){
           var aAfter = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]');
           var bAfter = document.querySelector('.tcNoteNode[data-note-id="'+b.id+'"]');
@@ -2649,7 +2626,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["defaultFollow"])
 
     def test_canvas_notes_colours_bucket_and_notes_and_persists_them(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -2658,8 +2635,8 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var a = window.TaskCanvasNotes.createNote(200, 220, "Alpha", "", "Planning");
-      window.TaskCanvasNotes.createNote(520, 260, "Beta", "", "Delivery");
+      var a = window.KyanbasuNotes.createNote(200, 220, "Alpha", "", "Planning");
+      window.KyanbasuNotes.createNote(520, 260, "Beta", "", "Delivery");
       var bucket = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
       var note = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]');
       var colorBtn = bucket.querySelector('.tcNoteBucketColor');
@@ -2669,8 +2646,8 @@ window.addEventListener('load', function(){
       setTimeout(function(){
         var bucketAfter = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
         var noteAfter = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]');
-        var exported = window.TaskCanvasNotes.exportData();
-        window.TaskCanvasNotes.importJSON(JSON.stringify(exported));
+        var exported = window.KyanbasuNotes.exportData();
+        window.KyanbasuNotes.importJSON(JSON.stringify(exported));
         setTimeout(function(){
           var bucketReloaded = document.querySelector('.tcNoteBucket[data-bucket="Planning"]');
           var noteReloaded = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]');
@@ -2711,7 +2688,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["reloadedBucket"], result["afterBucket"])
 
     def test_drawer_tasks_make_notes_move_aside_when_added_to_canvas(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({
             "tasks": [
                 {"uuid": "task-1", "short": "task-1", "desc": "Alpha task", "project": "Alpha", "tags": ["Planning"], "has_depends": False}
@@ -2725,7 +2702,7 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      window.TaskCanvasNotes.createNote(-180, 20, "Note block", "", "Planning");
+      window.KyanbasuNotes.createNote(-180, 20, "Note block", "", "Planning");
       addToBuilder(TASKS[0], null, null);
         setTimeout(function(){
           var note = document.querySelector('.tcNoteNode');
@@ -2772,7 +2749,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["taskClear"], msg=json.dumps(result))
 
     def test_project_drag_into_note_area_pushes_notes_not_project(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({
             "tasks": [
                 {"uuid": "task-1", "short": "task-1", "desc": "Alpha task", "project": "Alpha", "tags": ["Planning"], "has_depends": False}
@@ -2786,7 +2763,7 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      window.TaskCanvasNotes.createNote(520, 300, "Note block", "", "Planning");
+      window.KyanbasuNotes.createNote(520, 300, "Note block", "", "Planning");
       addToBuilder(TASKS[0], null, null);
       setTimeout(function(){
         moveWholeProject("Alpha", 500, 280);
@@ -2833,7 +2810,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["clear"], msg=json.dumps(result))
 
     def test_note_placement_in_project_area_pushes_project_aside(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({
             "tasks": [
                 {"uuid": "task-1", "short": "task-1", "desc": "Alpha task", "project": "Alpha", "tags": ["Planning"], "has_depends": False}
@@ -2849,7 +2826,7 @@ window.addEventListener('load', function(){
     try{
       addToBuilder(TASKS[0], null, null);
       setTimeout(function(){
-        window.TaskCanvasNotes.createNote(36, 36, "Note block", "", "Planning");
+        window.KyanbasuNotes.createNote(36, 36, "Note block", "", "Planning");
         setTimeout(function(){
           var note = document.querySelector('.tcNoteNode');
           var bucket = document.querySelector('.tcNoteBucket');
@@ -2892,7 +2869,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["projectClearOfBucket"], msg=json.dumps(result))
 
     def test_note_bucket_move_into_project_area_pushes_project_aside(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({
             "tasks": [
                 {"uuid": "task-1", "short": "task-1", "desc": "Alpha task", "project": "Alpha", "tags": ["Planning"], "has_depends": False}
@@ -2908,10 +2885,10 @@ window.addEventListener('load', function(){
     try{
       addToBuilder(TASKS[0], null, null);
       setTimeout(function(){
-        var note = window.TaskCanvasNotes.createNote(720, 420, "Note block", "", "Planning", {skipAutoLayout:true});
+        var note = window.KyanbasuNotes.createNote(720, 420, "Note block", "", "Planning", {skipAutoLayout:true});
         note.x = 36;
         note.y = 36;
-        window.TaskCanvasNotes.render();
+        window.KyanbasuNotes.render();
         settleProjectsAgainstNotes();
         setTimeout(function(){
           var bucket = document.querySelector('.tcNoteBucket');
@@ -2951,7 +2928,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["clear"], msg=json.dumps(result))
 
     def test_canvas_notes_focuses_branch_and_bucket_across_builder_and_viewer(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -2960,16 +2937,16 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var root = window.TaskCanvasNotes.createNote(180, 220, 'Root idea', '', 'Planning', {skipAutoLayout:true});
-      var child = window.TaskCanvasNotes.createChildNote(root.id, 'Child idea', '');
-      window.TaskCanvasNotes.createChildNote(child.id, 'Nested idea', '');
-      window.TaskCanvasNotes.createNote(820, 220, 'Other planning root', '', 'Planning', {skipAutoLayout:true});
-      window.TaskCanvasNotes.createNote(820, 480, 'Delivery root', '', 'Delivery', {skipAutoLayout:true});
-      window.TaskCanvasNotes.toggleCollapse(root.id);
-      window.TaskCanvasNotes.focusBranch(root.id);
+      var root = window.KyanbasuNotes.createNote(180, 220, 'Root idea', '', 'Planning', {skipAutoLayout:true});
+      var child = window.KyanbasuNotes.createChildNote(root.id, 'Child idea', '');
+      window.KyanbasuNotes.createChildNote(child.id, 'Nested idea', '');
+      window.KyanbasuNotes.createNote(820, 220, 'Other planning root', '', 'Planning', {skipAutoLayout:true});
+      window.KyanbasuNotes.createNote(820, 480, 'Delivery root', '', 'Delivery', {skipAutoLayout:true});
+      window.KyanbasuNotes.toggleCollapse(root.id);
+      window.KyanbasuNotes.focusBranch(root.id);
       var branchVisible = Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){ return el.style.display !== 'none'; }).length;
-      var branchState = window.TaskCanvasNotes.focusState();
-      var branchOutline = window.TaskCanvasNotes.visibleOutline();
+      var branchState = window.KyanbasuNotes.focusState();
+      var branchOutline = window.KyanbasuNotes.visibleOutline();
       var focusBar = (document.getElementById('tcNoteFocusBar') || {}).textContent || '';
       document.getElementById('tabViewer').click();
       setTimeout(function(){
@@ -2980,10 +2957,10 @@ window.addEventListener('load', function(){
         setTimeout(function(){
           var allRows = document.querySelectorAll('#viewerStage .viewerNote').length;
           document.getElementById('tabBuilder').click();
-          window.TaskCanvasNotes.focusBucket('Planning');
+          window.KyanbasuNotes.focusBucket('Planning');
           var bucketVisible = Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){ return el.style.display !== 'none'; }).length;
           var bucketBoxes = document.querySelectorAll('#tcNoteBucketsLayer .tcNoteBucket').length;
-          var bucketState = window.TaskCanvasNotes.focusState();
+          var bucketState = window.KyanbasuNotes.focusState();
           document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
           setTimeout(function(){
             var out = {
@@ -2997,7 +2974,7 @@ window.addEventListener('load', function(){
               bucketVisible:bucketVisible,
               bucketBoxes:bucketBoxes,
               bucketState:bucketState,
-              afterEscape:window.TaskCanvasNotes.focusState().kind,
+              afterEscape:window.KyanbasuNotes.focusState().kind,
               allVisible:Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){ return el.style.display !== 'none'; }).length
             };
             var pre = document.createElement('pre');
@@ -3036,7 +3013,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["allVisible"], 5, msg=json.dumps(result))
 
     def test_viewer_note_outliner_edits_and_creates_siblings_and_children(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -3045,7 +3022,7 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var root = window.TaskCanvasNotes.createNote(180, 240, 'Initial thought', '', 'Planning');
+      var root = window.KyanbasuNotes.createNote(180, 240, 'Initial thought', '', 'Planning');
       document.getElementById('tabViewer').click();
       setTimeout(function(){
         var rootRow = document.querySelector('#viewerStage .viewerNote[data-note-id="'+root.id+'"]');
@@ -3055,11 +3032,11 @@ window.addEventListener('load', function(){
         editor.dispatchEvent(new Event('input', {bubbles:true}));
         editor.dispatchEvent(new KeyboardEvent('keydown', {key:'Tab', bubbles:true, cancelable:true}));
         setTimeout(function(){
-          var selectedId = window.TaskCanvasNotes.primaryNote();
+          var selectedId = window.KyanbasuNotes.primaryNote();
           var childEditor = document.querySelector('#viewerStage .viewerNote[data-note-id="'+selectedId+'"] .viewerNoteText');
           childEditor.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true, cancelable:true}));
           setTimeout(function(){
-            var outline = window.TaskCanvasNotes.outline();
+            var outline = window.KyanbasuNotes.outline();
             var rootAfter = outline.filter(function(item){ return item.id === root.id; })[0];
             var selectedRowsBefore = document.querySelectorAll('#viewerStage .viewerNote.selected').length;
             var inspectorKindBefore = !!document.getElementById('inspectorNoteKind');
@@ -3068,8 +3045,8 @@ window.addEventListener('load', function(){
             setTimeout(function(){
               var collapsedRows = document.querySelectorAll('#viewerStage .viewerNote').length;
               var out = {
-                content:window.TaskCanvasNotes.notes().filter(function(note){ return note.id === root.id; })[0].content,
-                notes:window.TaskCanvasNotes.notes().length,
+                content:window.KyanbasuNotes.notes().filter(function(note){ return note.id === root.id; })[0].content,
+                notes:window.KyanbasuNotes.notes().length,
                 childCount:rootAfter && rootAfter.children.length,
                 childDepths:(rootAfter && rootAfter.children || []).map(function(item){ return item.depth; }),
                 collapsedRows:collapsedRows,
@@ -3109,7 +3086,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["inspectorKind"], msg=json.dumps(result))
 
     def test_viewer_renders_task_section_and_note_outline(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({
             "tasks": [
                 {"uuid": "task-1", "short": "A", "desc": "Parent task", "project": "Work", "tags": ["Plan"], "has_depends": False},
@@ -3125,9 +3102,9 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var root = window.TaskCanvasNotes.createNote(180, 240, "Launch plan", "", "Planning");
-      var child = window.TaskCanvasNotes.createChildNote(root.id, "Build prototype", "");
-      window.TaskCanvasNotes.setBucket(child.id, "Delivery");
+      var root = window.KyanbasuNotes.createNote(180, 240, "Launch plan", "", "Planning");
+      var child = window.KyanbasuNotes.createChildNote(root.id, "Build prototype", "");
+      window.KyanbasuNotes.setBucket(child.id, "Delivery");
       document.getElementById('tabViewer').click();
       setTimeout(function(){
         var sections = Array.prototype.slice.call(document.querySelectorAll('#viewerStage .viewerSectionTitle')).map(function(el){ return el.textContent; });
@@ -3193,7 +3170,7 @@ window.addEventListener('load', function(){
         self.assertGreater(result["noteRows"][1]["indent"], result["noteRows"][0]["indent"], msg=json.dumps(result))
 
     def test_viewer_note_outline_sorts_roots_by_bucket(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -3203,10 +3180,10 @@ window.addEventListener('load', function(){
   setTimeout(function(){
     try{
       localStorage.removeItem('kyanbasu:viewer:notes-sort');
-      localStorage.removeItem('taskcanvas:viewer:notes-sort');
-      var z = window.TaskCanvasNotes.createNote(120, 220, "Zeta root", "", "Zeta", {skipAutoLayout:true});
-      window.TaskCanvasNotes.createChildNote(z.id, "Zeta child", "");
-      window.TaskCanvasNotes.createNote(420, 220, "Alpha root", "", "Alpha", {skipAutoLayout:true});
+      localStorage.removeItem('kyanbasu:viewer:notes-sort');
+      var z = window.KyanbasuNotes.createNote(120, 220, "Zeta root", "", "Zeta", {skipAutoLayout:true});
+      window.KyanbasuNotes.createChildNote(z.id, "Zeta child", "");
+      window.KyanbasuNotes.createNote(420, 220, "Alpha root", "", "Alpha", {skipAutoLayout:true});
       document.getElementById('tabViewer').click();
       setTimeout(function(){
         var before = Array.prototype.slice.call(document.querySelectorAll('#viewerStage .viewerNoteText')).map(function(el){ return el.textContent; });
@@ -3244,7 +3221,7 @@ window.addEventListener('load', function(){
         self.assertGreater(result["indents"][2], result["indents"][1], msg=json.dumps(result))
 
     def test_project_nearest_open_slot_prefers_close_diagonal_position(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -3284,7 +3261,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["dy"], -80)
 
     def test_canvas_notes_rejects_overlapping_notes(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -3293,8 +3270,8 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var a = window.TaskCanvasNotes.createNote(260, 260, "Alpha", "", "Planning");
-      var b = window.TaskCanvasNotes.createNote(260, 260, "Beta", "", "Planning");
+      var a = window.KyanbasuNotes.createNote(260, 260, "Alpha", "", "Planning");
+      var b = window.KyanbasuNotes.createNote(260, 260, "Beta", "", "Planning");
       setTimeout(function(){
         var aEl = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]');
         var bEl = document.querySelector('.tcNoteNode[data-note-id="'+b.id+'"]');
@@ -3332,7 +3309,7 @@ window.addEventListener('load', function(){
         self.assertNotEqual(result["ay"], result["by"])
 
     def test_canvas_notes_create_tasks_stages_selected_note_commands(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -3341,13 +3318,13 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var a = window.TaskCanvasNotes.createNote(180, 240, "Plan branch", "");
-      var b = window.TaskCanvasNotes.createNote(440, 240, "Build branch", "with details");
-      var c = window.TaskCanvasNotes.createNote(760, 240, "Ignore branch", "");
-      window.TaskCanvasNotes.selectNote(a.id);
-      window.TaskCanvasNotes.selectNote(b.id, true);
-      var count1 = window.TaskCanvasNotes.stageSelectedNotesAsTasks();
-      var count2 = window.TaskCanvasNotes.stageSelectedNotesAsTasks();
+      var a = window.KyanbasuNotes.createNote(180, 240, "Plan branch", "");
+      var b = window.KyanbasuNotes.createNote(440, 240, "Build branch", "with details");
+      var c = window.KyanbasuNotes.createNote(760, 240, "Ignore branch", "");
+      window.KyanbasuNotes.selectNote(a.id);
+      window.KyanbasuNotes.selectNote(b.id, true);
+      var count1 = window.KyanbasuNotes.stageSelectedNotesAsTasks();
+      var count2 = window.KyanbasuNotes.stageSelectedNotesAsTasks();
       if (typeof updateConsole === 'function') updateConsole();
       setTimeout(function(){
         var lines = ((document.getElementById('consoleText') || {}).value || "").split(/\\n/).filter(Boolean);
@@ -3388,7 +3365,7 @@ window.addEventListener('load', function(){
         self.assertFalse(result["ignorePresent"])
 
     def test_shell_uses_kyanbasu_brand_wordmark(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -3412,8 +3389,7 @@ window.addEventListener('load', function(){
         kanaDecorative:kana && kana.getAttribute('aria-hidden'),
         eyebrow:eyebrow && eyebrow.textContent,
         subtitle:subtitle && subtitle.textContent,
-        compactWordmarkVisible:getComputedStyle(document.querySelector('.shellWordmark')).display !== 'none',
-        oldVisibleName:Array.from(document.querySelectorAll('.shellBrand *')).some(function(el){ return el.textContent.trim() === 'TaskCanvas'; })
+        compactWordmarkVisible:getComputedStyle(document.querySelector('.shellWordmark')).display !== 'none'
       };
       var pre = document.createElement('pre');
       pre.id = 'e2e-out';
@@ -3443,10 +3419,9 @@ window.addEventListener('load', function(){
         self.assertEqual(result["eyebrow"], "Visual planning for Taskwarrior", msg=json.dumps(result))
         self.assertIn("Stage dependencies", result["subtitle"], msg=json.dumps(result))
         self.assertTrue(result["compactWordmarkVisible"], msg=json.dumps(result))
-        self.assertFalse(result["oldVisibleName"], msg=json.dumps(result))
 
     def test_top_toolbar_groups_note_and_command_actions(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -3527,7 +3502,7 @@ window.addEventListener('load', function(){
         self.assertIn("toolbarGroupCanvas", result["resetParentClass"], msg=json.dumps(result))
 
     def test_top_toolbar_can_collapse_restore_and_persist(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -3610,7 +3585,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["reopened"]["saved"], "0", msg=json.dumps(result))
 
     def test_context_selection_bar_handles_note_and_link_actions(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -3627,18 +3602,18 @@ window.addEventListener('load', function(){
         if (!btn) throw new Error('missing context action ' + name);
         btn.click();
       }
-      var a = window.TaskCanvasNotes.createNote(180, 240, 'Alpha', '', 'Planning', {skipAutoLayout:true});
+      var a = window.KyanbasuNotes.createNote(180, 240, 'Alpha', '', 'Planning', {skipAutoLayout:true});
       var singleActions = actions();
       clickAction('note-child');
-      var afterChild = window.TaskCanvasNotes.notes().length;
-      var b = window.TaskCanvasNotes.createNote(780, 240, 'Beta', '', 'Planning', {skipAutoLayout:true});
-      window.TaskCanvasNotes.selectNote(a.id);
-      window.TaskCanvasNotes.selectNote(b.id, true);
+      var afterChild = window.KyanbasuNotes.notes().length;
+      var b = window.KyanbasuNotes.createNote(780, 240, 'Beta', '', 'Planning', {skipAutoLayout:true});
+      window.KyanbasuNotes.selectNote(a.id);
+      window.KyanbasuNotes.selectNote(b.id, true);
       var multiActions = actions();
       clickAction('note-task');
       var stagedTasks = (window.STAGED_CMDS || []).filter(function(line){ return String(line).indexOf('task add ') === 0; }).length;
       clickAction('note-link');
-      var linkState = window.TaskCanvasContextBar.state();
+      var linkState = window.KyanbasuContextBar.state();
       var linkActions = actions();
       clickAction('link-delete');
       var out = {
@@ -3649,7 +3624,7 @@ window.addEventListener('load', function(){
         stagedTasks: stagedTasks,
         linkState: linkState,
         linkActions: linkActions,
-        remainingLinks: window.TaskCanvasNotes.links().length,
+        remainingLinks: window.KyanbasuNotes.links().length,
         hiddenAfterUnlink: document.getElementById('contextSelectionBar').hidden
       };
       var pre = document.createElement('pre');
@@ -3683,7 +3658,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["hiddenAfterUnlink"], msg=json.dumps(result))
 
     def test_context_selection_bar_switches_between_tasks_and_notes(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps(
             {
                 "tasks": [
@@ -3710,14 +3685,14 @@ window.addEventListener('load', function(){
       addNodeForTask(task, 180, 240, {deferLayout:true});
       var node = document.querySelector('#builderStage .node[data-short="aaaaaaaa"]');
       selectNode(node);
-      var taskState = window.TaskCanvasContextBar.state();
+      var taskState = window.KyanbasuContextBar.state();
       var taskActions = Array.prototype.slice.call(document.querySelectorAll('#contextSelectionActions button')).map(function(b){ return b.getAttribute('data-context-action'); });
       document.querySelector('#contextSelectionActions [data-context-action="done"]').click();
-      var note = window.TaskCanvasNotes.createNote(620, 260, 'Planning note', '', 'Planning', {skipAutoLayout:true});
-      var noteState = window.TaskCanvasContextBar.state();
+      var note = window.KyanbasuNotes.createNote(620, 260, 'Planning note', '', 'Planning', {skipAutoLayout:true});
+      var noteState = window.KyanbasuContextBar.state();
       var taskSelectedAfterNote = node.classList.contains('selected');
       selectNode(node);
-      var finalState = window.TaskCanvasContextBar.state();
+      var finalState = window.KyanbasuContextBar.state();
       var out = {
         taskState: taskState,
         taskActions: taskActions,
@@ -3725,7 +3700,7 @@ window.addEventListener('load', function(){
         noteState: noteState,
         taskSelectedAfterNote: taskSelectedAfterNote,
         finalState: finalState,
-        selectedNotesAfterTask: window.TaskCanvasNotes.selectedNotes().length
+        selectedNotesAfterTask: window.KyanbasuNotes.selectedNotes().length
       };
       var pre = document.createElement('pre');
       pre.id = 'e2e-out';
@@ -3755,7 +3730,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["selectedNotesAfterTask"], 0, msg=json.dumps(result))
 
     def test_canvas_workbenches_switch_layouts_and_notes_without_clearing_commands(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps(
             {
                 "tasks": [
@@ -3780,50 +3755,50 @@ window.addEventListener('load', function(){
       window.STAGED_CMDS = ['task aaaaaaaa modify +focus'];
       var task = (window.TASKS || [])[0];
       if (task && typeof addNodeForTask === 'function') addNodeForTask(task, 420, 280, {deferLayout:true});
-      window.TaskCanvasNotes.createNote(520, 360, 'Main note', '', 'Planning', {skipAutoLayout:true});
-      window.TaskCanvasWorkbenches.capture();
-      var createdId = window.TaskCanvasWorkbenches.create();
-      window.TaskCanvasWorkbenches.rename(createdId, 'Planning');
+      window.KyanbasuNotes.createNote(520, 360, 'Main note', '', 'Planning', {skipAutoLayout:true});
+      window.KyanbasuWorkbenches.capture();
+      var createdId = window.KyanbasuWorkbenches.create();
+      window.KyanbasuWorkbenches.rename(createdId, 'Planning');
       setTimeout(function(){
         var afterCreate = {
-          active: window.TaskCanvasWorkbenches.active(),
+          active: window.KyanbasuWorkbenches.active(),
           tabs: document.querySelectorAll('.tcWorkbenchTab').length,
           tabLabels: Array.prototype.slice.call(document.querySelectorAll('.tcWorkbenchTabName')).map(function(el){ return el.textContent; }),
           tabMeta: Array.prototype.slice.call(document.querySelectorAll('.tcWorkbenchTabMeta')).map(function(el){ return el.textContent; }),
           tabActions: document.querySelectorAll('.tcWorkbenchTabAction').length,
-          list: window.TaskCanvasWorkbenches.list(),
+          list: window.KyanbasuWorkbenches.list(),
           nodes: document.querySelectorAll('#builderStage .node').length,
-          notes: window.TaskCanvasNotes.notes().length,
+          notes: window.KyanbasuNotes.notes().length,
           commands: (window.STAGED_CMDS || []).slice()
         };
-        window.TaskCanvasWorkbenches.switchTo('main');
+        window.KyanbasuWorkbenches.switchTo('main');
         setTimeout(function(){
-          var duplicateId = window.TaskCanvasWorkbenches.duplicate('main');
-          var duplicated = window.TaskCanvasWorkbenches.active();
-          window.TaskCanvasWorkbenches.switchTo('main');
+          var duplicateId = window.KyanbasuWorkbenches.duplicate('main');
+          var duplicated = window.KyanbasuWorkbenches.active();
+          window.KyanbasuWorkbenches.switchTo('main');
           var duplicateSwitch = document.querySelector('[data-workbench-switch="' + duplicateId + '"]');
           if (duplicateSwitch) duplicateSwitch.click();
-          var duplicatedClickActive = window.TaskCanvasWorkbenches.active();
-          window.TaskCanvasWorkbenches.delete(duplicateId);
-          window.TaskCanvasWorkbenches.switchTo(createdId);
-          var deleted = window.TaskCanvasWorkbenches.delete(createdId);
+          var duplicatedClickActive = window.KyanbasuWorkbenches.active();
+          window.KyanbasuWorkbenches.delete(duplicateId);
+          window.KyanbasuWorkbenches.switchTo(createdId);
+          var deleted = window.KyanbasuWorkbenches.delete(createdId);
           setTimeout(function(){
           var out = {
             group: !!document.getElementById('workbenchGroup'),
-            api: !!window.TaskCanvasWorkbenches,
+            api: !!window.KyanbasuWorkbenches,
             afterCreate: afterCreate,
             duplicated: duplicated,
             duplicatedClickActive: duplicatedClickActive,
             deleted: deleted,
-            active: window.TaskCanvasWorkbenches.active(),
-            list: window.TaskCanvasWorkbenches.list(),
+            active: window.KyanbasuWorkbenches.active(),
+            list: window.KyanbasuWorkbenches.list(),
             tabs: document.querySelectorAll('.tcWorkbenchTab').length,
             tabLabels: Array.prototype.slice.call(document.querySelectorAll('.tcWorkbenchTabName')).map(function(el){ return el.textContent; }),
             tabMeta: Array.prototype.slice.call(document.querySelectorAll('.tcWorkbenchTabMeta')).map(function(el){ return el.textContent; }),
             tabActions: document.querySelectorAll('.tcWorkbenchTabAction').length,
             nodes: document.querySelectorAll('#builderStage .node').length,
-            notes: window.TaskCanvasNotes.notes().length,
-            noteContent: (window.TaskCanvasNotes.notes()[0] || {}).content || '',
+            notes: window.KyanbasuNotes.notes().length,
+            noteContent: (window.KyanbasuNotes.notes()[0] || {}).content || '',
             commands: (window.STAGED_CMDS || []).slice()
           };
           var pre = document.createElement('pre');
@@ -3878,7 +3853,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["commands"], ["task aaaaaaaa modify +focus"], msg=json.dumps(result))
 
     def test_canvas_workbench_duplicate_reopens_after_canvas_changes(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps(
             {
                 "tasks": [
@@ -3902,22 +3877,22 @@ window.addEventListener('load', function(){
     try{
       var task = (window.TASKS || [])[0];
       if (task && typeof addNodeForTask === 'function') addNodeForTask(task, 100, 120, {deferLayout:true});
-      window.TaskCanvasNotes.createNote(180, 220, 'Base note', '', 'Planning', {skipAutoLayout:true});
-      window.TaskCanvasWorkbenches.capture();
-      var duplicateId = window.TaskCanvasWorkbenches.duplicate('main');
+      window.KyanbasuNotes.createNote(180, 220, 'Base note', '', 'Planning', {skipAutoLayout:true});
+      window.KyanbasuWorkbenches.capture();
+      var duplicateId = window.KyanbasuWorkbenches.duplicate('main');
       setTimeout(function(){
-        var copyNote = window.TaskCanvasNotes.createNote(520, 420, 'Copy-only note', '', 'Copy', {skipAutoLayout:true});
+        var copyNote = window.KyanbasuNotes.createNote(520, 420, 'Copy-only note', '', 'Copy', {skipAutoLayout:true});
         var node = document.querySelector('#builderStage .node[data-short="aaaaaaaa"]');
         if (node){
           node.style.left = '680px';
           node.style.top = '520px';
         }
-        window.TaskCanvasWorkbenches.capture();
-        window.TaskCanvasWorkbenches.switchTo('main');
+        window.KyanbasuWorkbenches.capture();
+        window.KyanbasuWorkbenches.switchTo('main');
         setTimeout(function(){
           var mainBeforeClick = {
-            active: window.TaskCanvasWorkbenches.active(),
-            notes: window.TaskCanvasNotes.notes().map(function(n){ return n.content; }),
+            active: window.KyanbasuWorkbenches.active(),
+            notes: window.KyanbasuNotes.notes().map(function(n){ return n.content; }),
             nodeLeft: (document.querySelector('#builderStage .node[data-short="aaaaaaaa"]') || {}).style ? document.querySelector('#builderStage .node[data-short="aaaaaaaa"]').style.left : ''
           };
           var sw = document.querySelector('[data-workbench-switch="' + duplicateId + '"]');
@@ -3930,8 +3905,8 @@ window.addEventListener('load', function(){
               duplicateId: duplicateId,
               clicked: !!sw,
               mainBeforeClick: mainBeforeClick,
-              active: window.TaskCanvasWorkbenches.active(),
-              notes: window.TaskCanvasNotes.notes().map(function(n){ return n.content; }).sort(),
+              active: window.KyanbasuWorkbenches.active(),
+              notes: window.KyanbasuNotes.notes().map(function(n){ return n.content; }).sort(),
               nodeLeft: (document.querySelector('#builderStage .node[data-short="aaaaaaaa"]') || {}).style ? document.querySelector('#builderStage .node[data-short="aaaaaaaa"]').style.left : '',
               tabLabels: Array.prototype.slice.call(document.querySelectorAll('.tcWorkbenchTabName')).map(function(el){ return el.textContent; })
             };
@@ -3964,7 +3939,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["nodeLeft"], "680px", msg=json.dumps(result))
 
     def test_canvas_workbench_export_all_includes_each_workbench_notes(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps(
             {
                 "tasks": [
@@ -3988,15 +3963,15 @@ window.addEventListener('load', function(){
     try{
       var task = (window.TASKS || [])[0];
       if (task && typeof addNodeForTask === 'function') addNodeForTask(task, 100, 120, {deferLayout:true});
-      window.TaskCanvasNotes.createNote(180, 220, 'Main note', '', 'Planning', {skipAutoLayout:true});
-      window.TaskCanvasWorkbenches.capture();
-      var secondId = window.TaskCanvasWorkbenches.create();
-      window.TaskCanvasWorkbenches.rename(secondId, 'Delivery');
+      window.KyanbasuNotes.createNote(180, 220, 'Main note', '', 'Planning', {skipAutoLayout:true});
+      window.KyanbasuWorkbenches.capture();
+      var secondId = window.KyanbasuWorkbenches.create();
+      window.KyanbasuWorkbenches.rename(secondId, 'Delivery');
       setTimeout(function(){
-        window.TaskCanvasNotes.createNote(520, 360, 'Delivery note', '', 'Delivery', {skipAutoLayout:true});
-        window.TaskCanvasWorkbenches.capture();
-        var current = JSON.parse(window.TaskCanvasNotes.exportJSON());
-        var all = window.TaskCanvasWorkbenches.exportData();
+        window.KyanbasuNotes.createNote(520, 360, 'Delivery note', '', 'Delivery', {skipAutoLayout:true});
+        window.KyanbasuWorkbenches.capture();
+        var current = JSON.parse(window.KyanbasuNotes.exportJSON());
+        var all = window.KyanbasuWorkbenches.exportData();
         var noteCounts = all.workbenches.map(function(w){ return {name:w.name, notes:w.notes.notes.length, tasks:w.layout && w.layout.nodes ? Object.keys(w.layout.nodes).length : 0}; });
         var out = {
           currentKind: current.kind,
@@ -4039,7 +4014,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["noteCounts"][1]["tasks"], 0, msg=json.dumps(result))
 
     def test_canvas_workbench_import_all_restores_each_workbench_notes(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -4049,7 +4024,7 @@ window.addEventListener('load', function(){
   setTimeout(function(){
     try{
       var backup = {
-        kind: 'taskcanvas.workbenches',
+        kind: 'kyanbasu.workbenches',
         version: 1,
         activeId: 'delivery',
         nextIndex: 3,
@@ -4059,7 +4034,7 @@ window.addEventListener('load', function(){
             name: 'Main',
             layout: {version:1, zoom:100, drawer_collapsed:true, nodes:{}, projects:[], tags:[]},
             notes: {
-              kind:'taskcanvas.notes',
+              kind:'kyanbasu.notes',
               version:1,
               notes:[{id:'main-note', x:180, y:220, content:'Imported main', bucket:'Planning'}],
               links:[],
@@ -4071,7 +4046,7 @@ window.addEventListener('load', function(){
             name: 'Delivery',
             layout: {version:1, zoom:100, drawer_collapsed:true, nodes:{}, projects:[], tags:[]},
             notes: {
-              kind:'taskcanvas.notes',
+              kind:'kyanbasu.notes',
               version:1,
               notes:[{id:'delivery-note', x:520, y:360, content:'Imported delivery', bucket:'Delivery'}],
               links:[],
@@ -4080,18 +4055,18 @@ window.addEventListener('load', function(){
           }
         ]
       };
-      window.TaskCanvasNotes.createNote(200, 200, 'Local note', '', 'Local', {skipAutoLayout:true});
-      var imported = window.TaskCanvasWorkbenches.importData(backup);
+      window.KyanbasuNotes.createNote(200, 200, 'Local note', '', 'Local', {skipAutoLayout:true});
+      var imported = window.KyanbasuWorkbenches.importData(backup);
       setTimeout(function(){
-        var deliveryNotes = window.TaskCanvasNotes.notes().map(function(n){ return n.content; });
-        window.TaskCanvasWorkbenches.switchTo('main');
+        var deliveryNotes = window.KyanbasuNotes.notes().map(function(n){ return n.content; });
+        window.KyanbasuWorkbenches.switchTo('main');
         setTimeout(function(){
-          var mainNotes = window.TaskCanvasNotes.notes().map(function(n){ return n.content; });
-          var reexportedKinds = window.TaskCanvasWorkbenches.exportData().workbenches.map(function(w){ return w.notes.kind; });
+          var mainNotes = window.KyanbasuNotes.notes().map(function(n){ return n.content; });
+          var reexportedKinds = window.KyanbasuWorkbenches.exportData().workbenches.map(function(w){ return w.notes.kind; });
           var out = {
             imported: imported,
-            active: window.TaskCanvasWorkbenches.active(),
-            list: window.TaskCanvasWorkbenches.list(),
+            active: window.KyanbasuWorkbenches.active(),
+            list: window.KyanbasuWorkbenches.list(),
             deliveryNotes: deliveryNotes,
             mainNotes: mainNotes,
             reexportedKinds: reexportedKinds
@@ -4125,7 +4100,7 @@ window.addEventListener('load', function(){
         self.assertEqual([w["name"] for w in result["list"]], ["Main", "Delivery"], msg=json.dumps(result))
 
     def test_canvas_navigator_renders_and_jumps_viewport(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -4134,7 +4109,7 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var note = window.TaskCanvasNotes.createNote(3200, 2100, "Remote note", "", "Planning", {skipAutoLayout:true});
+      var note = window.KyanbasuNotes.createNote(3200, 2100, "Remote note", "", "Planning", {skipAutoLayout:true});
       var task = document.createElement('div');
       task.className = 'node selected';
       task.setAttribute('data-short', 'T1');
@@ -4144,8 +4119,8 @@ window.addEventListener('load', function(){
       task.style.height = '110px';
       task.textContent = 'Remote task';
       document.getElementById('builderStage').appendChild(task);
-      window.TaskCanvasNotes.selectNote(note.id);
-      window.TaskCanvasNavigator.render();
+      window.KyanbasuNotes.selectNote(note.id);
+      window.KyanbasuNavigator.render();
       setTimeout(function(){
         var panel = document.getElementById('tcNavigator');
         var cnv = panel && panel.querySelector('canvas');
@@ -4158,7 +4133,7 @@ window.addEventListener('load', function(){
           left: cv.scrollLeft,
           top: cv.scrollTop
         };
-        var ms = window.TaskCanvasNavigator.mapState('all');
+        var ms = window.KyanbasuNavigator.mapState('all');
         var x = ms.ox + ((note.x + 110) - ms.bounds.x) * ms.m;
         var y = ms.oy + ((note.y + 46) - ms.bounds.y) * ms.m;
         var cr = cnv.getBoundingClientRect();
@@ -4172,7 +4147,7 @@ window.addEventListener('load', function(){
         document.dispatchEvent(new MouseEvent('mouseup', {bubbles:true, cancelable:true, button:0}));
         setTimeout(function(){
           var jumped = {left: cv.scrollLeft, top: cv.scrollTop};
-          window.TaskCanvasNavigator.fitTo('selection');
+          window.KyanbasuNavigator.fitTo('selection');
           setTimeout(function(){
             var out = {
               visible: before.visible,
@@ -4214,7 +4189,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "", msg=json.dumps(result))
 
     def test_canvas_navigator_can_be_dragged_and_restores_position(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -4223,7 +4198,7 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      window.TaskCanvasNavigator.render();
+      window.KyanbasuNavigator.render();
       setTimeout(function(){
         var panel = document.getElementById('tcNavigator');
         var head = panel.querySelector('.tcNavigatorHead');
@@ -4247,7 +4222,7 @@ window.addEventListener('load', function(){
           var moved = panel.getBoundingClientRect();
           var saved = JSON.parse(localStorage.getItem('kyanbasu:navigator:v1') || '{}');
           panel.remove();
-          window.TaskCanvasNavigator.render();
+          window.KyanbasuNavigator.render();
           setTimeout(function(){
             var restored = document.getElementById('tcNavigator').getBoundingClientRect();
             var out = {
@@ -4291,7 +4266,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "", msg=json.dumps(result))
 
     def test_canvas_navigator_keeps_stable_bounds_when_branch_collapses(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -4300,22 +4275,22 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var left = window.TaskCanvasNotes.createNote(200, 240, "Left root", "", "", {skipAutoLayout:true});
-      window.TaskCanvasNotes.createChildNote(left.id, "Left child 1", "");
-      window.TaskCanvasNotes.createChildNote(left.id, "Left child 2", "");
-      var right = window.TaskCanvasNotes.createNote(2600, 1600, "Right root", "", "", {skipAutoLayout:true});
-      window.TaskCanvasNotes.createChildNote(right.id, "Right child 1", "");
-      window.TaskCanvasNotes.createChildNote(right.id, "Right child 2", "");
-      window.TaskCanvasNavigator.render();
-      var before = window.TaskCanvasNavigator.mapState('all').bounds;
-      window.TaskCanvasNotes.toggleCollapse(left.id);
-      window.TaskCanvasNavigator.render();
-      var after = window.TaskCanvasNavigator.mapState('all').bounds;
+      var left = window.KyanbasuNotes.createNote(200, 240, "Left root", "", "", {skipAutoLayout:true});
+      window.KyanbasuNotes.createChildNote(left.id, "Left child 1", "");
+      window.KyanbasuNotes.createChildNote(left.id, "Left child 2", "");
+      var right = window.KyanbasuNotes.createNote(2600, 1600, "Right root", "", "", {skipAutoLayout:true});
+      window.KyanbasuNotes.createChildNote(right.id, "Right child 1", "");
+      window.KyanbasuNotes.createChildNote(right.id, "Right child 2", "");
+      window.KyanbasuNavigator.render();
+      var before = window.KyanbasuNavigator.mapState('all').bounds;
+      window.KyanbasuNotes.toggleCollapse(left.id);
+      window.KyanbasuNavigator.render();
+      var after = window.KyanbasuNavigator.mapState('all').bounds;
       var visible = Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){
         return el.style.display !== 'none';
       }).length;
       var out = {
-        total: window.TaskCanvasNotes.notes().length,
+        total: window.KyanbasuNotes.notes().length,
         visible: visible,
         meta: document.querySelector('#tcNavigator .tcNavigatorMeta').textContent,
         boundsStable: before.x === after.x && before.y === after.y && before.w === after.w && before.h === after.h,
@@ -4346,7 +4321,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "", msg=json.dumps(result))
 
     def test_canvas_task_cards_render_polished_metadata(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -4420,7 +4395,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "", msg=json.dumps(result))
 
     def test_canvas_notes_create_linked_tasks_stages_and_links_generated_refs(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -4429,26 +4404,26 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var a = window.TaskCanvasNotes.createNote(180, 240, "Plan linked", "", "Planning");
-      var b = window.TaskCanvasNotes.createNote(440, 240, "Build linked", "details", "Delivery");
-      window.TaskCanvasNotes.selectNote(a.id);
-      window.TaskCanvasNotes.selectNote(b.id, true);
-      var count1 = window.TaskCanvasNotes.createLinkedTasksFromSelectedNotes();
-      var refsA1 = window.TaskCanvasNotes.linkedTasks(a.id);
-      var refsB1 = window.TaskCanvasNotes.linkedTasks(b.id);
-      var count2 = window.TaskCanvasNotes.createLinkedTasksFromSelectedNotes();
+      var a = window.KyanbasuNotes.createNote(180, 240, "Plan linked", "", "Planning");
+      var b = window.KyanbasuNotes.createNote(440, 240, "Build linked", "details", "Delivery");
+      window.KyanbasuNotes.selectNote(a.id);
+      window.KyanbasuNotes.selectNote(b.id, true);
+      var count1 = window.KyanbasuNotes.createLinkedTasksFromSelectedNotes();
+      var refsA1 = window.KyanbasuNotes.linkedTasks(a.id);
+      var refsB1 = window.KyanbasuNotes.linkedTasks(b.id);
+      var count2 = window.KyanbasuNotes.createLinkedTasksFromSelectedNotes();
       if (typeof updateConsole === 'function') updateConsole();
       setTimeout(function(){
         var lines = ((document.getElementById('consoleText') || {}).value || "").split(/\\n/).filter(Boolean);
         var badgeA = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"] .tcNoteTaskBadge');
-        var exported = window.TaskCanvasNotes.exportData();
+        var exported = window.KyanbasuNotes.exportData();
         var noteA = exported.notes.filter(function(n){ return n.id === a.id; })[0];
         var out = {
           button: !!document.getElementById('noteCreateLinkedTasksBtn'),
           count1: count1,
           count2: count2,
           refsA1: refsA1,
-          refsA2: window.TaskCanvasNotes.linkedTasks(a.id),
+          refsA2: window.KyanbasuNotes.linkedTasks(a.id),
           refsB1: refsB1,
           lines: lines,
           staged: Array.isArray(window.STAGED_CMDS) ? window.STAGED_CMDS.slice() : [],
@@ -4492,7 +4467,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["exportedRefsA"], result["refsA1"], msg=json.dumps(result))
 
     def test_console_editor_edits_and_removes_commands_across_updates(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -4507,11 +4482,11 @@ window.addEventListener('load', function(){
           value: { writeText: function(txt){ window.__copiedText = txt; return Promise.resolve(); } }
         });
       }catch(_){}
-      var a = window.TaskCanvasNotes.createNote(180, 240, "First task", "");
-      var b = window.TaskCanvasNotes.createNote(440, 240, "Second task", "");
-      window.TaskCanvasNotes.selectNote(a.id);
-      window.TaskCanvasNotes.selectNote(b.id, true);
-      window.TaskCanvasNotes.stageSelectedNotesAsTasks();
+      var a = window.KyanbasuNotes.createNote(180, 240, "First task", "");
+      var b = window.KyanbasuNotes.createNote(440, 240, "Second task", "");
+      window.KyanbasuNotes.selectNote(a.id);
+      window.KyanbasuNotes.selectNote(b.id, true);
+      window.KyanbasuNotes.stageSelectedNotesAsTasks();
       setTimeout(function(){
         var rows = document.querySelectorAll('#consoleRows .consoleCommandRow');
         rows[0].querySelector('button').click();
@@ -4524,7 +4499,7 @@ window.addEventListener('load', function(){
           if (typeof updateConsole === 'function') updateConsole();
           setTimeout(function(){
             var text = (document.getElementById('consoleText') || {}).value || "";
-            var review = window.TaskCanvasReview.current();
+            var review = window.KyanbasuReview.current();
             document.getElementById('copyBtn').click();
             setTimeout(function(){
             var out = {
@@ -4536,8 +4511,8 @@ window.addEventListener('load', function(){
               copied: window.__copiedText || "",
               reviewText: review.text,
               reviewNewTasks: review.groups.newTasks.length,
-              stateEdits: Object.keys(window.TaskCanvasConsoleEditor.state().edits).length,
-              stateRemoved: Object.keys(window.TaskCanvasConsoleEditor.state().removed).length
+              stateEdits: Object.keys(window.KyanbasuConsoleEditor.state().edits).length,
+              stateRemoved: Object.keys(window.KyanbasuConsoleEditor.state().removed).length
             };
             var pre = document.createElement('pre');
             pre.id = 'e2e-out';
@@ -4573,7 +4548,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["stateRemoved"], 1)
 
     def test_console_update_immediately_displays_short_ids_without_uuid_flicker(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps(
             {
                 "tasks": [
@@ -4634,7 +4609,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["stable"], msg=json.dumps(result))
 
     def test_console_editor_mounts_empty_state_without_commands(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -4646,7 +4621,7 @@ window.addEventListener('load', function(){
       var rows = document.getElementById('consoleRows');
       var ta = document.getElementById('consoleText');
       var out = {
-        api: !!window.TaskCanvasConsoleEditor,
+        api: !!window.KyanbasuConsoleEditor,
         rows: !!rows,
         rowsInOverlay: !!(rows && document.getElementById('depCmdPre') && rows.nextSibling === document.getElementById('depCmdPre')),
         empty: !!document.querySelector('#consoleRows .consoleCommandEmpty'),
@@ -4683,7 +4658,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["rowCount"], 0)
 
     def test_canvas_notes_runtime_creates_child_branches_and_reflows_map(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -4692,16 +4667,16 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var root = window.TaskCanvasNotes.createNote(180, 240, "Launch plan", "");
-      var a = window.TaskCanvasNotes.createChildNote(root.id, "Design", "");
-      var b = window.TaskCanvasNotes.createChildNote(root.id, "Build", "");
-      var c = window.TaskCanvasNotes.createChildNote(a.id, "Prototype", "");
-      window.TaskCanvasNotes.reflowMindMap(root.id);
-      window.TaskCanvasNotes.save();
+      var root = window.KyanbasuNotes.createNote(180, 240, "Launch plan", "");
+      var a = window.KyanbasuNotes.createChildNote(root.id, "Design", "");
+      var b = window.KyanbasuNotes.createChildNote(root.id, "Build", "");
+      var c = window.KyanbasuNotes.createChildNote(a.id, "Prototype", "");
+      window.KyanbasuNotes.reflowMindMap(root.id);
+      window.KyanbasuNotes.save();
       if (typeof updateConsole === 'function') updateConsole();
       setTimeout(function(){
-        var notes = window.TaskCanvasNotes.notes();
-        var links = window.TaskCanvasNotes.links();
+        var notes = window.KyanbasuNotes.notes();
+        var links = window.KyanbasuNotes.links();
         var byContent = {};
         notes.forEach(function(n){ byContent[n.content] = n; });
         var out = {
@@ -4747,7 +4722,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "")
 
     def test_canvas_notes_rejects_invalid_child_graph_mutations(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -4756,24 +4731,24 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var root = window.TaskCanvasNotes.createNote(180, 240, 'Root', '');
-      var child = window.TaskCanvasNotes.createChildNote(root.id, 'Child', '');
-      var nested = window.TaskCanvasNotes.createChildNote(child.id, 'Nested', '');
-      var other = window.TaskCanvasNotes.createNote(900, 240, 'Other', '');
-      var cycle = window.TaskCanvasNotes.linkNotes(nested.id, root.id, 'child');
+      var root = window.KyanbasuNotes.createNote(180, 240, 'Root', '');
+      var child = window.KyanbasuNotes.createChildNote(root.id, 'Child', '');
+      var nested = window.KyanbasuNotes.createChildNote(child.id, 'Nested', '');
+      var other = window.KyanbasuNotes.createNote(900, 240, 'Other', '');
+      var cycle = window.KyanbasuNotes.linkNotes(nested.id, root.id, 'child');
       var cycleMessage = (document.getElementById('devConsoleToast') || {}).textContent || '';
-      var secondParent = window.TaskCanvasNotes.linkNotes(other.id, child.id, 'child');
+      var secondParent = window.KyanbasuNotes.linkNotes(other.id, child.id, 'child');
       var parentMessage = (document.getElementById('devConsoleToast') || {}).textContent || '';
       var out = {
         cycle: cycle,
         cycleMessage: cycleMessage,
         secondParent: secondParent,
         parentMessage: parentMessage,
-        selfParent: window.TaskCanvasNotes.linkNotes(root.id, root.id, 'child'),
-        duplicate: window.TaskCanvasNotes.linkNotes(root.id, child.id, 'child'),
-        manualCycle: window.TaskCanvasNotes.linkNotes(nested.id, root.id, 'manual'),
-        childLinks: window.TaskCanvasNotes.links().filter(function(l){ return l.type === 'child'; }).length,
-        manualLinks: window.TaskCanvasNotes.links().filter(function(l){ return l.type === 'manual'; }).length
+        selfParent: window.KyanbasuNotes.linkNotes(root.id, root.id, 'child'),
+        duplicate: window.KyanbasuNotes.linkNotes(root.id, child.id, 'child'),
+        manualCycle: window.KyanbasuNotes.linkNotes(nested.id, root.id, 'manual'),
+        childLinks: window.KyanbasuNotes.links().filter(function(l){ return l.type === 'child'; }).length,
+        manualLinks: window.KyanbasuNotes.links().filter(function(l){ return l.type === 'manual'; }).length
       };
       var pre = document.createElement('pre');
       pre.id = 'e2e-out';
@@ -4804,7 +4779,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["manualLinks"], 1, msg=json.dumps(result))
 
     def test_canvas_notes_import_repairs_invalid_child_graph(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -4813,8 +4788,8 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var result = window.TaskCanvasNotes.importData({
-        kind:'taskcanvas.notes',
+      var result = window.KyanbasuNotes.importData({
+        kind:'kyanbasu.notes',
         version:1,
         notes:[
           {id:'a', x:180, y:240, content:'A'},
@@ -4836,8 +4811,8 @@ window.addEventListener('load', function(){
       });
       var out = {
         result: result,
-        links: window.TaskCanvasNotes.links().map(function(l){ return l.type + ':' + l.from + ':' + l.to; }).sort(),
-        outlineRoots: window.TaskCanvasNotes.outline().map(function(n){ return n.id; }).sort()
+        links: window.KyanbasuNotes.links().map(function(l){ return l.type + ':' + l.from + ':' + l.to; }).sort(),
+        outlineRoots: window.KyanbasuNotes.outline().map(function(n){ return n.id; }).sort()
       };
       var pre = document.createElement('pre');
       pre.id = 'e2e-out';
@@ -4869,14 +4844,14 @@ window.addEventListener('load', function(){
         self.assertEqual(result["outlineRoots"], ["a"], msg=json.dumps(result))
 
     def test_canvas_notes_load_repairs_and_persists_invalid_child_graph(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
-        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"workspace_id": "branch-storage-guards", "tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_BRANCH_STORAGE_GUARDS_HARNESS">
 (function(){
-  var storageKey = 'taskcanvas:notes:v1:empty';
+  var storageKey = 'kyanbasu:workspace:v1:branch-storage-guards:notes';
   localStorage.setItem(storageKey, JSON.stringify({
     notes:[
       {id:'a', x:180, y:240, content:'A'},
@@ -4893,14 +4868,13 @@ window.addEventListener('load', function(){
   window.addEventListener('load', function(){
     setTimeout(function(){
       try{
-        var stableKey = window.TaskCanvasStorage.key('notes');
+        var stableKey = window.KyanbasuStorage.key('notes');
         var persisted = JSON.parse(localStorage.getItem(stableKey) || '{}');
         var out = {
-          runtimeLinks: window.TaskCanvasNotes.links().map(function(l){ return l.from + ':' + l.to; }),
+          runtimeLinks: window.KyanbasuNotes.links().map(function(l){ return l.from + ':' + l.to; }),
           persistedLinks: (persisted.links || []).map(function(l){ return l.from + ':' + l.to; }),
-          notes: window.TaskCanvasNotes.notes().length,
+          notes: window.KyanbasuNotes.notes().length,
           stableKey: stableKey,
-          migratedFrom: localStorage.getItem(stableKey + ':migrated-from') || '',
           repairToast: (document.getElementById('devConsoleToast') || {}).textContent || ''
         };
         var pre = document.createElement('pre');
@@ -4926,11 +4900,10 @@ window.addEventListener('load', function(){
         self.assertEqual(result["runtimeLinks"], ["a:b"], msg=json.dumps(result))
         self.assertEqual(result["persistedLinks"], ["a:b"], msg=json.dumps(result))
         self.assertTrue(result["stableKey"].startswith("kyanbasu:workspace:v1:"), msg=json.dumps(result))
-        self.assertEqual(result["migratedFrom"], "taskcanvas:notes:v1:empty", msg=json.dumps(result))
         self.assertEqual(result["repairToast"], "Repaired 3 invalid saved note links.", msg=json.dumps(result))
 
     def test_canvas_notes_shows_saving_and_saved_status(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -4941,7 +4914,7 @@ window.addEventListener('load', function(){
     try{
       var status = document.getElementById('noteSaveStatus');
       var initial = status ? status.textContent : '';
-      window.TaskCanvasNotes.createNote(180, 240, 'Save status', '');
+      window.KyanbasuNotes.createNote(180, 240, 'Save status', '');
       var pending = status ? status.textContent : '';
       setTimeout(function(){
         var out = {
@@ -4977,7 +4950,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["parent"], "noteDataGroup", msg=json.dumps(result))
 
     def test_canvas_notes_compact_map_packs_bucket_groups(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -4986,11 +4959,11 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var a = window.TaskCanvasNotes.createNote(120, 240, "Alpha root", "", "Planning", {skipAutoLayout:true});
-      window.TaskCanvasNotes.createChildNote(a.id, "Alpha child", "");
-      var b = window.TaskCanvasNotes.createNote(2500, 900, "Beta root", "", "Delivery", {skipAutoLayout:true});
-      window.TaskCanvasNotes.createChildNote(b.id, "Beta child", "");
-      var c = window.TaskCanvasNotes.createNote(4200, 1600, "Gamma root", "", "Review", {skipAutoLayout:true});
+      var a = window.KyanbasuNotes.createNote(120, 240, "Alpha root", "", "Planning", {skipAutoLayout:true});
+      window.KyanbasuNotes.createChildNote(a.id, "Alpha child", "");
+      var b = window.KyanbasuNotes.createNote(2500, 900, "Beta root", "", "Delivery", {skipAutoLayout:true});
+      window.KyanbasuNotes.createChildNote(b.id, "Beta child", "");
+      var c = window.KyanbasuNotes.createNote(4200, 1600, "Gamma root", "", "Review", {skipAutoLayout:true});
       function rects(){
         return Array.prototype.slice.call(document.querySelectorAll('.tcNoteBucket')).map(function(el){
           return {
@@ -5015,13 +4988,13 @@ window.addEventListener('load', function(){
       setTimeout(function(){
         var before = rects();
         var beforeSpan = span(before);
-        window.TaskCanvasNotes.compactMindMap();
+        window.KyanbasuNotes.compactMindMap();
         setTimeout(function(){
           var after = rects();
           var afterSpan = span(after);
           var overlaps = false;
           for (var i=0;i<after.length;i++) for (var j=i+1;j<after.length;j++) if (overlap(after[i], after[j])) overlaps = true;
-          var notes = window.TaskCanvasNotes.notes();
+          var notes = window.KyanbasuNotes.notes();
           var byContent = {};
           notes.forEach(function(n){ byContent[n.content] = n; });
           var out = {
@@ -5062,7 +5035,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["betaChildRight"], msg=json.dumps(result))
 
     def test_canvas_notes_compact_map_avoids_task_project_space(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -5078,9 +5051,9 @@ window.addEventListener('load', function(){
       window.TASK_BY_SHORT[task.short] = task;
       addNodeForTask(task, 160, 140, {deferLayout:true});
       recomputeAreasAndTags();
-      var a = window.TaskCanvasNotes.createNote(2600, 240, "Alpha root", "", "Planning", {skipAutoLayout:true});
-      window.TaskCanvasNotes.createChildNote(a.id, "Alpha child", "");
-      var b = window.TaskCanvasNotes.createNote(3300, 620, "Beta root", "", "Review", {skipAutoLayout:true});
+      var a = window.KyanbasuNotes.createNote(2600, 240, "Alpha root", "", "Planning", {skipAutoLayout:true});
+      window.KyanbasuNotes.createChildNote(a.id, "Alpha child", "");
+      var b = window.KyanbasuNotes.createNote(3300, 620, "Beta root", "", "Review", {skipAutoLayout:true});
       function rectFor(el){
         return {
           x: parseFloat(el.style.left || '0'),
@@ -5093,7 +5066,7 @@ window.addEventListener('load', function(){
         return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
       }
       setTimeout(function(){
-        window.TaskCanvasNotes.compactMindMap();
+        window.KyanbasuNotes.compactMindMap();
         setTimeout(function(){
           var buckets = Array.prototype.slice.call(document.querySelectorAll('.tcNoteBucket')).map(rectFor);
           var occupied = Array.prototype.slice.call(document.querySelectorAll('#builderStage .node, #builderStage .projArea, #builderStage .tagArea')).map(rectFor);
@@ -5135,7 +5108,7 @@ window.addEventListener('load', function(){
         self.assertFalse(result["overlaps"], msg=json.dumps(result))
 
     def test_canvas_notes_keyboard_creates_sibling_and_child_notes(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -5144,17 +5117,17 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var root = window.TaskCanvasNotes.createNote(180, 240, "Root", "");
-      var first = window.TaskCanvasNotes.createChildNote(root.id, "First", "");
-      window.TaskCanvasNotes.selectNote(first.id);
+      var root = window.KyanbasuNotes.createNote(180, 240, "Root", "");
+      var first = window.KyanbasuNotes.createChildNote(root.id, "First", "");
+      window.KyanbasuNotes.selectNote(first.id);
       document.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true, cancelable:true}));
       if (document.activeElement) document.activeElement.blur();
-      window.TaskCanvasNotes.selectNote(first.id);
+      window.KyanbasuNotes.selectNote(first.id);
       document.dispatchEvent(new KeyboardEvent('keydown', {key:'Tab', bubbles:true, cancelable:true}));
       if (typeof updateConsole === 'function') updateConsole();
       setTimeout(function(){
-        var notes = window.TaskCanvasNotes.notes();
-        var links = window.TaskCanvasNotes.links();
+        var notes = window.KyanbasuNotes.notes();
+        var links = window.KyanbasuNotes.links();
         var byContent = {};
         notes.forEach(function(n){
           if (!byContent[n.content]) byContent[n.content] = [];
@@ -5212,7 +5185,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "")
 
     def test_canvas_notes_dynamic_reference_labels_follow_mind_map(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -5221,18 +5194,18 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var a = window.TaskCanvasNotes.createNote(180, 240, "Root A", "", "Planning", {skipAutoLayout: true});
-      var b = window.TaskCanvasNotes.createNote(620, 240, "Root B", "", "Planning", {skipAutoLayout: true});
-      var aChild = window.TaskCanvasNotes.createChildNote(a.id, "A child", "");
-      var aNested = window.TaskCanvasNotes.createChildNote(aChild.id, "A nested", "");
-      var aSibling = window.TaskCanvasNotes.createSiblingNote(aChild.id, "A sibling", "");
+      var a = window.KyanbasuNotes.createNote(180, 240, "Root A", "", "Planning", {skipAutoLayout: true});
+      var b = window.KyanbasuNotes.createNote(620, 240, "Root B", "", "Planning", {skipAutoLayout: true});
+      var aChild = window.KyanbasuNotes.createChildNote(a.id, "A child", "");
+      var aNested = window.KyanbasuNotes.createChildNote(aChild.id, "A nested", "");
+      var aSibling = window.KyanbasuNotes.createSiblingNote(aChild.id, "A sibling", "");
       setTimeout(function(){
-        var labels = window.TaskCanvasNotes.noteLabels();
+        var labels = window.KyanbasuNotes.noteLabels();
         function badge(id){
           var el = document.querySelector('.tcNoteNode[data-note-id="'+id+'"] .tcNoteCode');
           return el ? el.textContent : "";
         }
-        var exported = window.TaskCanvasNotes.exportData();
+        var exported = window.KyanbasuNotes.exportData();
         var out = {
           labels: {
             a: labels[a.id],
@@ -5282,7 +5255,7 @@ window.addEventListener('load', function(){
         self.assertFalse(result["exportedHasGeneratedLabel"], msg=json.dumps(result))
 
     def test_canvas_notes_search_matches_label_text_and_bucket(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -5291,15 +5264,15 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var root = window.TaskCanvasNotes.createNote(180, 240, "Planning root", "", "Planning", {skipAutoLayout: true});
-      var child = window.TaskCanvasNotes.createChildNote(root.id, "Risk register", "");
-      var delivery = window.TaskCanvasNotes.createNote(620, 260, "Ship checklist", "", "Delivery", {skipAutoLayout: true});
+      var root = window.KyanbasuNotes.createNote(180, 240, "Planning root", "", "Planning", {skipAutoLayout: true});
+      var child = window.KyanbasuNotes.createChildNote(root.id, "Risk register", "");
+      var delivery = window.KyanbasuNotes.createNote(620, 260, "Ship checklist", "", "Delivery", {skipAutoLayout: true});
       var input = document.getElementById('noteSearchInput');
       function runQuery(q){
         input.value = q;
         input.dispatchEvent(new Event('input', {bubbles:true}));
         return {
-          ids: window.TaskCanvasNotes.searchNotes(q),
+          ids: window.KyanbasuNotes.searchNotes(q),
           resultCodes: Array.prototype.slice.call(document.querySelectorAll('#noteSearchResults .tcNoteSearchCode')).map(function(el){ return el.textContent; }),
           highlighted: Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode.searchMatch')).map(function(el){ return el.getAttribute('data-note-id'); })
         };
@@ -5316,7 +5289,7 @@ window.addEventListener('load', function(){
           byLabel: byLabel,
           byText: byText,
           byBucket: byBucket,
-          selected: window.TaskCanvasNotes.selectedNotes(),
+          selected: window.KyanbasuNotes.selectedNotes(),
           childId: child.id,
           deliveryId: delivery.id,
           resultsVisible: !document.getElementById('noteSearchResults').hidden
@@ -5350,7 +5323,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["resultsVisible"], msg=json.dumps(result))
 
     def test_canvas_notes_structured_queries_and_thinking_lenses(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -5359,31 +5332,31 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var openQuestion = TaskCanvasNotes.createNote(140, 180, 'What blocks launch?', '', 'Deep Work', {skipAutoLayout:true, kind:'question'});
-      var resolvedQuestion = TaskCanvasNotes.createNote(380, 180, 'Who owns launch?', '', 'Deep Work', {skipAutoLayout:true, kind:'question', status:'resolved'});
-      var assumption = TaskCanvasNotes.createNote(620, 180, 'Users need export', '', 'Research', {skipAutoLayout:true, kind:'assumption'});
-      var action = TaskCanvasNotes.createNote(860, 180, 'Draft rollout', '', 'Delivery', {skipAutoLayout:true, kind:'action'});
-      var decision = TaskCanvasNotes.createNote(1100, 180, 'Use phased rollout', '', 'Delivery', {skipAutoLayout:true, kind:'decision'});
+      var openQuestion = KyanbasuNotes.createNote(140, 180, 'What blocks launch?', '', 'Deep Work', {skipAutoLayout:true, kind:'question'});
+      var resolvedQuestion = KyanbasuNotes.createNote(380, 180, 'Who owns launch?', '', 'Deep Work', {skipAutoLayout:true, kind:'question', status:'resolved'});
+      var assumption = KyanbasuNotes.createNote(620, 180, 'Users need export', '', 'Research', {skipAutoLayout:true, kind:'assumption'});
+      var action = KyanbasuNotes.createNote(860, 180, 'Draft rollout', '', 'Delivery', {skipAutoLayout:true, kind:'action'});
+      var decision = KyanbasuNotes.createNote(1100, 180, 'Use phased rollout', '', 'Delivery', {skipAutoLayout:true, kind:'decision'});
       var queries = {
-        openQuestions: TaskCanvasNotes.searchNotes('kind:question status:open'),
-        quotedBucket: TaskCanvasNotes.searchNotes('bucket:"Deep Work"'),
-        unresolved: TaskCanvasNotes.searchNotes('kind:question -status:resolved'),
-        textAndKind: TaskCanvasNotes.searchNotes('launch kind:question'),
-        orphans: TaskCanvasNotes.searchNotes('is:orphan'),
-        withoutTasks: TaskCanvasNotes.searchNotes('-has:tasks')
+        openQuestions: KyanbasuNotes.searchNotes('kind:question status:open'),
+        quotedBucket: KyanbasuNotes.searchNotes('bucket:"Deep Work"'),
+        unresolved: KyanbasuNotes.searchNotes('kind:question -status:resolved'),
+        textAndKind: KyanbasuNotes.searchNotes('launch kind:question'),
+        orphans: KyanbasuNotes.searchNotes('is:orphan'),
+        withoutTasks: KyanbasuNotes.searchNotes('-has:tasks')
       };
       document.getElementById('noteLensBtn').click();
       var menuOptions = document.querySelectorAll('#noteLensMenu .tcNoteLensOption').length;
-      TaskCanvasNotes.applyLens('open-questions');
+      KyanbasuNotes.applyLens('open-questions');
       renderViewer();
       var lensVisible = Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){ return el.style.display !== 'none'; }).map(function(el){ return el.getAttribute('data-note-id'); });
       var viewerRows = Array.prototype.slice.call(document.querySelectorAll('#viewerStage .viewerNote')).map(function(el){ return el.getAttribute('data-note-id'); });
       var viewerTitle = document.querySelector('#viewerStage .viewerSection:last-of-type .viewerSectionTitle');
-      TaskCanvasNotes.applyLens('actions');
-      var actionBeforeLink = TaskCanvasNotes.lensState();
-      TaskCanvasNotes.linkNoteToTask(action.id, {uuid:'task-1', short:'task-1', desc:'Draft rollout'});
-      var actionAfterLink = TaskCanvasNotes.lensState();
-      TaskCanvasNotes.clearLens();
+      KyanbasuNotes.applyLens('actions');
+      var actionBeforeLink = KyanbasuNotes.lensState();
+      KyanbasuNotes.linkNoteToTask(action.id, {uuid:'task-1', short:'task-1', desc:'Draft rollout'});
+      var actionAfterLink = KyanbasuNotes.lensState();
+      KyanbasuNotes.clearLens();
       var visibleAfterClear = Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){ return el.style.display !== 'none'; }).length;
       var out = {
         ids:{openQuestion:openQuestion.id, resolvedQuestion:resolvedQuestion.id, action:action.id},
@@ -5395,8 +5368,8 @@ window.addEventListener('load', function(){
         actionBeforeLink:actionBeforeLink,
         actionAfterLink:actionAfterLink,
         visibleAfterClear:visibleAfterClear,
-        totalNotes:TaskCanvasNotes.notes().length,
-        parsed:TaskCanvasNotes.parseSearchQuery('kind:question -status:resolved bucket:"Deep Work"')
+        totalNotes:KyanbasuNotes.notes().length,
+        parsed:KyanbasuNotes.parseSearchQuery('kind:question -status:resolved bucket:"Deep Work"')
       };
       var pre = document.createElement('pre');
       pre.id = 'e2e-out';
@@ -5434,7 +5407,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["parsed"][1]["negated"], msg=json.dumps(result))
 
     def test_canvas_notes_saved_custom_lenses_lifecycle(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -5443,19 +5416,19 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var matching = TaskCanvasNotes.createNote(180, 220, 'Validate pricing', '', 'Research', {skipAutoLayout:true, kind:'assumption'});
-      TaskCanvasNotes.createNote(460, 220, 'Draft pricing page', '', 'Delivery', {skipAutoLayout:true, kind:'action'});
-      var saved = TaskCanvasNotes.saveLens('Research assumptions', 'bucket:Research kind:assumption status:open');
-      var duplicate = TaskCanvasNotes.saveLens('research assumptions', 'kind:action');
-      var applied = TaskCanvasNotes.applyLens(saved.id);
-      var activeBeforeRename = TaskCanvasNotes.lensState();
-      var renamed = TaskCanvasNotes.renameLens(saved.id, 'Open research assumptions');
-      var activeAfterRename = TaskCanvasNotes.lensState();
+      var matching = KyanbasuNotes.createNote(180, 220, 'Validate pricing', '', 'Research', {skipAutoLayout:true, kind:'assumption'});
+      KyanbasuNotes.createNote(460, 220, 'Draft pricing page', '', 'Delivery', {skipAutoLayout:true, kind:'action'});
+      var saved = KyanbasuNotes.saveLens('Research assumptions', 'bucket:Research kind:assumption status:open');
+      var duplicate = KyanbasuNotes.saveLens('research assumptions', 'kind:action');
+      var applied = KyanbasuNotes.applyLens(saved.id);
+      var activeBeforeRename = KyanbasuNotes.lensState();
+      var renamed = KyanbasuNotes.renameLens(saved.id, 'Open research assumptions');
+      var activeAfterRename = KyanbasuNotes.lensState();
       document.getElementById('noteLensBtn').click();
       var customRow = document.querySelector('#noteLensMenu .tcNoteLensRow.custom');
       var menuText = customRow && customRow.textContent;
-      var stored = TaskCanvasStorage.getJSON('note-lenses', []);
-      var deleted = TaskCanvasNotes.deleteLens(saved.id);
+      var stored = KyanbasuStorage.getJSON('note-lenses', []);
+      var deleted = KyanbasuNotes.deleteLens(saved.id);
       var out = {
         saved:saved,
         duplicate:duplicate,
@@ -5466,8 +5439,8 @@ window.addEventListener('load', function(){
         menuText:menuText,
         stored:stored,
         deleted:deleted,
-        lensAfterDelete:TaskCanvasNotes.lensState(),
-        definitions:TaskCanvasNotes.lenses(),
+        lensAfterDelete:KyanbasuNotes.lensState(),
+        definitions:KyanbasuNotes.lenses(),
         visible:Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){ return el.style.display !== 'none'; }).length,
         matchingId:matching.id
       };
@@ -5503,7 +5476,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["visible"], 2, msg=json.dumps(result))
 
     def test_canvas_notes_review_metadata_queries_and_export(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -5514,30 +5487,30 @@ window.addEventListener('load', function(){
     try{
       var now = Date.now();
       var day = 86400000;
-      TaskCanvasNotes.importData({notes:[
+      KyanbasuNotes.importData({notes:[
         {id:'stale-open', content:'Old open assumption', bucket:'Research', kind:'assumption', status:'open', createdAt:now-60*day, updatedAt:now-45*day, reviewedAt:now-40*day},
         {id:'fresh-reviewed', content:'Fresh decision', bucket:'Planning', kind:'decision', status:'open', createdAt:now-10*day, updatedAt:now-2*day, reviewedAt:now-day},
         {id:'never-recent', content:'Recent question', bucket:'Research', kind:'question', status:'open', createdAt:now-day, updatedAt:now-day, reviewedAt:0},
         {id:'old-resolved', content:'Closed history', bucket:'Archive', kind:'note', status:'resolved', createdAt:now-90*day, updatedAt:now-60*day, reviewedAt:0}
       ], links:[], buckets:{}});
       var queries = {
-        never:TaskCanvasNotes.searchNotes('reviewed:never'),
-        recentReview:TaskCanvasNotes.searchNotes('reviewed:7d'),
-        recentUpdate:TaskCanvasNotes.searchNotes('updated:7d'),
-        stale:TaskCanvasNotes.searchNotes('is:stale')
+        never:KyanbasuNotes.searchNotes('reviewed:never'),
+        recentReview:KyanbasuNotes.searchNotes('reviewed:7d'),
+        recentUpdate:KyanbasuNotes.searchNotes('updated:7d'),
+        stale:KyanbasuNotes.searchNotes('is:stale')
       };
-      TaskCanvasNotes.selectNote('never-recent');
+      KyanbasuNotes.selectNote('never-recent');
       renderInspector();
       var inspectorText = document.getElementById('inspectorBody').textContent;
-      TaskCanvasNotes.startReview();
-      var firstReviewId = TaskCanvasNotes.reviewState().currentId;
-      TaskCanvasNotes.nextReview();
-      var firstAfterNavigation = TaskCanvasNotes.notes().filter(function(note){ return note.id === firstReviewId; })[0].reviewedAt;
-      TaskCanvasNotes.stopReview();
-      var beforeUpdated = TaskCanvasNotes.notes().filter(function(note){ return note.id === 'never-recent'; })[0].updatedAt;
-      TaskCanvasNotes.markReviewed('never-recent');
-      var marked = TaskCanvasNotes.notes().filter(function(note){ return note.id === 'never-recent'; })[0];
-      var exported = TaskCanvasNotes.exportData();
+      KyanbasuNotes.startReview();
+      var firstReviewId = KyanbasuNotes.reviewState().currentId;
+      KyanbasuNotes.nextReview();
+      var firstAfterNavigation = KyanbasuNotes.notes().filter(function(note){ return note.id === firstReviewId; })[0].reviewedAt;
+      KyanbasuNotes.stopReview();
+      var beforeUpdated = KyanbasuNotes.notes().filter(function(note){ return note.id === 'never-recent'; })[0].updatedAt;
+      KyanbasuNotes.markReviewed('never-recent');
+      var marked = KyanbasuNotes.notes().filter(function(note){ return note.id === 'never-recent'; })[0];
+      var exported = KyanbasuNotes.exportData();
       var exportedMarked = exported.notes.filter(function(note){ return note.id === 'never-recent'; })[0];
       var out = {
         queries:queries,
@@ -5545,10 +5518,10 @@ window.addEventListener('load', function(){
         firstAfterNavigation:firstAfterNavigation,
         beforeUpdated:beforeUpdated,
         marked:marked,
-        neverAfterMark:TaskCanvasNotes.searchNotes('reviewed:never'),
+        neverAfterMark:KyanbasuNotes.searchNotes('reviewed:never'),
         exportedVersion:exported.version,
         exportedMarked:exportedMarked,
-        lensIds:TaskCanvasNotes.lenses().map(function(lens){ return lens.id; })
+        lensIds:KyanbasuNotes.lenses().map(function(lens){ return lens.id; })
       };
       var pre = document.createElement('pre');
       pre.id = 'e2e-out';
@@ -5583,7 +5556,7 @@ window.addEventListener('load', function(){
         self.assertIn("stale-open", result["lensIds"], msg=json.dumps(result))
 
     def test_canvas_notes_review_session_tracks_active_lens_and_actions(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -5592,33 +5565,33 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var first = TaskCanvasNotes.createNote(180, 220, 'First question', '', 'Research', {skipAutoLayout:true, kind:'question'});
-      var second = TaskCanvasNotes.createNote(460, 220, 'Second question', '', 'Research', {skipAutoLayout:true, kind:'question'});
-      var third = TaskCanvasNotes.createNote(740, 220, 'Background evidence', '', 'Research', {skipAutoLayout:true, kind:'evidence'});
-      TaskCanvasNotes.applyLens('open-questions');
-      var started = TaskCanvasNotes.startReview();
-      var initial = TaskCanvasNotes.reviewState();
+      var first = KyanbasuNotes.createNote(180, 220, 'First question', '', 'Research', {skipAutoLayout:true, kind:'question'});
+      var second = KyanbasuNotes.createNote(460, 220, 'Second question', '', 'Research', {skipAutoLayout:true, kind:'question'});
+      var third = KyanbasuNotes.createNote(740, 220, 'Background evidence', '', 'Research', {skipAutoLayout:true, kind:'evidence'});
+      KyanbasuNotes.applyLens('open-questions');
+      var started = KyanbasuNotes.startReview();
+      var initial = KyanbasuNotes.reviewState();
       var initialPanel = !document.getElementById('tcNoteReviewPanel').hidden;
       document.querySelector('#tcNoteReviewPanel [data-review-status="resolved"]').click();
-      var afterResolve = TaskCanvasNotes.reviewState();
-      var firstAfterResolve = TaskCanvasNotes.notes().filter(function(note){ return note.id === first.id; })[0];
+      var afterResolve = KyanbasuNotes.reviewState();
+      var firstAfterResolve = KyanbasuNotes.notes().filter(function(note){ return note.id === first.id; })[0];
       var firstStatus = firstAfterResolve.status;
       document.querySelector('#tcNoteReviewPanel [data-review-kind="action"]').click();
-      var afterActions = TaskCanvasNotes.reviewState();
-      var secondKind = TaskCanvasNotes.notes().filter(function(note){ return note.id === second.id; })[0].kind;
-      var secondReviewedAt = TaskCanvasNotes.notes().filter(function(note){ return note.id === second.id; })[0].reviewedAt;
+      var afterActions = KyanbasuNotes.reviewState();
+      var secondKind = KyanbasuNotes.notes().filter(function(note){ return note.id === second.id; })[0].kind;
+      var secondReviewedAt = KyanbasuNotes.notes().filter(function(note){ return note.id === second.id; })[0].reviewedAt;
       var panelClosed = document.getElementById('tcNoteReviewPanel').hidden;
-      TaskCanvasNotes.clearLens();
-      TaskCanvasNotes.startReview();
-      TaskCanvasNotes.nextReview();
-      var afterNext = TaskCanvasNotes.reviewState();
+      KyanbasuNotes.clearLens();
+      KyanbasuNotes.startReview();
+      KyanbasuNotes.nextReview();
+      var afterNext = KyanbasuNotes.reviewState();
       var editor = document.querySelector('#tcNoteReviewPanel .tcNoteReviewContent');
       editor.value = 'Edited during review';
       editor.dispatchEvent(new Event('input', {bubbles:true}));
-      var edited = TaskCanvasNotes.notes().filter(function(note){ return note.id === afterNext.currentId; })[0].content;
-      TaskCanvasNotes.previousReview();
-      var afterPrevious = TaskCanvasNotes.reviewState();
-      TaskCanvasNotes.stopReview();
+      var edited = KyanbasuNotes.notes().filter(function(note){ return note.id === afterNext.currentId; })[0].content;
+      KyanbasuNotes.previousReview();
+      var afterPrevious = KyanbasuNotes.reviewState();
+      KyanbasuNotes.stopReview();
       var out = {
         ids:{first:first.id, second:second.id, third:third.id},
         started:started,
@@ -5634,7 +5607,7 @@ window.addEventListener('load', function(){
         afterNext:afterNext,
         edited:edited,
         afterPrevious:afterPrevious,
-        stopped:TaskCanvasNotes.reviewState()
+        stopped:KyanbasuNotes.reviewState()
       };
       var pre = document.createElement('pre');
       pre.id = 'e2e-out';
@@ -5672,7 +5645,7 @@ window.addEventListener('load', function(){
         self.assertFalse(result["stopped"]["active"], msg=json.dumps(result))
 
     def test_canvas_notes_links_selected_note_to_existing_task(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({
             "tasks": [
                 {
@@ -5693,15 +5666,15 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var note = window.TaskCanvasNotes.createNote(180, 240, "Plan Alpha", "", "Planning", {skipAutoLayout: true});
+      var note = window.KyanbasuNotes.createNote(180, 240, "Plan Alpha", "", "Planning", {skipAutoLayout: true});
       var task = window.TASK_BY_SHORT && window.TASK_BY_SHORT.alpha;
       var node = window.addNodeForTask(task, 540, 240, {deferLayout:true});
-      window.TaskCanvasNotes.selectNote(note.id);
+      window.KyanbasuNotes.selectNote(note.id);
       document.getElementById('noteTaskLinkBtn').click();
       node.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, cancelable:true, button:0}));
       setTimeout(function(){
-        var refs = window.TaskCanvasNotes.linkedTasks(note.id);
-        var exported = window.TaskCanvasNotes.exportData();
+        var refs = window.KyanbasuNotes.linkedTasks(note.id);
+        var exported = window.KyanbasuNotes.exportData();
         var noteOut = exported.notes.filter(function(n){ return n.id === note.id; })[0];
         var badge = document.querySelector('.tcNoteNode[data-note-id="'+note.id+'"] .tcNoteTaskBadge');
         var badgeText = badge && badge.textContent;
@@ -5713,8 +5686,8 @@ window.addEventListener('load', function(){
         var highlightedFromMenu = node.classList.contains('noteTaskLinked');
         var unlinkBtn = popover && popover.querySelector('[data-task-unlink]');
         if (unlinkBtn) unlinkBtn.click();
-        var refsAfterUnlink = window.TaskCanvasNotes.linkedTasks(note.id);
-        var exportedAfterUnlink = window.TaskCanvasNotes.exportData();
+        var refsAfterUnlink = window.KyanbasuNotes.linkedTasks(note.id);
+        var exportedAfterUnlink = window.KyanbasuNotes.exportData();
         var noteAfterUnlink = exportedAfterUnlink.notes.filter(function(n){ return n.id === note.id; })[0];
         var out = {
           refs: refs,
@@ -5728,7 +5701,7 @@ window.addEventListener('load', function(){
           exportedRefsAfterUnlink: noteAfterUnlink && noteAfterUnlink.taskRefs,
           badgeAfterUnlink: badge && badge.textContent,
           badgeHiddenAfterUnlink: badge && badge.hidden,
-          selectedNote: window.TaskCanvasNotes.selectedNotes()
+          selectedNote: window.KyanbasuNotes.selectedNotes()
         };
         var pre = document.createElement('pre');
         pre.id = 'e2e-out';
@@ -5766,7 +5739,7 @@ window.addEventListener('load', function(){
         self.assertEqual(len(result["selectedNote"]), 1, msg=json.dumps(result))
 
     def test_canvas_inspector_renders_note_selection_and_actions(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -5775,8 +5748,8 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var root = window.TaskCanvasNotes.createNote(180, 240, "Plan Alpha", "", "Planning", {skipAutoLayout:true});
-      window.TaskCanvasNotes.selectNote(root.id);
+      var root = window.KyanbasuNotes.createNote(180, 240, "Plan Alpha", "", "Planning", {skipAutoLayout:true});
+      window.KyanbasuNotes.selectNote(root.id);
       setTimeout(function(){
         var before = {
           title:(document.getElementById('inspectorTitle') || {}).textContent || '',
@@ -5793,13 +5766,13 @@ window.addEventListener('load', function(){
         var bucketInput = document.getElementById('inspectorNoteBucket');
         bucketInput.value = 'Delivery';
         bucketInput.dispatchEvent(new Event('change', {bubbles:true}));
-        var editedNote = window.TaskCanvasNotes.notes().filter(function(n){ return n.id === root.id; })[0] || {};
+        var editedNote = window.KyanbasuNotes.notes().filter(function(n){ return n.id === root.id; })[0] || {};
         var cardText = (document.querySelector('.tcNoteNode[data-note-id="'+root.id+'"] .tcNoteText') || {}).textContent || '';
         var cardBucket = (document.querySelector('.tcNoteNode[data-note-id="'+root.id+'"] .tcNoteBucketLabel') || {}).textContent || '';
         document.getElementById('inspectorDone').click();
         setTimeout(function(){
-          var notes = window.TaskCanvasNotes.notes();
-          var selected = window.TaskCanvasNotes.selectedNotes();
+          var notes = window.KyanbasuNotes.notes();
+          var selected = window.KyanbasuNotes.selectedNotes();
           var selectedNote = notes.filter(function(n){ return n.id === selected[0]; })[0] || {};
           var after = {
             title:(document.getElementById('inspectorTitle') || {}).textContent || '',
@@ -5812,7 +5785,7 @@ window.addEventListener('load', function(){
             before:before,
             after:after,
             notes:notes.length,
-            links:window.TaskCanvasNotes.links().length,
+            links:window.KyanbasuNotes.links().length,
             selected:selected.length,
             selectedContent:selectedNote.content || '',
             editedContent:editedNote.content || '',
@@ -5858,7 +5831,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["after"]["title"], "A1-1 selected", msg=json.dumps(result))
 
     def test_canvas_notes_tab_places_child_right_and_pushes_blocker(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -5867,15 +5840,15 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var root = window.TaskCanvasNotes.createNote(180, 240, "Root", "", "Planning", {skipAutoLayout: true});
-      var blocker = window.TaskCanvasNotes.createNote(root.x + 300, root.y, "Blocker", "", "Planning", {skipAutoLayout: true});
+      var root = window.KyanbasuNotes.createNote(180, 240, "Root", "", "Planning", {skipAutoLayout: true});
+      var blocker = window.KyanbasuNotes.createNote(root.x + 300, root.y, "Blocker", "", "Planning", {skipAutoLayout: true});
       var blockerStartX = blocker.x;
-      window.TaskCanvasNotes.createNote(root.x + 300, root.y + 220, "Other bucket", "", "Delivery", {skipAutoLayout: true});
-      window.TaskCanvasNotes.selectNote(root.id);
+      window.KyanbasuNotes.createNote(root.x + 300, root.y + 220, "Other bucket", "", "Delivery", {skipAutoLayout: true});
+      window.KyanbasuNotes.selectNote(root.id);
       document.dispatchEvent(new KeyboardEvent('keydown', {key:'Tab', bubbles:true, cancelable:true}));
       setTimeout(function(){
-        var notes = window.TaskCanvasNotes.notes();
-        var links = window.TaskCanvasNotes.links();
+        var notes = window.KyanbasuNotes.notes();
+        var links = window.KyanbasuNotes.links();
         var childIds = {};
         links.filter(function(l){ return l.type === 'child' && l.from === root.id; }).forEach(function(l){ childIds[l.to] = true; });
         var child = notes.filter(function(n){ return childIds[n.id]; })[0];
@@ -5915,7 +5888,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["sameBucket"], msg=json.dumps(result))
 
     def test_canvas_notes_enter_places_sibling_below_not_far_right(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -5924,17 +5897,17 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var root = window.TaskCanvasNotes.createNote(180, 240, "Root", "", "Planning");
-      var first = window.TaskCanvasNotes.createChildNote(root.id, "First", "");
-      window.TaskCanvasNotes.createNote(first.x + 360, first.y + 12, "Right side", "", "Planning");
-      window.TaskCanvasNotes.createNote(first.x + 260, first.y + 8, "Other bucket", "", "Delivery");
-      var lower = window.TaskCanvasNotes.createNote(first.x, first.y + 132, "Lower", "", "Planning", {skipAutoLayout: true});
+      var root = window.KyanbasuNotes.createNote(180, 240, "Root", "", "Planning");
+      var first = window.KyanbasuNotes.createChildNote(root.id, "First", "");
+      window.KyanbasuNotes.createNote(first.x + 360, first.y + 12, "Right side", "", "Planning");
+      window.KyanbasuNotes.createNote(first.x + 260, first.y + 8, "Other bucket", "", "Delivery");
+      var lower = window.KyanbasuNotes.createNote(first.x, first.y + 132, "Lower", "", "Planning", {skipAutoLayout: true});
       var lowerStartY = lower.y;
-      window.TaskCanvasNotes.selectNote(first.id);
+      window.KyanbasuNotes.selectNote(first.id);
       document.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true, cancelable:true}));
       setTimeout(function(){
-        var notes = window.TaskCanvasNotes.notes();
-        var links = window.TaskCanvasNotes.links();
+        var notes = window.KyanbasuNotes.notes();
+        var links = window.KyanbasuNotes.links();
         var siblingIds = {};
         links.filter(function(l){ return l.type === 'child' && l.from === root.id; }).forEach(function(l){ siblingIds[l.to] = true; });
         var sibling = notes.filter(function(n){ return siblingIds[n.id] && n.id !== first.id; }).sort(function(a, b){ return b.y - a.y; })[0];
@@ -5978,7 +5951,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["sameBucket"], msg=json.dumps(result))
 
     def test_canvas_notes_multiselect_deletes_selected_notes_and_links(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -5987,22 +5960,22 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var root = window.TaskCanvasNotes.createNote(180, 240, "Root", "");
-      var a = window.TaskCanvasNotes.createChildNote(root.id, "A", "");
-      var b = window.TaskCanvasNotes.createChildNote(root.id, "B", "");
-      var c = window.TaskCanvasNotes.createChildNote(a.id, "C", "");
-      window.TaskCanvasNotes.selectNote(a.id);
-      window.TaskCanvasNotes.selectNote(c.id, true);
+      var root = window.KyanbasuNotes.createNote(180, 240, "Root", "");
+      var a = window.KyanbasuNotes.createChildNote(root.id, "A", "");
+      var b = window.KyanbasuNotes.createChildNote(root.id, "B", "");
+      var c = window.KyanbasuNotes.createChildNote(a.id, "C", "");
+      window.KyanbasuNotes.selectNote(a.id);
+      window.KyanbasuNotes.selectNote(c.id, true);
       document.dispatchEvent(new KeyboardEvent('keydown', {key:'Delete', bubbles:true, cancelable:true}));
       if (typeof updateConsole === 'function') updateConsole();
       setTimeout(function(){
-        var notes = window.TaskCanvasNotes.notes();
-        var links = window.TaskCanvasNotes.links();
+        var notes = window.KyanbasuNotes.notes();
+        var links = window.KyanbasuNotes.links();
         var out = {
           notes: notes.length,
           contents: notes.map(function(n){ return n.content; }).sort(),
           links: links.length,
-          selected: window.TaskCanvasNotes.selectedNotes().length,
+          selected: window.KyanbasuNotes.selectedNotes().length,
           selectedNodes: document.querySelectorAll('.tcNoteNode.selected').length,
           domNotes: document.querySelectorAll('.tcNoteNode').length,
           console: (document.getElementById('consoleText') || {}).value || ""
@@ -6035,7 +6008,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "")
 
     def test_canvas_inspector_moves_multiple_notes_to_bucket(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -6044,11 +6017,11 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var a = window.TaskCanvasNotes.createNote(180, 240, "A", "", "Planning", {skipAutoLayout:true});
-      var b = window.TaskCanvasNotes.createNote(440, 240, "B", "", "Delivery", {skipAutoLayout:true});
-      var c = window.TaskCanvasNotes.createNote(760, 240, "C", "", "Later", {skipAutoLayout:true});
-      window.TaskCanvasNotes.selectNote(a.id);
-      window.TaskCanvasNotes.selectNote(b.id, true);
+      var a = window.KyanbasuNotes.createNote(180, 240, "A", "", "Planning", {skipAutoLayout:true});
+      var b = window.KyanbasuNotes.createNote(440, 240, "B", "", "Delivery", {skipAutoLayout:true});
+      var c = window.KyanbasuNotes.createNote(760, 240, "C", "", "Later", {skipAutoLayout:true});
+      window.KyanbasuNotes.selectNote(a.id);
+      window.KyanbasuNotes.selectNote(b.id, true);
       setTimeout(function(){
         var before = {
           title:(document.getElementById('inspectorTitle') || {}).textContent || '',
@@ -6069,7 +6042,7 @@ window.addEventListener('load', function(){
           var colorA = (document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]') || {}).style.getPropertyValue('--note-accent').trim();
           var colorB = (document.querySelector('.tcNoteNode[data-note-id="'+b.id+'"]') || {}).style.getPropertyValue('--note-accent').trim();
           var colorC = (document.querySelector('.tcNoteNode[data-note-id="'+c.id+'"]') || {}).style.getPropertyValue('--note-accent').trim();
-          var exportedAfterColor = window.TaskCanvasNotes.exportData();
+          var exportedAfterColor = window.KyanbasuNotes.exportData();
           var exportedByContent = {};
           (exportedAfterColor.notes || []).forEach(function(n){ exportedByContent[n.content] = n; });
           var bucketSelect = document.getElementById('inspectorNoteBucketSelect');
@@ -6077,11 +6050,11 @@ window.addEventListener('load', function(){
           bucketSelect.dispatchEvent(new Event('change', {bubbles:true}));
           setTimeout(function(){
           var afterExisting = {};
-          window.TaskCanvasNotes.notes().forEach(function(n){ afterExisting[n.content] = n.bucket; });
+          window.KyanbasuNotes.notes().forEach(function(n){ afterExisting[n.content] = n.bucket; });
           var resetBtn = document.querySelector('[data-note-color="bucket"]');
           if (resetBtn) resetBtn.click();
           setTimeout(function(){
-          var exportedAfterReset = window.TaskCanvasNotes.exportData();
+          var exportedAfterReset = window.KyanbasuNotes.exportData();
           var resetByContent = {};
           (exportedAfterReset.notes || []).forEach(function(n){ resetByContent[n.content] = n; });
           bucketSelect = document.getElementById('inspectorNoteBucketSelect');
@@ -6091,7 +6064,7 @@ window.addEventListener('load', function(){
           bucketInput.value = 'Shared';
           bucketInput.dispatchEvent(new Event('change', {bubbles:true}));
           setTimeout(function(){
-          var notes = window.TaskCanvasNotes.notes();
+          var notes = window.KyanbasuNotes.notes();
           var byContent = {};
           notes.forEach(function(n){ byContent[n.content] = n; });
           var out = {
@@ -6118,7 +6091,7 @@ window.addEventListener('load', function(){
               B: byContent.B && byContent.B.bucket,
               C: byContent.C && byContent.C.bucket
             },
-            selected: window.TaskCanvasNotes.selectedNotes().length,
+            selected: window.KyanbasuNotes.selectedNotes().length,
             selectedNodes: document.querySelectorAll('.tcNoteNode.selected').length,
             cardBuckets: Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode.selected .tcNoteBucketLabel')).map(function(el){ return el.textContent; }).sort()
           };
@@ -6172,7 +6145,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["cardBuckets"], ["Shared", "Shared"], msg=json.dumps(result))
 
     def test_canvas_notes_shift_click_multiselects_notes(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -6181,8 +6154,8 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var a = window.TaskCanvasNotes.createNote(180, 240, "A", "");
-      var b = window.TaskCanvasNotes.createNote(440, 240, "B", "");
+      var a = window.KyanbasuNotes.createNote(180, 240, "A", "");
+      var b = window.KyanbasuNotes.createNote(440, 240, "B", "");
       var aEl = document.querySelector('.tcNoteNode[data-note-id="'+a.id+'"]');
       var bEl = document.querySelector('.tcNoteNode[data-note-id="'+b.id+'"]');
       aEl.dispatchEvent(new MouseEvent('click', {bubbles:true, cancelable:true, button:0}));
@@ -6192,10 +6165,10 @@ window.addEventListener('load', function(){
       if (typeof updateConsole === 'function') updateConsole();
       setTimeout(function(){
         var out = {
-          selected: window.TaskCanvasNotes.selectedNotes().length,
+          selected: window.KyanbasuNotes.selectedNotes().length,
           selectedNodes: document.querySelectorAll('.tcNoteNode.selected').length,
-          selectedContents: window.TaskCanvasNotes.selectedNotes().map(function(id){
-            return window.TaskCanvasNotes.notes().filter(function(n){ return n.id === id; })[0].content;
+          selectedContents: window.KyanbasuNotes.selectedNotes().map(function(id){
+            return window.KyanbasuNotes.notes().filter(function(n){ return n.id === id; })[0].content;
           }).sort(),
           console: (document.getElementById('consoleText') || {}).value || ""
         };
@@ -6224,7 +6197,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "")
 
     def test_canvas_notes_drag_lasso_multiselects_notes(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -6233,9 +6206,9 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      window.TaskCanvasNotes.createNote(180, 240, "A", "");
-      window.TaskCanvasNotes.createNote(440, 240, "B", "");
-      window.TaskCanvasNotes.createNote(760, 240, "C", "");
+      window.KyanbasuNotes.createNote(180, 240, "A", "");
+      window.KyanbasuNotes.createNote(440, 240, "B", "");
+      window.KyanbasuNotes.createNote(760, 240, "C", "");
       var stage = document.getElementById('builderStage');
       var r = stage.getBoundingClientRect();
       function evt(type, x, y){
@@ -6247,10 +6220,10 @@ window.addEventListener('load', function(){
       if (typeof updateConsole === 'function') updateConsole();
       setTimeout(function(){
         var out = {
-          selected: window.TaskCanvasNotes.selectedNotes().length,
+          selected: window.KyanbasuNotes.selectedNotes().length,
           selectedNodes: document.querySelectorAll('.tcNoteNode.selected').length,
-          selectedContents: window.TaskCanvasNotes.selectedNotes().map(function(id){
-            return window.TaskCanvasNotes.notes().filter(function(n){ return n.id === id; })[0].content;
+          selectedContents: window.KyanbasuNotes.selectedNotes().map(function(id){
+            return window.KyanbasuNotes.notes().filter(function(n){ return n.id === id; })[0].content;
           }).sort(),
           marqueeLeftovers: document.querySelectorAll('.tcNoteMarquee').length,
           console: (document.getElementById('consoleText') || {}).value || ""
@@ -6281,7 +6254,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "")
 
     def test_canvas_notes_drag_moves_selected_note_group(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -6290,11 +6263,11 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var a = window.TaskCanvasNotes.createNote(180, 240, "A", "");
-      var b = window.TaskCanvasNotes.createNote(440, 240, "B", "");
-      var c = window.TaskCanvasNotes.createNote(760, 240, "C", "");
-      window.TaskCanvasNotes.selectNote(a.id);
-      window.TaskCanvasNotes.selectNote(b.id, true);
+      var a = window.KyanbasuNotes.createNote(180, 240, "A", "");
+      var b = window.KyanbasuNotes.createNote(440, 240, "B", "");
+      var c = window.KyanbasuNotes.createNote(760, 240, "C", "");
+      window.KyanbasuNotes.selectNote(a.id);
+      window.KyanbasuNotes.selectNote(b.id, true);
       var bEl = document.querySelector('.tcNoteNode[data-note-id="'+b.id+'"]');
       var head = bEl.querySelector('.tcNoteHead');
       head.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, cancelable:true, button:0, clientX:450, clientY:250}));
@@ -6303,11 +6276,11 @@ window.addEventListener('load', function(){
       if (typeof updateConsole === 'function') updateConsole();
         setTimeout(function(){
         var by = {};
-        window.TaskCanvasNotes.notes().forEach(function(n){ by[n.content] = n; });
+        window.KyanbasuNotes.notes().forEach(function(n){ by[n.content] = n; });
         var aRect = document.querySelector('.tcNoteNode[data-note-id="'+by.A.id+'"]').getBoundingClientRect();
         var bRect = document.querySelector('.tcNoteNode[data-note-id="'+by.B.id+'"]').getBoundingClientRect();
         var out = {
-          selected: window.TaskCanvasNotes.selectedNotes().length,
+          selected: window.KyanbasuNotes.selectedNotes().length,
           aMoved: Math.abs(by.A.x - 270) <= 60 && Math.abs(by.A.y - 290) <= 60,
           bMoved: Math.abs(by.B.x - 530) <= 60 && Math.abs(by.B.y - 290) <= 60,
           notOverlap: !(aRect.right > bRect.left && aRect.left < bRect.right && aRect.bottom > bRect.top && aRect.top < bRect.bottom),
@@ -6343,7 +6316,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["console"], "")
 
     def test_canvas_notes_collapse_hides_descendants_and_restores_them(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -6352,21 +6325,21 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
-      var root = window.TaskCanvasNotes.createNote(180, 240, "Root", "");
-      var a = window.TaskCanvasNotes.createChildNote(root.id, "A", "");
-      var b = window.TaskCanvasNotes.createChildNote(root.id, "B", "");
-      var c = window.TaskCanvasNotes.createChildNote(a.id, "C", "");
-      window.TaskCanvasNotes.toggleCollapse(root.id);
+      var root = window.KyanbasuNotes.createNote(180, 240, "Root", "");
+      var a = window.KyanbasuNotes.createChildNote(root.id, "A", "");
+      var b = window.KyanbasuNotes.createChildNote(root.id, "B", "");
+      var c = window.KyanbasuNotes.createChildNote(a.id, "C", "");
+      window.KyanbasuNotes.toggleCollapse(root.id);
       var collapsedVisible = Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){ return el.style.display !== 'none'; }).length;
       var collapsedPaths = document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink[data-type="child"]').length;
-      window.TaskCanvasNotes.toggleCollapse(root.id);
+      window.KyanbasuNotes.toggleCollapse(root.id);
       var expandedVisible = Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){ return el.style.display !== 'none'; }).length;
       var expandedPaths = document.querySelectorAll('#tcNoteLinksLayer path.tcNoteLink[data-type="child"]').length;
       if (typeof updateConsole === 'function') updateConsole();
       setTimeout(function(){
         var out = {
-          notes: window.TaskCanvasNotes.notes().length,
-          links: window.TaskCanvasNotes.links().length,
+          notes: window.KyanbasuNotes.notes().length,
+          links: window.KyanbasuNotes.links().length,
           collapsedVisible: collapsedVisible,
           collapsedPaths: collapsedPaths,
           expandedVisible: expandedVisible,
@@ -6402,8 +6375,8 @@ window.addEventListener('load', function(){
         self.assertEqual(result["collapseButtons"], 4)
         self.assertEqual(result["console"], "")
 
-    def test_taskcanvas_commands_core_includes_dependency_commands(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+    def test_kyanbasu_commands_core_includes_dependency_commands(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -6411,7 +6384,7 @@ window.addEventListener('load', function(){
 <script id="E2E_DEP_COMMAND_CORE_HARNESS">
 window.addEventListener('load', function(){
   try{
-    var res = window.TaskCanvasCommands.build({
+    var res = window.KyanbasuCommands.build({
       raw: "task task-a modify +next",
       stagedAdd: [{from:"task-a", to:"task-b"}],
       depExtraCmds: ["task task-a modify depends:-task-c"],
@@ -6436,8 +6409,8 @@ window.addEventListener('load', function(){
         self.assertIn("task 'task-a' modify '+next' 'depends:-task-c'", text)
         self.assertIn("task 'uuid-a' modify 'depends:uuid-b'", text)
 
-    def test_taskcanvas_commands_core_handles_new_task_fold_states(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+    def test_kyanbasu_commands_core_handles_new_task_fold_states(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -6456,8 +6429,8 @@ window.addEventListener('load', function(){
       "new-del": {deleted:true, tags:{}, extra:[]},
       "new-mod": {project:"Later", due:"tomorrow", tags:{fresh:true}, extra:["priority:H"]}
     };
-    var res = window.TaskCanvasCommands.build({
-      raw: window.TaskCanvasCommands.rawTaskLines({tasks:tasks, fold:fold}).join("\\n")
+    var res = window.KyanbasuCommands.build({
+      raw: window.KyanbasuCommands.rawTaskLines({tasks:tasks, fold:fold}).join("\\n")
     });
     var pre = document.createElement('pre');
     pre.id = 'e2e-out';
@@ -6481,7 +6454,7 @@ window.addEventListener('load', function(){
         self.assertIn("task add 'Mod me' 'project:Later' '+old' '+fresh' 'due:tomorrow' 'priority:H'", text)
 
     def test_new_task_sync_reconciles_staged_new_task_modifiers_via_command_core(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -6524,8 +6497,8 @@ window.addEventListener('load', function(){
         self.assertTrue(result["fold"]["done"])
         self.assertIn("task log 'Sync me' 'project:Work' '+old' '+fresh' 'due:tomorrow'", result["text"])
 
-    def test_taskcanvas_commands_core_handles_existing_task_ops(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+    def test_kyanbasu_commands_core_handles_existing_task_ops(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
 
@@ -6538,8 +6511,8 @@ window.addEventListener('load', function(){
       {uuid:"uuid-done", short:"done", desc:"Done", project:"Work", tags:["old"]},
       {uuid:"uuid-del", short:"del", desc:"Delete", project:"Work", tags:["old"]}
     ];
-    var res = window.TaskCanvasCommands.build({
-      raw: window.TaskCanvasCommands.rawTaskLines({
+    var res = window.KyanbasuCommands.build({
+      raw: window.KyanbasuCommands.rawTaskLines({
         tasks: tasks,
         initMainTag: {mod:"old", done:"old", del:"old"},
         initProject: {mod:"Work", done:"Work", del:"Work"},
@@ -6572,7 +6545,7 @@ window.addEventListener('load', function(){
         self.assertNotIn("due:ignored", text)
 
     def test_runtime_existing_ops_flow_uses_command_core(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps(
             {
                 "tasks": [
@@ -6620,7 +6593,7 @@ window.addEventListener('load', function(){
         self.assertIn("task 'cccccccc-cccc-cccc-cccc-cccccccccccc' modify 'project:Later' '-old' '+next' 'due:tomorrow' '+focus'", text)
 
     def test_build_commands_includes_staged_dependencies_without_base_monkey_patch(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps(
             {
                 "tasks": [
@@ -6673,7 +6646,7 @@ window.addEventListener('load', function(){
         self.assertIn("task 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' modify 'depends:bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'", raw)
 
     def test_dependency_overlay_matches_console_with_deduped_core_text(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps(
             {
                 "tasks": [
@@ -6750,7 +6723,7 @@ window.addEventListener('load', function(){
         self.assertIn("task 'aaaaaaaa' modify 'depends:bbbbbbbb' 'depends:-cccccccc'", result["console"])
 
     def test_dependency_interactions_runtime_renders_single_handle_and_staged_path(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps(
             {
                 "tasks": [
@@ -6817,7 +6790,7 @@ window.addEventListener('load', function(){
           stagedSources: document.querySelectorAll('#depStagedOverlay .depDirectionSource').length,
           stagedArrows: document.querySelectorAll('#depStagedOverlay .depDirectionArrow').length,
           stagedChevrons: document.querySelectorAll('#depStagedOverlay .depDirectionChevron').length,
-          commandText: window.TaskCanvasCommands.runtimeCommandText(window, {short:true})
+          commandText: window.KyanbasuCommands.runtimeCommandText(window, {short:true})
         };
         var pre = document.createElement('pre');
         pre.id = 'e2e-out';
@@ -6851,7 +6824,7 @@ window.addEventListener('load', function(){
         self.assertIn("task 'aaaaaaaa' modify 'depends:bbbbbbbb'", result["commandText"])
 
     def test_dependency_edges_runtime_renders_existing_edges_and_keeps_pulses_opt_in(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps(
             {
                 "tasks": [
@@ -6915,7 +6888,7 @@ window.addEventListener('load', function(){
       makeNode("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "aaaaaaaa", 120, 120);
       makeNode("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", "bbbbbbbb", 340, 230);
       makeNode("cccccccc-cccc-cccc-cccc-cccccccccccc", "cccccccc", 560, 330);
-      if (typeof window.TaskCanvasPerfReset === 'function') window.TaskCanvasPerfReset();
+      if (typeof window.KyanbasuPerfReset === 'function') window.KyanbasuPerfReset();
       window.EXIST_EDGES = [{from:"aaaaaaaa", to:"bbbbbbbb"}];
       window.stagedAdd = [{from:"bbbbbbbb", to:"cccccccc"}];
       if (typeof drawLinks === 'function') drawLinks();
@@ -6923,7 +6896,7 @@ window.addEventListener('load', function(){
       setTimeout(function(){
         var idlePulseGroups = document.querySelectorAll('#depPulseOverlay').length;
         var idlePulses = document.querySelectorAll('#depPulseOverlay .pulse-dot').length;
-        var idlePerf = window.TaskCanvasDiagnostics ? window.TaskCanvasDiagnostics().perfSummary : null;
+        var idlePerf = window.KyanbasuDiagnostics ? window.KyanbasuDiagnostics().perfSummary : null;
         document.dispatchEvent(new KeyboardEvent('keydown', {key:'p', bubbles:true}));
         setTimeout(function(){
         var out = {
@@ -6958,7 +6931,7 @@ window.addEventListener('load', function(){
           idleRefreshCalls: idlePerf ? idlePerf.topFunctions.filter(function(x){ return x.name === 'refreshDepHandleLetters'; }).reduce(function(n, x){ return n + x.calls; }, 0) : -1,
           pulseGroups: document.querySelectorAll('#depPulseOverlay').length,
           pulses: document.querySelectorAll('#depPulseOverlay .pulse-dot').length,
-          api: !!window.TaskCanvasDependencyEdges
+          api: !!window.KyanbasuDependencyEdges
         };
         var pre = document.createElement('pre');
         pre.id = 'e2e-out';
@@ -7014,7 +6987,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["pulses"], 0)
 
     def test_project_picker_runtime_opens_and_lists_projects(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps(
             {
                 "tasks": [
@@ -7081,7 +7054,7 @@ window.addEventListener('load', function(){
         self.assertIn("0 selected", result["selectedText"])
 
     def test_quickfix_add_render_runtime_exposes_parser_and_optimistic_add(self):
-        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
         html = build_runtime_html(base_html, payload, 0, lambda *_: None)
         self.assertIn('id="FEATURE_QUICKFIX_ADD_RENDER_V1"', html)
@@ -7092,8 +7065,8 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   try{
     setTimeout(function(){
-      var parsed = window.TaskCanvasQuickAdd.parseAdd("task add Review report project:Work +next due:tomorrow");
-      var ok = window.TaskCanvasQuickAdd.optimisticAdd("task add Review report project:Work +next due:tomorrow");
+      var parsed = window.KyanbasuQuickAdd.parseAdd("task add Review report project:Work +next due:tomorrow");
+      var ok = window.KyanbasuQuickAdd.optimisticAdd("task add Review report project:Work +next due:tomorrow");
       setTimeout(function(){
         var node = document.querySelector('#builderStage .node[data-uuid^="new-"]');
         var out = {

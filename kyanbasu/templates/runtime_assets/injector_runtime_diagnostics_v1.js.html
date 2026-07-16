@@ -1,0 +1,290 @@
+<script id="FEATURE_RUNTIME_DIAGNOSTICS_V1">
+(function(){
+  if (window.__RUNTIME_DIAGNOSTICS_V1__) return; window.__RUNTIME_DIAGNOSTICS_V1__ = true;
+
+  var diag = window.__KYANBASU_DIAG__ || {
+    errors: 0,
+    rejections: 0,
+    events: [],
+    perf: null
+  };
+  window.__KYANBASU_DIAG__ = diag;
+  if (!diag.perf){
+    diag.perf = {
+      startedAt: Date.now(),
+      functions: {},
+      timers: {},
+      raf: { scheduled: 0, fired: 0, active: 0, totalMs: 0, maxMs: 0 },
+      observers: { created: 0, callbacks: 0, records: 0, totalMs: 0, maxMs: 0, entries: {} }
+    };
+  }
+  var perf = diag.perf;
+  var originals = window.__KYANBASU_DIAG_ORIGINALS__ || {};
+  window.__KYANBASU_DIAG_ORIGINALS__ = originals;
+
+  function now(){
+    try{ return performance.now(); }catch(_){ return Date.now(); }
+  }
+  function stat(bucket, name, ms){
+    var key = String(name || 'unknown');
+    var s = bucket[key] || (bucket[key] = { calls: 0, totalMs: 0, maxMs: 0 });
+    s.calls += 1;
+    s.totalMs += ms || 0;
+    if ((ms || 0) > s.maxMs) s.maxMs = ms || 0;
+    return s;
+  }
+  function topMap(map, limit){
+    return Object.keys(map || {}).map(function(name){
+      var s = map[name] || {};
+      return {
+        name: name,
+        calls: s.calls || 0,
+        totalMs: Math.round((s.totalMs || 0) * 10) / 10,
+        maxMs: Math.round((s.maxMs || 0) * 10) / 10
+      };
+    }).sort(function(a, b){ return b.totalMs - a.totalMs; }).slice(0, limit || 12);
+  }
+  function stackLabel(prefix){
+    try{
+      var stack = (new Error()).stack || '';
+      var lines = stack.split('\n').map(function(s){ return s.trim(); }).filter(Boolean);
+      for (var i=2;i<lines.length;i++){
+        if (lines[i].indexOf('KyanbasuDiagnostics') === -1 &&
+            lines[i].indexOf('stackLabel') === -1 &&
+            lines[i].indexOf('window.setTimeout') === -1 &&
+            lines[i].indexOf('window.setInterval') === -1 &&
+            lines[i].indexOf('window.requestAnimationFrame') === -1 &&
+            lines[i].indexOf('window.MutationObserver') === -1){
+          return prefix + ':' + lines[i].replace(/^at\s+/, '').slice(0, 120);
+        }
+      }
+    }catch(_){}
+    return prefix + ':unknown';
+  }
+
+  if (!originals.setTimeout && window.setTimeout){
+    originals.setTimeout = window.setTimeout.bind(window);
+    originals.clearTimeout = window.clearTimeout ? window.clearTimeout.bind(window) : null;
+    window.setTimeout = function(fn, delay){
+      if (typeof fn !== 'function') return originals.setTimeout.apply(window, arguments);
+      var label = stackLabel('timeout ' + (delay || 0));
+      var args = Array.prototype.slice.call(arguments, 2);
+      return originals.setTimeout(function(){
+        var t0 = now();
+        try{ return fn.apply(this, args); }
+        finally{ stat(perf.timers, label, now() - t0); }
+      }, delay);
+    };
+  }
+
+  if (!originals.setInterval && window.setInterval){
+    originals.setInterval = window.setInterval.bind(window);
+    originals.clearInterval = window.clearInterval ? window.clearInterval.bind(window) : null;
+    window.setInterval = function(fn, delay){
+      if (typeof fn !== 'function') return originals.setInterval.apply(window, arguments);
+      var label = stackLabel('interval ' + (delay || 0));
+      var args = Array.prototype.slice.call(arguments, 2);
+      return originals.setInterval(function(){
+        var t0 = now();
+        try{ return fn.apply(this, args); }
+        finally{ stat(perf.timers, label, now() - t0); }
+      }, delay);
+    };
+  }
+
+  if (!originals.requestAnimationFrame && window.requestAnimationFrame){
+    originals.requestAnimationFrame = window.requestAnimationFrame.bind(window);
+    originals.cancelAnimationFrame = window.cancelAnimationFrame ? window.cancelAnimationFrame.bind(window) : null;
+    window.requestAnimationFrame = function(fn){
+      if (typeof fn !== 'function') return originals.requestAnimationFrame.apply(window, arguments);
+      perf.raf.scheduled += 1;
+      perf.raf.active += 1;
+      var label = stackLabel('raf');
+      return originals.requestAnimationFrame(function(ts){
+        var t0 = now();
+        try{ return fn.call(this, ts); }
+        finally{
+          var ms = now() - t0;
+          perf.raf.fired += 1;
+          perf.raf.active = Math.max(0, perf.raf.active - 1);
+          perf.raf.totalMs += ms;
+          if (ms > perf.raf.maxMs) perf.raf.maxMs = ms;
+          stat(perf.timers, label, ms);
+        }
+      });
+    };
+  }
+
+  if (!originals.MutationObserver && window.MutationObserver){
+    originals.MutationObserver = window.MutationObserver;
+    var NativeMutationObserver = window.MutationObserver;
+    window.MutationObserver = function(callback){
+      var label = stackLabel('observer');
+      perf.observers.created += 1;
+      var wrapped = function(records, observer){
+        var t0 = now();
+        try{ return callback.call(this, records, observer); }
+        finally{
+          var ms = now() - t0;
+          perf.observers.callbacks += 1;
+          perf.observers.records += records && records.length ? records.length : 0;
+          perf.observers.totalMs += ms;
+          if (ms > perf.observers.maxMs) perf.observers.maxMs = ms;
+          var s = stat(perf.observers.entries, label, ms);
+          s.records = (s.records || 0) + (records && records.length ? records.length : 0);
+        }
+      };
+      return new NativeMutationObserver(wrapped);
+    };
+    window.MutationObserver.prototype = NativeMutationObserver.prototype;
+  }
+
+  function wrapFunction(name){
+    var fn = window[name];
+    if (typeof fn !== 'function' || fn.__tcDiagWrapped) return false;
+    window[name] = function(){
+      var t0 = now();
+      try{ return fn.apply(this, arguments); }
+      finally{ stat(perf.functions, name, now() - t0); }
+    };
+    window[name].__tcDiagWrapped = true;
+    return true;
+  }
+  function wrapKnownHotPaths(){
+    [
+      'drawLinks',
+      'updateConsole',
+      'buildCommands',
+      'renderList',
+      'recomputeAreasAndTags',
+      'relayoutTag',
+      'renderStagedOverlay',
+      'refreshDepHandleLetters',
+      'addNodeForTask',
+      'addToBuilder',
+      'renderDepsOverlay',
+      '__depsOverlayRender'
+    ].forEach(wrapFunction);
+    try{
+      if (window.KyanbasuNotes && !window.KyanbasuNotes.__tcDiagWrapped){
+        ['render', 'createNote', 'createChildNote', 'createSiblingNote', 'compactMindMap'].forEach(function(k){
+          var fn = window.KyanbasuNotes[k];
+          if (typeof fn !== 'function' || fn.__tcDiagWrapped) return;
+          window.KyanbasuNotes[k] = function(){
+            var t0 = now();
+            try{ return fn.apply(this, arguments); }
+            finally{ stat(perf.functions, 'KyanbasuNotes.' + k, now() - t0); }
+          };
+          window.KyanbasuNotes[k].__tcDiagWrapped = true;
+        });
+        window.KyanbasuNotes.__tcDiagWrapped = true;
+      }
+    }catch(_){}
+  }
+
+  function perfSummary(){
+    return {
+      uptimeMs: Date.now() - perf.startedAt,
+      topFunctions: topMap(perf.functions, 16),
+      topTimers: topMap(perf.timers, 16),
+      raf: {
+        scheduled: perf.raf.scheduled,
+        fired: perf.raf.fired,
+        active: perf.raf.active,
+        totalMs: Math.round(perf.raf.totalMs * 10) / 10,
+        maxMs: Math.round(perf.raf.maxMs * 10) / 10
+      },
+      observers: {
+        created: perf.observers.created,
+        callbacks: perf.observers.callbacks,
+        records: perf.observers.records,
+        totalMs: Math.round(perf.observers.totalMs * 10) / 10,
+        maxMs: Math.round(perf.observers.maxMs * 10) / 10,
+        top: topMap(perf.observers.entries, 16).map(function(x){
+          var raw = perf.observers.entries[x.name] || {};
+          x.records = raw.records || 0;
+          return x;
+        })
+      }
+    };
+  }
+
+  function push(kind, msg, extra){
+    var entry = {
+      ts: new Date().toISOString(),
+      kind: String(kind || 'error'),
+      msg: String(msg || '(no message)')
+    };
+    if (extra && typeof extra === 'object'){
+      for (var k in extra){
+        if (!Object.prototype.hasOwnProperty.call(extra, k)) continue;
+        entry[k] = extra[k];
+      }
+    }
+    diag.events.push(entry);
+    if (diag.events.length > 50) diag.events.shift();
+    try{ console.warn('[Kyanbasu][diag]', entry.kind + ':', entry.msg, entry); }catch(_){}
+  }
+
+  window.addEventListener('error', function(ev){
+    try{
+      diag.errors += 1;
+      var msg = (ev && ev.message) ? ev.message : 'window error';
+      push('error', msg, {
+        file: ev && ev.filename ? ev.filename : '',
+        line: ev && ev.lineno ? ev.lineno : 0,
+        col: ev && ev.colno ? ev.colno : 0
+      });
+    }catch(_){}
+  });
+
+  window.addEventListener('unhandledrejection', function(ev){
+    try{
+      diag.rejections += 1;
+      var reason = ev ? ev.reason : '';
+      var msg = '';
+      if (reason && typeof reason === 'object' && reason.message) msg = reason.message;
+      else msg = String(reason || 'unhandled rejection');
+      push('unhandledrejection', msg, {});
+    }catch(_){}
+  });
+
+  window.KyanbasuDiagnostics = function(){
+    try{
+      var copy = JSON.parse(JSON.stringify(diag));
+      copy.perfSummary = perfSummary();
+      return copy;
+    }catch(_){ return diag; }
+  };
+  window.KyanbasuPerfReport = function(){
+    var snap = window.KyanbasuDiagnostics();
+    try{
+      console.log('[Kyanbasu][perf] uptimeMs', snap.perfSummary.uptimeMs);
+      console.table(snap.perfSummary.topFunctions);
+      console.table(snap.perfSummary.topTimers);
+      console.table(snap.perfSummary.observers.top);
+      console.log('[Kyanbasu][perf] raf', snap.perfSummary.raf, 'observers', snap.perfSummary.observers);
+    }catch(_){}
+    return snap;
+  };
+  window.KyanbasuPerfReset = function(){
+    diag.perf = {
+      startedAt: Date.now(),
+      functions: {},
+      timers: {},
+      raf: { scheduled: 0, fired: 0, active: 0, totalMs: 0, maxMs: 0 },
+      observers: { created: perf.observers.created || 0, callbacks: 0, records: 0, totalMs: 0, maxMs: 0, entries: {} }
+    };
+    perf = diag.perf;
+    return window.KyanbasuDiagnostics();
+  };
+
+  wrapKnownHotPaths();
+  (originals.setTimeout || setTimeout)(wrapKnownHotPaths, 0);
+  (originals.setTimeout || setTimeout)(wrapKnownHotPaths, 120);
+  (originals.setTimeout || setTimeout)(wrapKnownHotPaths, 600);
+  (originals.setTimeout || setTimeout)(wrapKnownHotPaths, 1600);
+  window.addEventListener('load', function(){ (originals.setTimeout || setTimeout)(wrapKnownHotPaths, 0); });
+  document.addEventListener('twdata', function(){ (originals.setTimeout || setTimeout)(wrapKnownHotPaths, 0); });
+})();
+</script>
