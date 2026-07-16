@@ -76,14 +76,14 @@ class TestCliHelpers(unittest.TestCase):
         with contextlib.redirect_stdout(output), self.assertRaises(SystemExit) as cm:
             parse_args(["--version"])
         self.assertEqual(cm.exception.code, 0)
-        self.assertEqual(output.getvalue().strip(), "Kyanbasu 0.1.0")
+        self.assertEqual(output.getvalue().strip(), "Kyanbasu 0.2.0")
 
     def test_legacy_version_output_remains_compatible(self):
         output = io.StringIO()
         with contextlib.redirect_stdout(output), self.assertRaises(SystemExit) as cm:
             parse_args(["--version"], prog="taskcanvas")
         self.assertEqual(cm.exception.code, 0)
-        self.assertEqual(output.getvalue().strip(), "taskcanvas 0.1.0")
+        self.assertEqual(output.getvalue().strip(), "taskcanvas 0.2.0")
 
 
 if __name__ == "__main__":

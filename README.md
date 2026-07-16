@@ -1,6 +1,6 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/catanadj/taskwarrior-canvas/ci.yml?branch=main&label=CI)](https://github.com/catanadj/taskwarrior-canvas/actions/workflows/ci.yml)
 
-![canvas](https://github.com/user-attachments/assets/dd74d092-0f3e-4416-a6ec-09f9cbfc6504)
+![Kyanbasu workspace](https://github.com/user-attachments/assets/dd74d092-0f3e-4416-a6ec-09f9cbfc6504)
 
 # Kyanbasu
 
@@ -11,6 +11,8 @@ Kyanbasu brings Taskwarrior tasks and structured notes onto one spatial canvas. 
 Task changes become plain `task` commands that you can review, edit, and copy back into your terminal. The generated HTML remains local and never writes to Taskwarrior directly.
 
 > Kyanbasu was formerly named TaskCanvas. The `taskcanvas` command, `TaskCanvas.py` script, and `TaskCanvas.html` output filename remain supported for compatibility.
+
+[Migration guide](MIGRATION.md) | [Changelog](CHANGELOG.md)
 
 ---
 
@@ -171,6 +173,8 @@ kyanbasu --filter "due.before:today"  # any filter string
 - `taskcanvas/output.py`: cross-platform browser opener.
 - `taskcanvas/injectors.py`: HTML/JS feature injectors and background/overlay patch helpers.
 - `taskcanvas/templates/`: base HTML template, modal replacement fragment, and runtime assets.
+- `MIGRATION.md`: upgrade and compatibility guidance for existing TaskCanvas users.
+- `CHANGELOG.md`: release history and compatibility notes.
 
 ---
 
@@ -196,6 +200,11 @@ python3 TaskCanvas.py  # compatibility source-tree wrapper
 
 Both commands accept the same arguments and generate the same compatible `TaskCanvas.html` workspace.
 
+The install distribution and source repository retain the `taskwarrior-canvas`
+identifier during the compatibility period. This allows existing package
+installations and repository links to upgrade cleanly while Kyanbasu becomes the
+public product name.
+
 ## Runtime compatibility
 
 - New browser state is stored under `kyanbasu:*` keys. Existing `taskcanvas:*` layouts, notes, workbenches, snapshots, and UI preferences are copied forward automatically when first read.
@@ -213,6 +222,8 @@ Both commands accept the same arguments and generate the same compatible `TaskCa
   - `TASKCANVAS_RUN_INTEGRATION=1 python3 -m unittest tests.test_task_io_integration -v`
 - Combined local release check:
   - `./scripts/release_check.sh`
+- Build the distributable wheel:
+  - `python3 -m pip wheel --no-build-isolation --no-deps --wheel-dir dist .`
 - CI integration job is optional and can be run via **Actions -> CI -> Run workflow** with `run_integration=true`.
 
 ---

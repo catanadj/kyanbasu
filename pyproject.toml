@@ -4,15 +4,23 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "taskwarrior-canvas"
-version = "0.1.0"
-description = "A visual dependency canvas and command generator for Taskwarrior."
+dynamic = ["version"]
+description = "Kyanbasu: a local visual planning and thinking workspace for Taskwarrior."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 authors = [
-  { name = "TaskCanvas contributors" }
+  { name = "Kyanbasu contributors" }
 ]
-keywords = ["taskwarrior", "tasks", "canvas", "dependencies"]
+keywords = [
+  "taskwarrior",
+  "productivity",
+  "planning",
+  "mind-map",
+  "notes",
+  "dependencies",
+  "canvas",
+]
 classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
@@ -25,7 +33,9 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/catanadj/taskwarrior-canvas"
+Source = "https://github.com/catanadj/taskwarrior-canvas"
 Issues = "https://github.com/catanadj/taskwarrior-canvas/issues"
+Changelog = "https://github.com/catanadj/taskwarrior-canvas/blob/main/CHANGELOG.md"
 
 [project.scripts]
 kyanbasu = "kyanbasu:main"
@@ -34,6 +44,9 @@ taskcanvas = "taskcanvas.app:taskcanvas_main"
 [tool.setuptools]
 packages = ["kyanbasu", "taskcanvas"]
 include-package-data = true
+
+[tool.setuptools.dynamic]
+version = { attr = "taskcanvas.__version__" }
 
 [tool.setuptools.package-data]
 taskcanvas = [

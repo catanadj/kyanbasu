@@ -6,7 +6,11 @@ on:
       - main
     paths:
       - ".github/workflows/ci.yml"
+      - "CHANGELOG.md"
       - "Kyanbasu.py"
+      - "LICENSE"
+      - "MIGRATION.md"
+      - "README.md"
       - "TaskCanvas.py"
       - "kyanbasu/**"
       - "pyproject.toml"
@@ -18,7 +22,11 @@ on:
       - main
     paths:
       - ".github/workflows/ci.yml"
+      - "CHANGELOG.md"
       - "Kyanbasu.py"
+      - "LICENSE"
+      - "MIGRATION.md"
+      - "README.md"
       - "TaskCanvas.py"
       - "kyanbasu/**"
       - "pyproject.toml"
@@ -61,6 +69,17 @@ jobs:
 
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
+
+      - name: Build wheel
+        run: python -m pip wheel --no-build-isolation --no-deps --wheel-dir dist .
+
+      - name: Smoke test wheel
+        run: |
+          python -m pip install --no-deps --target "${RUNNER_TEMP}/kyanbasu-wheel" dist/*.whl
+          primary_version="$(cd "${RUNNER_TEMP}" && PYTHONPATH="${RUNNER_TEMP}/kyanbasu-wheel" "${RUNNER_TEMP}/kyanbasu-wheel/bin/kyanbasu" --version)"
+          legacy_version="$(cd "${RUNNER_TEMP}" && PYTHONPATH="${RUNNER_TEMP}/kyanbasu-wheel" "${RUNNER_TEMP}/kyanbasu-wheel/bin/taskcanvas" --version)"
+          test "${primary_version}" = "Kyanbasu 0.2.0"
+          test "${legacy_version}" = "taskcanvas 0.2.0"
 
   integration:
     if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_integration == 'true' }}
