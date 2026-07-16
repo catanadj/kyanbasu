@@ -7,7 +7,8 @@
   function canvas(){ return qs('#builderWrap .canvas'); }
   function zoomInput(){ return qs('#zoom'); }
   function scale(){ return (typeof window.ZSCALE === 'number' && window.ZSCALE) ? window.ZSCALE : 1; }
-  function storageKey(){ return 'taskcanvas:navigator:v1'; }
+  function storageKey(){ return 'kyanbasu:navigator:v1'; }
+  function legacyStorageKey(){ return 'taskcanvas:navigator:v1'; }
   function toInt(v, fallback){
     var n = parseInt(v, 10);
     return isFinite(n) ? n : fallback;
@@ -180,6 +181,10 @@
   function restorePanelPosition(panel){
     try{
       var raw = localStorage.getItem(storageKey());
+      if (!raw){
+        raw = localStorage.getItem(legacyStorageKey());
+        if (raw) localStorage.setItem(storageKey(), raw);
+      }
       if (!raw) return;
       var pos = JSON.parse(raw);
       if (!pos || !isFinite(pos.left) || !isFinite(pos.top)) return;

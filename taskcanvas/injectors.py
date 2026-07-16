@@ -202,7 +202,7 @@ def _find_bg_file(prefer: str | None, base_dir: Path | None = None, include_demo
         candidates.append(p if p.is_absolute() else (cwd / p))
         candidates.append(script_dir / p.name)
         candidates.append(demo_dir / p.name)
-    names = ["taskcanvas-bg", "TaskCanvas.bg", "canvas-bg", "background", "bg"]
+    names = ["kyanbasu-bg", "Kyanbasu.bg", "taskcanvas-bg", "TaskCanvas.bg", "canvas-bg", "background", "bg"]
     roots = [script_dir, cwd]
     if include_demo:
         roots.append(demo_dir)

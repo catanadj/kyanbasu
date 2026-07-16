@@ -1,0 +1,48 @@
+<script id="FEATURE_KYANBASU_COMPAT_V1">
+(function(){
+  if (window.__FEATURE_KYANBASU_COMPAT_V1__) return;
+  window.__FEATURE_KYANBASU_COMPAT_V1__ = true;
+
+  var suffixes = [
+    'Commands',
+    'ConsoleEditor',
+    'ContextBar',
+    'DependencyEdges',
+    'Diagnostics',
+    'EdgeDirection',
+    'LayoutPersist',
+    'Navigator',
+    'Notes',
+    'NotesCore',
+    'PerfReport',
+    'PerfReset',
+    'QuickAdd',
+    'Review',
+    'Storage',
+    'Workbenches'
+  ];
+
+  function installAlias(suffix){
+    var legacy = 'TaskCanvas' + suffix;
+    var primary = 'Kyanbasu' + suffix;
+    if (typeof window[legacy] === 'undefined' && typeof window[primary] !== 'undefined'){
+      window[legacy] = window[primary];
+    }
+    try{
+      Object.defineProperty(window, primary, {
+        configurable: true,
+        enumerable: true,
+        get: function(){ return window[legacy]; },
+        set: function(value){ window[legacy] = value; }
+      });
+    }catch(_){
+      window[primary] = window[legacy];
+    }
+  }
+
+  suffixes.forEach(installAlias);
+  window.Kyanbasu = window.Kyanbasu || {};
+  window.Kyanbasu.apiVersion = 1;
+  window.Kyanbasu.legacyNamespace = 'TaskCanvas';
+})();
+</script>

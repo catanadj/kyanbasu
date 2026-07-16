@@ -136,7 +136,7 @@ kyanbasu --filter "due.before:today"  # any filter string
 
 - You can give Kyanbasu a custom background image via `--bg` and `--bg-opacity`.
 
-- If no flag is provided, it auto-searches for files like taskcanvas-bg.jpg/png/webp in the package, current working directory, or demo directory and uses them as a body overlay.
+- If no flag is provided, it auto-searches for files like `kyanbasu-bg.jpg/png/webp` in the package, current working directory, or demo directory and uses them as a body overlay. Legacy `taskcanvas-bg.*` names are still recognized.
 
 ### Termux and desktop friendly
 
@@ -176,7 +176,8 @@ kyanbasu --filter "due.before:today"  # any filter string
 
 ## Diagnostics
 
-- Set `TASKCANVAS_LOG_LEVEL` to control runtime logs (`DEBUG`, `INFO`, `WARNING`, `ERROR`).
+- Set `KYANBASU_LOG_LEVEL` to control runtime logs (`DEBUG`, `INFO`, `WARNING`, `ERROR`).
+- The legacy `TASKCANVAS_LOG_LEVEL` variable remains supported when `KYANBASU_LOG_LEVEL` is not set.
 - Default log level is `INFO`.
 
 ## Command compatibility
@@ -194,6 +195,13 @@ python3 TaskCanvas.py  # compatibility source-tree wrapper
 ```
 
 Both commands accept the same arguments and generate the same compatible `TaskCanvas.html` workspace.
+
+## Runtime compatibility
+
+- New browser state is stored under `kyanbasu:*` keys. Existing `taskcanvas:*` layouts, notes, workbenches, snapshots, and UI preferences are copied forward automatically when first read.
+- Notes and workbench exports use the `kyanbasu.notes` and `kyanbasu.workbenches` kinds. Imports continue to accept legacy `taskcanvas.notes` and `taskcanvas.workbenches` files.
+- Downloaded files use `kyanbasu-notes.json`, `kyanbasu-workbenches.json`, and `kyanbasu-reviewed-commands.sh`.
+- Browser integrations can use `window.KyanbasuNotes`, `window.KyanbasuWorkbenches`, and the other `window.Kyanbasu*` APIs. Existing `window.TaskCanvas*` names remain synchronized aliases.
 
 ---
 
@@ -268,7 +276,7 @@ kyanbasu --bg=mywall.png --bg-opacity=0.12
 
 Kyanbasu will copy the image next to `TaskCanvas.html` in the same directory and add a background overlay with the requested opacity (default approximately 0.18).
 
-Without --bg, it tries to locate a file named like taskcanvas-bg.*, canvas-bg.*, background.* or bg.* in the package directory, current working directory, or demo directory.
+Without `--bg`, it tries to locate a file named like `kyanbasu-bg.*`, `taskcanvas-bg.*`, `canvas-bg.*`, `background.*`, or `bg.*` in the package directory, current working directory, or demo directory.
 
 ---
 

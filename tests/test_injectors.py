@@ -130,6 +130,18 @@ class TestInjectors(unittest.TestCase):
             found = _find_bg_file(None, base_dir=base)
             self.assertEqual(found, bg)
 
+    def test_find_bg_file_prefers_kyanbasu_name_over_legacy_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            primary = base / "kyanbasu-bg.jpg"
+            legacy = base / "taskcanvas-bg.jpg"
+            primary.write_bytes(b"primary")
+            legacy.write_bytes(b"legacy")
+
+            found = _find_bg_file(None, base_dir=base)
+
+            self.assertEqual(found, primary)
+
     def test_find_bg_file_skips_demo_dir_by_default(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -128,4 +128,6 @@ def build_runtime_html(
     html = inject_layout_persistence(html)
     html = inject_command_preflight(html)
     html = inject_undo_redo(html)
+    if "FEATURE_KYANBASU_COMPAT_V1" not in html:
+        html = inject_body(html, load_runtime_asset("kyanbasu_compat_v1.js.html"))
     return html

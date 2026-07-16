@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import tempfile
 import unittest
@@ -22,6 +23,28 @@ def _task(uuid: str, desc: str, project: str = "Work", depends=None, due=None):
 
 
 class TestMainFlow(unittest.TestCase):
+    def test_logger_prefers_kyanbasu_log_level(self):
+        original_level = TaskCanvas.LOGGER.level
+        try:
+            with patch.dict(
+                TaskCanvas.os.environ,
+                {"KYANBASU_LOG_LEVEL": "ERROR", "TASKCANVAS_LOG_LEVEL": "DEBUG"},
+                clear=True,
+            ):
+                logger = TaskCanvas._build_logger()
+            self.assertEqual(logger.level, logging.ERROR)
+        finally:
+            TaskCanvas.LOGGER.setLevel(original_level)
+
+    def test_logger_accepts_legacy_taskcanvas_log_level(self):
+        original_level = TaskCanvas.LOGGER.level
+        try:
+            with patch.dict(TaskCanvas.os.environ, {"TASKCANVAS_LOG_LEVEL": "WARNING"}, clear=True):
+                logger = TaskCanvas._build_logger()
+            self.assertEqual(logger.level, logging.WARNING)
+        finally:
+            TaskCanvas.LOGGER.setLevel(original_level)
+
     def test_main_merges_selector_and_filter_placements(self):
         all_tasks = [
             _task("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "Alpha", project="Home"),

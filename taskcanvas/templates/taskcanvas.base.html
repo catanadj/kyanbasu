@@ -1808,7 +1808,8 @@ function expandInspector(){ document.body.classList.remove('inspector-collapsed'
 if (hideInspector) hideInspector.addEventListener('click', collapseInspector);
 if (inspectorHandle) inspectorHandle.addEventListener('click', expandInspector);
 
-var HEADER_TOOLS_STORAGE_KEY = 'taskcanvas:header-tools-collapsed';
+var HEADER_TOOLS_STORAGE_KEY = 'kyanbasu:header-tools-collapsed';
+var LEGACY_HEADER_TOOLS_STORAGE_KEY = 'taskcanvas:header-tools-collapsed';
 function setHeaderToolsCollapsed(collapsed, persist){
   collapsed = !!collapsed;
   document.body.classList.toggle('header-tools-collapsed', collapsed);
@@ -1825,7 +1826,14 @@ function setHeaderToolsCollapsed(collapsed, persist){
 }
 function restoreHeaderToolsState(){
   var collapsed = false;
-  try{ collapsed = localStorage.getItem(HEADER_TOOLS_STORAGE_KEY) === '1'; }catch(_){}
+  try{
+    var saved = localStorage.getItem(HEADER_TOOLS_STORAGE_KEY);
+    if (saved === null){
+      saved = localStorage.getItem(LEGACY_HEADER_TOOLS_STORAGE_KEY);
+      if (saved !== null) localStorage.setItem(HEADER_TOOLS_STORAGE_KEY, saved);
+    }
+    collapsed = saved === '1';
+  }catch(_){}
   return setHeaderToolsCollapsed(collapsed, false);
 }
 if (toggleHeaderTools) toggleHeaderTools.addEventListener('click', function(){
@@ -1840,7 +1848,7 @@ function cloneJSON(v){
 }
 function layoutBoardKeyFromTasks(tasks){
   try{
-    var prefix = "taskcanvas:layout:v1:";
+    var prefix = "kyanbasu:layout:v1:";
     if (!tasks || !tasks.length) return prefix + "empty";
     var ids = tasks.map(function(t){
       return t ? String(t.uuid || t.short || "") : "";
@@ -1852,20 +1860,28 @@ function layoutBoardKeyFromTasks(tasks){
     }
     return prefix + (h >>> 0).toString(16);
   }catch(_){
-    return "taskcanvas:layout:v1:fallback";
+    return "kyanbasu:layout:v1:fallback";
   }
+}
+function legacyLayoutBoardKeyFromTasks(tasks){
+  return layoutBoardKeyFromTasks(tasks).replace(/^kyanbasu:/, "taskcanvas:");
 }
 function layoutBoardKey(){
   var tasks = (window.DATA && Array.isArray(window.DATA.tasks)) ? window.DATA.tasks : TASKS;
   return layoutBoardKeyFromTasks(tasks);
 }
 function clearPersistedLayout(){
-  try{ localStorage.removeItem(layoutBoardKey()); }catch(_){}
+  try{
+    localStorage.removeItem(layoutBoardKey());
+    var tasks = (window.DATA && Array.isArray(window.DATA.tasks)) ? window.DATA.tasks : TASKS;
+    localStorage.removeItem(legacyLayoutBoardKeyFromTasks(tasks));
+  }catch(_){}
 }
 function clearPersistedLayoutForData(data){
   try{
     var tasks = (data && Array.isArray(data.tasks)) ? data.tasks : [];
     localStorage.removeItem(layoutBoardKeyFromTasks(tasks));
+    localStorage.removeItem(legacyLayoutBoardKeyFromTasks(tasks));
   }catch(_){}
 }
 function emptyObjectInPlace(obj){
@@ -3887,13 +3903,18 @@ function isDependentShort(shortId){
 }
 function viewerNotesSortMode(){
   try{
-    var v = localStorage.getItem('taskcanvas:viewer:notes-sort') || 'id';
+    var v = localStorage.getItem('kyanbasu:viewer:notes-sort');
+    if (v === null){
+      v = localStorage.getItem('taskcanvas:viewer:notes-sort');
+      if (v !== null) localStorage.setItem('kyanbasu:viewer:notes-sort', v);
+    }
+    v = v || 'id';
     return v === 'bucket' ? 'bucket' : 'id';
   }catch(_){ return 'id'; }
 }
 function setViewerNotesSortMode(mode){
   mode = mode === 'bucket' ? 'bucket' : 'id';
-  try{ localStorage.setItem('taskcanvas:viewer:notes-sort', mode); }catch(_){}
+  try{ localStorage.setItem('kyanbasu:viewer:notes-sort', mode); }catch(_){}
   renderViewer();
 }
 function viewerSection(titleText, countText, top){

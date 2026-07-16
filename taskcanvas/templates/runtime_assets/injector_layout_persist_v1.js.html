@@ -2,7 +2,8 @@
 (function(){
   if (window.__LAYOUT_PERSIST_V1__) return; window.__LAYOUT_PERSIST_V1__ = true;
 
-  var PREFIX = "taskcanvas:layout:v1:";
+  var PREFIX = "kyanbasu:layout:v1:";
+  var LEGACY_PREFIX = "taskcanvas:layout:v1:";
   var lastSerialized = null;
   var restored = false;
   var saveTimer = 0;
@@ -38,6 +39,19 @@
       return PREFIX + fnv1a(ids);
     }catch(_){
       return PREFIX + "fallback";
+    }
+  }
+
+  function legacyBoardKey(){
+    try{
+      if (!hasTasks()) return LEGACY_PREFIX + "empty";
+      var ids = window.TASKS.map(function(t){
+        if (!t) return "";
+        return String(t.uuid || t.short || "");
+      }).filter(Boolean).sort().join("|");
+      return LEGACY_PREFIX + fnv1a(ids);
+    }catch(_){
+      return LEGACY_PREFIX + "fallback";
     }
   }
 
@@ -311,7 +325,16 @@
 
   function readState(){
     try{
-      var raw = localStorage.getItem(boardKey());
+      var key = boardKey();
+      var raw = localStorage.getItem(key);
+      if (!raw){
+        var legacyKey = legacyBoardKey();
+        raw = localStorage.getItem(legacyKey);
+        if (raw){
+          localStorage.setItem(key, raw);
+          try{ localStorage.setItem(key + ":migrated-from", legacyKey); }catch(_){}
+        }
+      }
       if (!raw) return null;
       return JSON.parse(raw);
     }catch(_){
@@ -408,7 +431,8 @@
     applyState: applyState,
     replaceState: replaceState,
     save: function(){ writeState(true); },
-    key: boardKey
+    key: boardKey,
+    legacyKey: legacyBoardKey
   };
 })();
 </script>

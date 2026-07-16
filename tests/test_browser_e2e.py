@@ -470,7 +470,7 @@ window.addEventListener('load', function(){
         self.assertFalse(result["copyDisabled"])
         self.assertTrue(result["downloadButton"])
         self.assertFalse(result["downloadDisabled"])
-        self.assertEqual(result["downloadName"], "taskcanvas-reviewed-commands.sh")
+        self.assertEqual(result["downloadName"], "kyanbasu-reviewed-commands.sh")
         self.assertTrue(result["downloadHref"].startswith("blob:review-"), msg=json.dumps(result))
         self.assertEqual(result["copied"], result["raw"])
         self.assertTrue(result["scriptText"].startswith("#!/usr/bin/env bash\nset -euo pipefail"), msg=json.dumps(result))
@@ -786,6 +786,121 @@ window.addEventListener('load', function(){
         self.assertEqual(result["restored"], 3)
         self.assertEqual(result["current"], 3)
 
+    def test_kyanbasu_storage_migrates_legacy_workspace_and_snapshots(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps(
+            {
+                "workspace_id": "storage-migration",
+                "tasks": [],
+                "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
+            }
+        )
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        prelude = """
+<script id="E2E_KYANBASU_STORAGE_PRELUDE">
+localStorage.setItem('taskcanvas:workspace:v1:storage-migration:probe', JSON.stringify({value:41}));
+localStorage.setItem('taskcanvas:workspace:v1:storage-migration:probe:snapshots', JSON.stringify([{savedAt:1, raw:'{"value":40}'}]));
+</script>
+"""
+        html = html.replace("<body>", "<body>" + prelude, 1)
+        harness = """
+<script id="E2E_KYANBASU_STORAGE_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var storage = window.KyanbasuStorage;
+      var key = storage.key('probe');
+      var value = storage.getJSON('probe', null);
+      var history = storage.snapshots('probe');
+      storage.setJSON('new-only', {value:42});
+      var out = {
+        key:key,
+        value:value && value.value,
+        historyValue:history[0] && JSON.parse(history[0].raw).value,
+        migratedFrom:localStorage.getItem(key + ':migrated-from'),
+        snapshotsMigratedFrom:localStorage.getItem(key + ':snapshots:migrated-from'),
+        legacyNewOnly:localStorage.getItem(storage.legacyKey('new-only')),
+        aliases:window.KyanbasuStorage === window.TaskCanvasStorage
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out';
+      pre.textContent = JSON.stringify(out);
+      document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["key"].startswith("kyanbasu:workspace:v1:"), msg=json.dumps(result))
+        self.assertEqual(result["value"], 41, msg=json.dumps(result))
+        self.assertEqual(result["historyValue"], 40, msg=json.dumps(result))
+        self.assertEqual(result["migratedFrom"], "taskcanvas:workspace:v1:storage-migration:probe")
+        self.assertEqual(
+            result["snapshotsMigratedFrom"],
+            "taskcanvas:workspace:v1:storage-migration:probe:snapshots",
+        )
+        self.assertIsNone(result["legacyNewOnly"])
+        self.assertTrue(result["aliases"])
+
+    def test_kyanbasu_browser_apis_alias_legacy_taskcanvas_apis(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        harness = """
+<script id="E2E_KYANBASU_API_ALIAS_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var suffixes = ['Commands','ConsoleEditor','ContextBar','DependencyEdges','Diagnostics','EdgeDirection','LayoutPersist','Navigator','Notes','NotesCore','PerfReport','PerfReset','QuickAdd','Review','Storage','Workbenches'];
+      var missing = suffixes.filter(function(suffix){
+        return !window['Kyanbasu' + suffix] || window['Kyanbasu' + suffix] !== window['TaskCanvas' + suffix];
+      });
+      var original = window.TaskCanvasNotes;
+      var replacement = {probe:true};
+      window.KyanbasuNotes = replacement;
+      var primaryUpdatesLegacy = window.TaskCanvasNotes === replacement;
+      window.TaskCanvasNotes = original;
+      var legacyUpdatesPrimary = window.KyanbasuNotes === original;
+      var out = {
+        missing:missing,
+        primaryUpdatesLegacy:primaryUpdatesLegacy,
+        legacyUpdatesPrimary:legacyUpdatesPrimary,
+        apiVersion:window.Kyanbasu && window.Kyanbasu.apiVersion,
+        legacyNamespace:window.Kyanbasu && window.Kyanbasu.legacyNamespace
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out';
+      pre.textContent = JSON.stringify(out);
+      document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["missing"], [], msg=json.dumps(result))
+        self.assertTrue(result["primaryUpdatesLegacy"], msg=json.dumps(result))
+        self.assertTrue(result["legacyUpdatesPrimary"], msg=json.dumps(result))
+        self.assertEqual(result["apiVersion"], 1)
+        self.assertEqual(result["legacyNamespace"], "TaskCanvas")
+
     def test_canvas_notes_runtime_creates_links_and_stays_out_of_commands(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
@@ -832,7 +947,7 @@ window.addEventListener('load', function(){
           firstContent: window.TaskCanvasNotes.notes()[0] && window.TaskCanvasNotes.notes()[0].content,
           hasTitleKey: window.TaskCanvasNotes.notes().some(function(n){ return Object.prototype.hasOwnProperty.call(n, 'title'); }),
           console: (document.getElementById('consoleText') || {}).value || "",
-          savedKeys: Object.keys(localStorage).filter(function(k){ return k.indexOf('taskcanvas:workspace:v1:') === 0; }).length,
+          savedKeys: Object.keys(localStorage).filter(function(k){ return k.indexOf('kyanbasu:workspace:v1:') === 0; }).length,
           storageKey: window.TaskCanvasStorage.key('notes'),
           snapshotCount: window.TaskCanvasStorage.snapshots('notes').length
         };
@@ -876,7 +991,7 @@ window.addEventListener('load', function(){
         self.assertFalse(result["hasTitleKey"])
         self.assertEqual(result["console"], "")
         self.assertGreaterEqual(result["savedKeys"], 1)
-        self.assertTrue(result["storageKey"].startswith("taskcanvas:workspace:v1:"))
+        self.assertTrue(result["storageKey"].startswith("kyanbasu:workspace:v1:"))
         self.assertGreaterEqual(result["snapshotCount"], 1)
 
     def test_canvas_notes_roles_and_statuses_render_edit_search_and_export(self):
@@ -1842,7 +1957,7 @@ window.addEventListener('load', function(){
           exportedFirstBucket: exported.notes[0] && exported.notes[0].bucket,
           exportedSecondBucket: exported.notes[1] && exported.notes[1].bucket,
           visibleNotes: Array.prototype.slice.call(document.querySelectorAll('.tcNoteNode')).filter(function(el){ return el.style.display !== 'none'; }).length,
-          savedKeys: Object.keys(localStorage).filter(function(k){ return k.indexOf('taskcanvas:workspace:v1:') === 0; }).length,
+          savedKeys: Object.keys(localStorage).filter(function(k){ return k.indexOf('kyanbasu:workspace:v1:') === 0; }).length,
           console: (document.getElementById('consoleText') || {}).value || ""
         };
         var pre = document.createElement('pre');
@@ -1868,7 +1983,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["exportButton"])
         self.assertEqual(result["resultNotes"], 2)
         self.assertEqual(result["resultLinks"], 1)
-        self.assertEqual(result["exportedKind"], "taskcanvas.notes")
+        self.assertEqual(result["exportedKind"], "kyanbasu.notes")
         self.assertEqual(result["exportedVersion"], 5)
         self.assertEqual(result["exportedNotes"], 2)
         self.assertEqual(result["exportedLinks"], 1)
@@ -3087,6 +3202,7 @@ window.addEventListener('load', function(){
 window.addEventListener('load', function(){
   setTimeout(function(){
     try{
+      localStorage.removeItem('kyanbasu:viewer:notes-sort');
       localStorage.removeItem('taskcanvas:viewer:notes-sort');
       var z = window.TaskCanvasNotes.createNote(120, 220, "Zeta root", "", "Zeta", {skipAutoLayout:true});
       window.TaskCanvasNotes.createChildNote(z.id, "Zeta child", "");
@@ -3098,7 +3214,7 @@ window.addEventListener('load', function(){
         setTimeout(function(){
           var after = Array.prototype.slice.call(document.querySelectorAll('#viewerStage .viewerNoteText')).map(function(el){ return el.textContent; });
           var active = (document.querySelector('#viewerStage .viewerSortBtn.active') || {}).textContent || "";
-          var stored = localStorage.getItem('taskcanvas:viewer:notes-sort') || "";
+          var stored = localStorage.getItem('kyanbasu:viewer:notes-sort') || "";
           var indents = Array.prototype.slice.call(document.querySelectorAll('#viewerStage .viewerNote')).map(function(el){ return parseFloat(el.style.marginLeft || '0'); });
           var out = {before:before, after:after, active:active, stored:stored, indents:indents};
           var pre = document.createElement('pre');
@@ -3440,7 +3556,7 @@ window.addEventListener('load', function(){
           meta:getComputedStyle(document.querySelector('.toolbarMeta')).display,
           modes:getComputedStyle(document.querySelector('.shellModeControls')).display,
           workbenches:getComputedStyle(document.getElementById('shellWorkbenchControls')).display,
-          saved:localStorage.getItem('taskcanvas:header-tools-collapsed'),
+          saved:localStorage.getItem('kyanbasu:header-tools-collapsed'),
           heightReduced:collapsedHeight < expandedHeight - 20
         };
         document.body.classList.remove('header-tools-collapsed');
@@ -3452,7 +3568,7 @@ window.addEventListener('load', function(){
             bodyClass:document.body.classList.contains('header-tools-collapsed'),
             expanded:toggle.getAttribute('aria-expanded'),
             actions:getComputedStyle(document.querySelector('.shellActionStack')).display,
-            saved:localStorage.getItem('taskcanvas:header-tools-collapsed')
+            saved:localStorage.getItem('kyanbasu:header-tools-collapsed')
           };
           var pre = document.createElement('pre');
           pre.id = 'e2e-out';
@@ -3911,9 +4027,9 @@ window.addEventListener('load', function(){
         self.assertNotIn("ERR:", raw)
         result = json.loads(raw)
         self.assertTrue(result["button"], msg=json.dumps(result))
-        self.assertEqual(result["currentKind"], "taskcanvas.notes", msg=json.dumps(result))
+        self.assertEqual(result["currentKind"], "kyanbasu.notes", msg=json.dumps(result))
         self.assertEqual(result["currentNotes"], ["Delivery note"], msg=json.dumps(result))
-        self.assertEqual(result["allKind"], "taskcanvas.workbenches", msg=json.dumps(result))
+        self.assertEqual(result["allKind"], "kyanbasu.workbenches", msg=json.dumps(result))
         self.assertEqual(result["workbenches"], 2, msg=json.dumps(result))
         self.assertEqual(result["noteCounts"][0]["name"], "Main", msg=json.dumps(result))
         self.assertEqual(result["noteCounts"][0]["notes"], 1, msg=json.dumps(result))
@@ -3971,12 +4087,14 @@ window.addEventListener('load', function(){
         window.TaskCanvasWorkbenches.switchTo('main');
         setTimeout(function(){
           var mainNotes = window.TaskCanvasNotes.notes().map(function(n){ return n.content; });
+          var reexportedKinds = window.TaskCanvasWorkbenches.exportData().workbenches.map(function(w){ return w.notes.kind; });
           var out = {
             imported: imported,
             active: window.TaskCanvasWorkbenches.active(),
             list: window.TaskCanvasWorkbenches.list(),
             deliveryNotes: deliveryNotes,
-            mainNotes: mainNotes
+            mainNotes: mainNotes,
+            reexportedKinds: reexportedKinds
           };
           var pre = document.createElement('pre');
           pre.id = 'e2e-out';
@@ -4003,6 +4121,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["deliveryNotes"], ["Imported delivery"], msg=json.dumps(result))
         self.assertEqual(result["active"]["id"], "main", msg=json.dumps(result))
         self.assertEqual(result["mainNotes"], ["Imported main"], msg=json.dumps(result))
+        self.assertEqual(result["reexportedKinds"], ["kyanbasu.notes", "kyanbasu.notes"], msg=json.dumps(result))
         self.assertEqual([w["name"] for w in result["list"]], ["Main", "Delivery"], msg=json.dumps(result))
 
     def test_canvas_navigator_renders_and_jumps_viewport(self):
@@ -4126,7 +4245,7 @@ window.addEventListener('load', function(){
         document.dispatchEvent(new MouseEvent('mouseup', {bubbles:true, cancelable:true, button:0}));
         setTimeout(function(){
           var moved = panel.getBoundingClientRect();
-          var saved = JSON.parse(localStorage.getItem('taskcanvas:navigator:v1') || '{}');
+          var saved = JSON.parse(localStorage.getItem('kyanbasu:navigator:v1') || '{}');
           panel.remove();
           window.TaskCanvasNavigator.render();
           setTimeout(function(){
@@ -4806,7 +4925,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["notes"], 3, msg=json.dumps(result))
         self.assertEqual(result["runtimeLinks"], ["a:b"], msg=json.dumps(result))
         self.assertEqual(result["persistedLinks"], ["a:b"], msg=json.dumps(result))
-        self.assertTrue(result["stableKey"].startswith("taskcanvas:workspace:v1:"), msg=json.dumps(result))
+        self.assertTrue(result["stableKey"].startswith("kyanbasu:workspace:v1:"), msg=json.dumps(result))
         self.assertEqual(result["migratedFrom"], "taskcanvas:notes:v1:empty", msg=json.dumps(result))
         self.assertEqual(result["repairToast"], "Repaired 3 invalid saved note links.", msg=json.dumps(result))
 

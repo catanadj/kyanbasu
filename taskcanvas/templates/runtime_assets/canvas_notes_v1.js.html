@@ -2167,7 +2167,7 @@
         try{
           var text = String(reader.result || '');
           var data = JSON.parse(text);
-          if (data && data.kind === 'taskcanvas.workbenches'){
+          if (data && (data.kind === 'kyanbasu.workbenches' || data.kind === 'taskcanvas.workbenches')){
             if (window.confirm && !window.confirm('Replace all workbenches with imported workbenches?')) return;
             if (!window.TaskCanvasWorkbenches || typeof window.TaskCanvasWorkbenches.importData !== 'function'){
               throw new Error('Workbench import is not available');
@@ -3742,7 +3742,7 @@
       };
     });
     return {
-      kind: 'taskcanvas.notes',
+      kind: 'kyanbasu.notes',
       version: 5,
       exportedAt: new Date().toISOString(),
       notes: notes.map(function(n){
@@ -3768,7 +3768,7 @@
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;
-    a.download = 'taskcanvas-notes.json';
+    a.download = 'kyanbasu-notes.json';
     document.body.appendChild(a);
     a.click();
     setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0);

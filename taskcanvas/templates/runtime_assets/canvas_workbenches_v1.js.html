@@ -24,6 +24,7 @@
     s.workbenches.forEach(function(w, i){
       if (!w.id) w.id = i === 0 ? 'main' : uid();
       if (!w.name) w.name = i === 0 ? 'Main' : ('Workbench ' + (i + 1));
+      if (w.notes) w.notes = normalizeNotesData(w.notes);
     });
     return s;
   }
@@ -81,7 +82,7 @@
     return {version:1, zoom:100, drawer_collapsed:true, nodes:{}, projects:[], tags:[]};
   }
   function emptyNotes(){
-    return {kind:'taskcanvas.notes', version:3, notes:[], links:[], buckets:{}};
+    return {kind:'kyanbasu.notes', version:3, notes:[], links:[], buckets:{}};
   }
   function workbenchCounts(w){
     var layout = w && w.layout;
@@ -107,12 +108,18 @@
   function cloneData(value, fallback){
     try{ return value ? JSON.parse(JSON.stringify(value)) : fallback; }catch(_){ return fallback; }
   }
+  function normalizeNotesData(value){
+    var data = cloneData(value, emptyNotes());
+    if (!data || !Array.isArray(data.notes)) data = emptyNotes();
+    data.kind = 'kyanbasu.notes';
+    return data;
+  }
   function exportData(){
     captureActive();
     saveNow();
     var s = load();
     return {
-      kind: 'taskcanvas.workbenches',
+      kind: 'kyanbasu.workbenches',
       version: 1,
       exportedAt: new Date().toISOString(),
       activeId: s.activeId,
@@ -126,7 +133,7 @@
           tasks: counts.tasks,
           notesCount: counts.notes,
           layout: cloneData(w.layout, emptyLayout()),
-          notes: cloneData(w.notes, emptyNotes())
+          notes: normalizeNotesData(w.notes)
         };
       })
     };
@@ -140,14 +147,15 @@
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;
-    a.download = 'taskcanvas-workbenches.json';
+    a.download = 'kyanbasu-workbenches.json';
     document.body.appendChild(a);
     a.click();
     setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 0);
   }
   function importData(data){
     if (typeof data === 'string') data = JSON.parse(data);
-    if (!data || data.kind !== 'taskcanvas.workbenches' || !Array.isArray(data.workbenches) || !data.workbenches.length){
+    var acceptedKind = data && (data.kind === 'kyanbasu.workbenches' || data.kind === 'taskcanvas.workbenches');
+    if (!acceptedKind || !Array.isArray(data.workbenches) || !data.workbenches.length){
       throw new Error('Import file must contain a workbenches array');
     }
     var ids = {};
@@ -160,7 +168,7 @@
         id: id,
         name: cleanName(w.name) || (i === 0 ? 'Main' : ('Workbench ' + (i + 1))),
         layout: cloneData(w.layout, emptyLayout()),
-        notes: cloneData(w.notes, emptyNotes()),
+        notes: normalizeNotesData(w.notes),
         savedAt: w.savedAt || Date.now()
       };
     });

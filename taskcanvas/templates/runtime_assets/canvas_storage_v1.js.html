@@ -1,8 +1,14 @@
 <script id="FEATURE_CANVAS_STORAGE_V1">
 (function(){
-  if (window.TaskCanvasStorage) return;
+  var existing = window.KyanbasuStorage || window.TaskCanvasStorage;
+  if (existing){
+    window.KyanbasuStorage = existing;
+    window.TaskCanvasStorage = existing;
+    return;
+  }
 
-  var PREFIX = 'taskcanvas:workspace:v1:';
+  var PREFIX = 'kyanbasu:workspace:v1:';
+  var LEGACY_PREFIX = 'taskcanvas:workspace:v1:';
   var SNAPSHOT_LIMIT = 5;
 
   function fnv1a(text){
@@ -30,6 +36,10 @@
     return PREFIX + workspaceId() + ':' + String(area || 'state');
   }
 
+  function legacyStorageKey(area){
+    return LEGACY_PREFIX + workspaceId() + ':' + String(area || 'state');
+  }
+
   function snapshotKey(area){
     return storageKey(area) + ':snapshots';
   }
@@ -44,18 +54,33 @@
     try{
       var current = localStorage.getItem(stableKey);
       if (current != null) return current;
-      if (!legacyKey) return null;
-      var legacy = localStorage.getItem(legacyKey);
-      if (legacy == null) return null;
-      localStorage.setItem(stableKey, legacy);
-      try{ localStorage.setItem(stableKey + ':migrated-from', String(legacyKey)); }catch(_){}
-      return legacy;
+      var candidates = [legacyStorageKey(area)];
+      if (legacyKey && candidates.indexOf(legacyKey) === -1) candidates.push(legacyKey);
+      for (var i=0; i<candidates.length; i++){
+        var sourceKey = candidates[i];
+        var legacy = localStorage.getItem(sourceKey);
+        if (legacy == null) continue;
+        localStorage.setItem(stableKey, legacy);
+        try{ localStorage.setItem(stableKey + ':migrated-from', String(sourceKey)); }catch(_){}
+        return legacy;
+      }
+      return null;
     }catch(_){ return null; }
   }
 
   function snapshots(area){
     try{
-      var rows = parse(localStorage.getItem(snapshotKey(area)), []);
+      var key = snapshotKey(area);
+      var raw = localStorage.getItem(key);
+      if (raw == null){
+        var legacyKey = legacyStorageKey(area) + ':snapshots';
+        raw = localStorage.getItem(legacyKey);
+        if (raw != null){
+          localStorage.setItem(key, raw);
+          try{ localStorage.setItem(key + ':migrated-from', legacyKey); }catch(_){}
+        }
+      }
+      var rows = parse(raw, []);
       return Array.isArray(rows) ? rows : [];
     }catch(_){ return []; }
   }
@@ -140,10 +165,11 @@
     return result.sort();
   }
 
-  window.TaskCanvasStorage = {
+  var api = {
     version: 1,
     workspaceId: workspaceId,
     key: storageKey,
+    legacyKey: legacyStorageKey,
     getRaw: getRaw,
     setRaw: setRaw,
     getJSON: getJSON,
@@ -154,5 +180,7 @@
     legacyWorkbenchesKey: legacyWorkbenchesKey,
     legacyCandidates: legacyCandidates
   };
+  window.KyanbasuStorage = api;
+  window.TaskCanvasStorage = api;
 })();
 </script>
