@@ -143,9 +143,9 @@ def _write_output_html(html: str) -> None:
         raise RuntimeError(f"Failed to write {OUT_HTML}: {e}") from e
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, prog: str = "kyanbasu") -> int:
     try:
-        args = parse_args(argv)
+        args = parse_args(argv, prog=prog)
     except ValueError as e:
         message = str(e)
         if message.startswith("--bg"):
@@ -197,3 +197,11 @@ def main(argv: list[str] | None = None) -> int:
     if not open_file(OUT_HTML):
         ewarn(f"Could not auto-open {OUT_HTML}. Open it manually in your browser.")
     return 0
+
+
+def kyanbasu_main(argv: list[str] | None = None) -> int:
+    return main(argv, prog="kyanbasu")
+
+
+def taskcanvas_main(argv: list[str] | None = None) -> int:
+    return main(argv, prog="taskcanvas")

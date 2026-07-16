@@ -28,10 +28,11 @@ Homepage = "https://github.com/catanadj/taskwarrior-canvas"
 Issues = "https://github.com/catanadj/taskwarrior-canvas/issues"
 
 [project.scripts]
-taskcanvas = "taskcanvas.app:main"
+kyanbasu = "kyanbasu:main"
+taskcanvas = "taskcanvas.app:taskcanvas_main"
 
 [tool.setuptools]
-packages = ["taskcanvas"]
+packages = ["kyanbasu", "taskcanvas"]
 include-package-data = true
 
 [tool.setuptools.package-data]

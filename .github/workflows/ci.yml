@@ -6,7 +6,10 @@ on:
       - main
     paths:
       - ".github/workflows/ci.yml"
+      - "Kyanbasu.py"
       - "TaskCanvas.py"
+      - "kyanbasu/**"
+      - "pyproject.toml"
       - "taskcanvas/**"
       - "tests/**"
       - "scripts/**"
@@ -15,7 +18,10 @@ on:
       - main
     paths:
       - ".github/workflows/ci.yml"
+      - "Kyanbasu.py"
       - "TaskCanvas.py"
+      - "kyanbasu/**"
+      - "pyproject.toml"
       - "taskcanvas/**"
       - "tests/**"
       - "scripts/**"
@@ -51,7 +57,7 @@ jobs:
         run: python --version
 
       - name: Compile
-        run: python -m compileall -q TaskCanvas.py taskcanvas tests
+        run: python -m compileall -q Kyanbasu.py TaskCanvas.py kyanbasu taskcanvas tests
 
       - name: Run unit tests
         run: python -m unittest discover -s tests -v

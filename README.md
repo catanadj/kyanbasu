@@ -10,7 +10,7 @@ Kyanbasu brings Taskwarrior tasks and structured notes onto one spatial canvas. 
 
 Task changes become plain `task` commands that you can review, edit, and copy back into your terminal. The generated HTML remains local and never writes to Taskwarrior directly.
 
-> Kyanbasu was formerly named TaskCanvas. The `taskcanvas` command and `TaskCanvas.html` output filename remain supported for compatibility.
+> Kyanbasu was formerly named TaskCanvas. The `taskcanvas` command, `TaskCanvas.py` script, and `TaskCanvas.html` output filename remain supported for compatibility.
 
 ---
 
@@ -48,9 +48,9 @@ cd taskwarrior-canvas
 python3 -m pip install -e .
 
 # 2. generate the board
-taskcanvas                    # all pending tasks
-taskcanvas project:Work       # place Work initially
-taskcanvas --filter "due.before:today"  # any filter string
+kyanbasu                    # all pending tasks
+kyanbasu project:Work       # place Work initially
+kyanbasu --filter "due.before:today"  # any filter string
 
 # 3. your browser opens; drag, connect, edit
 # 4. hit “Copy commands” and paste in terminal
@@ -160,8 +160,11 @@ taskcanvas --filter "due.before:today"  # any filter string
 
 ## Code layout (for contributors)
 
+- `Kyanbasu.py`: preferred wrapper for direct script execution.
+- `kyanbasu/`: public package facade and `python -m kyanbasu` entry point.
 - `TaskCanvas.py`: compatibility wrapper for direct script execution.
-- `taskcanvas/app.py`: app orchestrator (HTML assembly, feature injection, runtime flow).
+- `taskcanvas/`: current implementation package, retained to preserve imports and installed data paths.
+- `taskcanvas/app.py`: app orchestrator and primary/compatibility CLI entry points.
 - `taskcanvas/task_io.py`: Taskwarrior export execution and parsing.
 - `taskcanvas/payload.py`: task graph payload construction.
 - `taskcanvas/cli.py`: CLI argument extraction helpers (`--filter`, `--bg`, `--bg-opacity`).
@@ -175,6 +178,22 @@ taskcanvas --filter "due.before:today"  # any filter string
 
 - Set `TASKCANVAS_LOG_LEVEL` to control runtime logs (`DEBUG`, `INFO`, `WARNING`, `ERROR`).
 - Default log level is `INFO`.
+
+## Command compatibility
+
+`kyanbasu` is the preferred command. Existing launch methods remain equivalent:
+
+```bash
+kyanbasu              # preferred installed command
+python3 -m kyanbasu   # preferred module entry point
+python3 Kyanbasu.py   # preferred source-tree wrapper
+
+taskcanvas             # compatibility command
+python3 -m taskcanvas  # compatibility module entry point
+python3 TaskCanvas.py  # compatibility source-tree wrapper
+```
+
+Both commands accept the same arguments and generate the same compatible `TaskCanvas.html` workspace.
 
 ---
 
@@ -195,7 +214,7 @@ taskcanvas --filter "due.before:today"  # any filter string
 You can pass project names as positional arguments; tasks from those projects will be initially placed on the canvas:
 
 ```
-taskcanvas Work Home side.hustle
+kyanbasu Work Home side.hustle
 ```
 
 The rest of your pending tasks remain available in the left-hand drawer for drag-and-drop.
@@ -205,7 +224,7 @@ The rest of your pending tasks remain available in the left-hand drawer for drag
 Use -f / --filter to provide any Taskwarrior filter expression; matching tasks will be auto-placed:
 
 ```
-taskcanvas --filter 'due.before:2026-01-01 status:pending'
+kyanbasu --filter 'due.before:2026-01-01 status:pending'
 ```
 
 The filter is only used to choose which tasks to pre-place; **all** pending tasks still go into the drawer/search payload.
@@ -213,7 +232,7 @@ The filter is only used to choose which tasks to pre-place; **all** pending task
 You can combine projects and a filter:
 
 ```
-taskcanvas -f 'project:Work +P1' Home 'life.admin'
+kyanbasu -f 'project:Work +P1' Home 'life.admin'
 ```
 
 ### Interactive project selector
@@ -221,7 +240,7 @@ taskcanvas -f 'project:Work +P1' Home 'life.admin'
 If you don’t feel like typing project names, use the selector:
 
 ```
-taskcanvas --selector
+kyanbasu --selector
 ```
 
 This starts a curses TUI listing all projects (with counts). Use:
@@ -243,8 +262,8 @@ If curses is not available, it falls back to a numbered prompt.
 To use a specific background image:
 
 ```
-taskcanvas --bg /path/to/image.jpg
-taskcanvas --bg=mywall.png --bg-opacity=0.12
+kyanbasu --bg /path/to/image.jpg
+kyanbasu --bg=mywall.png --bg-opacity=0.12
 ```
 
 Kyanbasu will copy the image next to `TaskCanvas.html` in the same directory and add a background overlay with the requested opacity (default approximately 0.18).

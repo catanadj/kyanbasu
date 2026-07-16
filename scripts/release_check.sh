@@ -2,7 +2,7 @@
 set -euo pipefail
 
 echo "[release-check] Running compile checks..."
-python3 -m compileall -q TaskCanvas.py taskcanvas tests
+python3 -m compileall -q Kyanbasu.py TaskCanvas.py kyanbasu taskcanvas tests
 
 echo "[release-check] Running unit tests..."
 python3 -m unittest discover -s tests -v

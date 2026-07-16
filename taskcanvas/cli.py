@@ -3,7 +3,7 @@ import argparse
 from taskcanvas import __version__
 
 
-class _TaskCanvasParser(argparse.ArgumentParser):
+class _KyanbasuParser(argparse.ArgumentParser):
     def error(self, message):
         if "argument -f/--filter: expected one argument" in message:
             raise ValueError("--filter requires a value")
@@ -14,9 +14,9 @@ class _TaskCanvasParser(argparse.ArgumentParser):
         raise ValueError(message)
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = _TaskCanvasParser(
-        prog="taskcanvas",
+def build_parser(*, prog: str = "kyanbasu") -> argparse.ArgumentParser:
+    parser = _KyanbasuParser(
+        prog=prog,
         description="Generate a Kyanbasu visual planning workspace for Taskwarrior.",
     )
     parser.add_argument(
@@ -45,13 +45,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--version",
         action="version",
-        version=f"taskcanvas {__version__}",
+        version=f"{'Kyanbasu' if prog == 'kyanbasu' else prog} {__version__}",
     )
     return parser
 
 
-def parse_args(argv=None):
-    return build_parser().parse_args(argv)
+def parse_args(argv=None, *, prog: str = "kyanbasu"):
+    return build_parser(prog=prog).parse_args(argv)
 
 
 def _extract_filter_arg(argv):

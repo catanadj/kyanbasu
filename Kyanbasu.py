@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 from taskcanvas import app
 
 
 def main(argv=None):
-    return app.taskcanvas_main(argv)
+    return app.kyanbasu_main(argv)
 
 
 if __name__ == "__main__":

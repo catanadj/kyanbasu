@@ -1,3 +1,5 @@
+import contextlib
+import io
 import unittest
 
 from taskcanvas.cli import _extract_bg_args, _extract_filter_arg, build_parser, parse_args
@@ -59,15 +61,29 @@ class TestCliHelpers(unittest.TestCase):
             parse_args(["--help"])
         self.assertEqual(cm.exception.code, 0)
 
-    def test_help_uses_kyanbasu_identity_and_compatible_command(self):
+    def test_help_uses_kyanbasu_identity_and_primary_command(self):
         help_text = build_parser().format_help()
+        self.assertIn("usage: kyanbasu", help_text)
+        self.assertIn("Kyanbasu visual planning workspace", help_text)
+
+    def test_legacy_help_retains_taskcanvas_command(self):
+        help_text = build_parser(prog="taskcanvas").format_help()
         self.assertIn("usage: taskcanvas", help_text)
         self.assertIn("Kyanbasu visual planning workspace", help_text)
 
     def test_parse_args_version_exits_zero(self):
-        with self.assertRaises(SystemExit) as cm:
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), self.assertRaises(SystemExit) as cm:
             parse_args(["--version"])
         self.assertEqual(cm.exception.code, 0)
+        self.assertEqual(output.getvalue().strip(), "Kyanbasu 0.1.0")
+
+    def test_legacy_version_output_remains_compatible(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), self.assertRaises(SystemExit) as cm:
+            parse_args(["--version"], prog="taskcanvas")
+        self.assertEqual(cm.exception.code, 0)
+        self.assertEqual(output.getvalue().strip(), "taskcanvas 0.1.0")
 
 
 if __name__ == "__main__":
