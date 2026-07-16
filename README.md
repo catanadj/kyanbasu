@@ -1,6 +1,6 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/catanadj/kyanbasu/ci.yml?branch=main&label=CI)](https://github.com/catanadj/kyanbasu/actions/workflows/ci.yml)
 
-![Kyanbasu workspace](https://github.com/user-attachments/assets/dd74d092-0f3e-4416-a6ec-09f9cbfc6504)
+![Kyanbasu branded thinking canvas](https://raw.githubusercontent.com/catanadj/kyanbasu/main/docs/assets/kyanbasu-banner.jpg)
 
 # Kyanbasu
 
