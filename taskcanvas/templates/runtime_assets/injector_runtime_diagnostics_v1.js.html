@@ -223,7 +223,7 @@
     }
     diag.events.push(entry);
     if (diag.events.length > 50) diag.events.shift();
-    try{ console.warn('[TaskCanvas][diag]', entry.kind + ':', entry.msg, entry); }catch(_){}
+    try{ console.warn('[Kyanbasu][diag]', entry.kind + ':', entry.msg, entry); }catch(_){}
   }
 
   window.addEventListener('error', function(ev){
@@ -259,11 +259,11 @@
   window.TaskCanvasPerfReport = function(){
     var snap = window.TaskCanvasDiagnostics();
     try{
-      console.log('[TaskCanvas][perf] uptimeMs', snap.perfSummary.uptimeMs);
+      console.log('[Kyanbasu][perf] uptimeMs', snap.perfSummary.uptimeMs);
       console.table(snap.perfSummary.topFunctions);
       console.table(snap.perfSummary.topTimers);
       console.table(snap.perfSummary.observers.top);
-      console.log('[TaskCanvas][perf] raf', snap.perfSummary.raf, 'observers', snap.perfSummary.observers);
+      console.log('[Kyanbasu][perf] raf', snap.perfSummary.raf, 'observers', snap.perfSummary.observers);
     }catch(_){}
     return snap;
   };

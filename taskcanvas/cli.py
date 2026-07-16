@@ -17,7 +17,7 @@ class _TaskCanvasParser(argparse.ArgumentParser):
 def build_parser() -> argparse.ArgumentParser:
     parser = _TaskCanvasParser(
         prog="taskcanvas",
-        description="Generate a visual Taskwarrior dependency canvas.",
+        description="Generate a Kyanbasu visual planning workspace for Taskwarrior.",
     )
     parser.add_argument(
         "projects",
@@ -36,7 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--bg",
-        help="Background image to copy next to TaskCanvas.html and use behind the canvas.",
+        help="Background image to copy next to the generated workspace and use behind the canvas.",
     )
     parser.add_argument(
         "--bg-opacity",

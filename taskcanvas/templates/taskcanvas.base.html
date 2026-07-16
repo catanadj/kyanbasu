@@ -4449,7 +4449,7 @@ projectAreas = new Map(); tagAreas = new Map(); // EMPTY canvas
 
     updateConsole();
     queueInspectorRender(0);
-  } catch (e) { console.log('[TaskCanvas] initFromDATA error', e); }
+  } catch (e) { console.log('[Kyanbasu] initFromDATA error', e); }
 }
 document.addEventListener('twdata', function(){ initFromDATA(); }, { once:true });
 window.addEventListener('load', function(){ if (window.DATA_READY) initFromDATA(); }, { once:true });

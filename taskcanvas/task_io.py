@@ -200,9 +200,9 @@ def fetch_tasks(
 
         if not rows and log_fn:
             if rc != 0:
-                log_fn(f"[TaskCanvas] task export failed (rc={rc}): {(err or '').strip()[:220]}")
+                log_fn(f"Task export failed (rc={rc}): {(err or '').strip()[:220]}")
             if rc2 != 0:
-                log_fn(f"[TaskCanvas] fallback task export failed (rc={rc2}): {(err2 or '').strip()[:220]}")
+                log_fn(f"Fallback task export failed (rc={rc2}): {(err2 or '').strip()[:220]}")
         if not rows and strict_errors and rc != 0 and rc2 != 0:
             raise RuntimeError("Taskwarrior export failed in both primary and fallback modes.")
 
@@ -225,10 +225,10 @@ def fetch_tasks(
 
     tasks.sort(key=lambda t: (t["project"], t["desc"]))
 
-    msg = f"[TaskCanvas] Loaded tasks: {len(tasks)} (filter: {filter_str!r})"
+    msg = f"Loaded tasks: {len(tasks)} (filter: {filter_str!r})"
     if log_fn:
         log_fn(msg)
         if widened:
-            log_fn(f"[TaskCanvas] Short ID collision guard widened {widened} task id(s) beyond 8 chars.")
+            log_fn(f"Short ID collision guard widened {widened} task id(s) beyond 8 chars.")
 
     return tasks

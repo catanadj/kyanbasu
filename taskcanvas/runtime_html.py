@@ -112,9 +112,9 @@ def build_runtime_html(
     html = inject_energy_arrows(html)
 
     if "<!-- INLINE_PAYLOAD_HERE -->" in html:
-        log_fn("[TaskCanvas] ERROR: placeholder was not replaced in HTML")
+        log_fn("ERROR: placeholder was not replaced in HTML")
     else:
-        log_fn(f"[TaskCanvas] Embedded tasks: {tasks_count}")
+        log_fn(f"Embedded tasks: {tasks_count}")
 
     html = inject_wire_deps_as_main(html)
     html = _append_remove_mode(html)

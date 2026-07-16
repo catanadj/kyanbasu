@@ -1,6 +1,6 @@
 import unittest
 
-from taskcanvas.cli import _extract_bg_args, _extract_filter_arg, parse_args
+from taskcanvas.cli import _extract_bg_args, _extract_filter_arg, build_parser, parse_args
 
 
 class TestCliHelpers(unittest.TestCase):
@@ -58,6 +58,11 @@ class TestCliHelpers(unittest.TestCase):
         with self.assertRaises(SystemExit) as cm:
             parse_args(["--help"])
         self.assertEqual(cm.exception.code, 0)
+
+    def test_help_uses_kyanbasu_identity_and_compatible_command(self):
+        help_text = build_parser().format_help()
+        self.assertIn("usage: taskcanvas", help_text)
+        self.assertIn("Kyanbasu visual planning workspace", help_text)
 
     def test_parse_args_version_exits_zero(self):
         with self.assertRaises(SystemExit) as cm:

@@ -2,39 +2,41 @@
 
 ![canvas](https://github.com/user-attachments/assets/dd74d092-0f3e-4416-a6ec-09f9cbfc6504)
 
-# TaskCanvas
+# Kyanbasu
 
-A visual dependency **canvas** and command generator for Taskwarrior.
+A visual planning workspace and command generator for Taskwarrior.
 
-TaskCanvas loads your pending Taskwarrior tasks, builds a dependency graph, and opens a single HTML file where you can drag tasks around, wire dependencies, and stage changes. 
+Kyanbasu brings Taskwarrior tasks and structured notes onto one spatial canvas. Organize work across multiple workbenches, build mind maps, inspect dependency chains, and stage task changes without giving the browser direct access to your Taskwarrior data.
 
-Every action becomes plain task commands that you copy-paste back into your terminal  -  the HTML never touches your Taskwarrior data directly.
+Task changes become plain `task` commands that you can review, edit, and copy back into your terminal. The generated HTML remains local and never writes to Taskwarrior directly.
+
+> Kyanbasu was formerly named TaskCanvas. The `taskcanvas` command and `TaskCanvas.html` output filename remain supported for compatibility.
 
 ---
 
 ## What it does
 
-TaskCanvas is a Python 3 app (`taskcanvas/` + packaged templates) that:
+Kyanbasu is a Python 3 app (`taskcanvas/` plus packaged templates) that:
 
 - Calls task status:pending export (or a custom filter) to fetch your tasks.
 
-- Builds a JSON payload with tasks (uuid, short id, description, project, tags, dependencies, due) and a dependency edge list.
+- Builds a local workspace payload with tasks, dependencies, and initial placement information.
 
-- Injects that payload into a self-contained HTML/JS UI (TaskCanvas.html) in the current working directory.
+- Injects that payload into a self-contained HTML/JS workspace (`TaskCanvas.html`) in the current working directory.
 
 - Opens the HTML in your default browser (Termux, Linux, macOS, Windows are handled).
 
 Inside the browser you get an interactive canvas where you can:
 
-- Drag projects, tags, and tasks around.
+- Arrange projects, tasks, note buckets, and mind-map branches.
 
-- Draw or remove dependency lines.
+- Draw task dependencies and annotated relationships between notes.
 
-- Stage Done/Delete/Modify actions via hover buttons.
+- Stage, review, edit, and remove Taskwarrior commands before copying them.
 
-- Add new tasks and projects.
+- Search, focus, collapse, import, and export structured notes.
 
-- Copy all staged changes as Taskwarrior commands.
+- Separate areas of work into independent workbenches.
 
 ---
 ## 30-second start
@@ -56,53 +58,65 @@ taskcanvas --filter "due.before:today"  # any filter string
 
 ## Features
 
-Visual canvas for Taskwarrior
+### Tasks and projects
 
 - All pending tasks are loaded into a searchable drawer and a canvas.
 
-- Tasks are displayed as draggable cards with a short ID, description, project and tags.
+- Tasks and projects are draggable, selectable, and visually distinct from planning notes.
 
-- Dependencies are visualised as SVG lines with animated “energy” pulses flowing along the chain.
+- Static directional dependency edges show blocking relationships without continuous animation or idle CPU work.
 
-Builder & Viewer tabs
+### Thinking canvas
 
-- **Builder**: full editing canvas where you place tasks, project/tag “bubbles”, and wire dependencies.
+- Notes form editable mind maps with keyboard-first sibling and child creation.
 
-- **Viewer**: a compact read-only overview of dependency chains (grouped by project) for quick inspection. (Feature is not complete.)
+- Buckets group related notes and can move their contents as one unit.
 
-Command console (copy-only)
+- Note identifiers, search, focus mode, editable outliner, colours, multi-selection, and import/export support larger maps.
+
+- Relationship annotations add a label or question directly to a note link.
+
+- Multiple workbenches separate contexts while keeping them in one generated workspace.
+
+### Builder & Viewer tabs
+
+- **Builder**: the full spatial workspace for arranging tasks, projects, notes, buckets, and links.
+
+- **Viewer**: a compact task overview and notes outliner, sortable by note ID or bucket.
+
+### Command console and review
 
 - Every change you stage becomes a task command (modify/add/done/delete/depends +/-) in a console area.
 
 - Commands are de-duplicated and normalised so each final line is safe to paste.
 
-- A dedicated **dependency console overlay** is available, with a keyboard shortcut wired via Ctrl+Shift+D.
+- Removed commands stay removed when the remaining command set is copied.
 
-Hover actions & staging
+### Hover actions and staging
 
-- Hovering a task card reveals small buttons (e.g. mark Done / Delete / Modify), implemented via a nodeActions overlay.
+- Hovering a task card reveals focused Done, Delete, and Modify actions.
 
 - Staged tasks are visually highlighted (green for Done, red for Delete) with line-through titles.
 
 - Undo/redo is available for staged interactions and canvas edits via `Ctrl/Cmd+Z` (undo), `Ctrl+Y` or `Ctrl/Cmd+Shift+Z` (redo).
 
-Dependencies that _feel_ alive
+### Clear dependency direction
 
-- Existing dependency edges are rendered as smooth cubic curves with arrowheads; staged ones use animated dashed strokes.
+- Dependency edges use smooth static curves, clear endpoint arrows, and directional markers.
 
-- Pulses running along the edges help you see direction and chain flow.
+- Existing and staged relationships remain visually distinguishable without animated strokes.
 
-- Staged vs existing edges are colour-split (blue vs pink/red) so it’s obvious what’s already in Taskwarrior vs what you’re planning.
+- Dragging tasks keeps their edges attached and updates the geometry only when needed.
 
-- A robust “follow edges on move” patch keeps lines glued to tasks while you drag them around.
+- Static rendering keeps the idle canvas responsive on larger workspaces.
 
-Actionable beacons & due badges
+### Actionable beacons and due badges
 
 - Tasks that participate in dependency chains but have no remaining prerequisites get a subtle “actionable” beacon, helping you see where you can actually start.
 
 - Due dates (when present) are shown as a small badge with visual states for overdue / soon / future.
 
-Multiline add & project creation
+### Multiline add and project creation
 
 - Floating “plus” menu (FAB) for adding new tasks.
 
@@ -110,7 +124,7 @@ Multiline add & project creation
 
 - The FAB menu is patched so you can also create **new projects** from the UI (“Add new project” button / modal).
 
-Project selector (terminal) & auto-placement
+### Project selector and auto-placement
 
 - Optional curses-based project selector (--selector) with filtering, select all/none, paging, and a fallback text prompt if curses fails.
 
@@ -118,15 +132,15 @@ Project selector (terminal) & auto-placement
 
 - Filtered tasks (e.g. project:Work +P1) are automatically dropped onto the canvas while all other tasks remain available in the drawer.
 
-Custom background
+### Custom background
 
-- You can give TaskCanvas a custom background image via --bg and --bg-opacity.
+- You can give Kyanbasu a custom background image via `--bg` and `--bg-opacity`.
 
 - If no flag is provided, it auto-searches for files like taskcanvas-bg.jpg/png/webp in the package, current working directory, or demo directory and uses them as a body overlay.
 
-Termux & desktop friendly
+### Termux and desktop friendly
 
-- Output HTML is always TaskCanvas.html in the current directory.
+- For compatibility, output HTML is still named `TaskCanvas.html` in the current directory.
 
 - It is opened via termux-open on Termux, xdg-open on Linux, open on macOS, and os.startfile on Windows.
 
@@ -233,7 +247,7 @@ taskcanvas --bg /path/to/image.jpg
 taskcanvas --bg=mywall.png --bg-opacity=0.12
 ```
 
-TaskCanvas will copy the image next to TaskCanvas.html (same directory) and inject a body::before overlay with the given opacity (default ≈ 0.18).
+Kyanbasu will copy the image next to `TaskCanvas.html` in the same directory and add a background overlay with the requested opacity (default approximately 0.18).
 
 Without --bg, it tries to locate a file named like taskcanvas-bg.*, canvas-bg.*, background.* or bg.* in the package directory, current working directory, or demo directory.
 
@@ -247,12 +261,12 @@ Without --bg, it tries to locate a file named like taskcanvas-bg.*, canvas-bg.*,
 
 - The curses selector does not work well on some Windows terminals; in that case the fallback prompt is used.
 
-- The UI relies on modern browser features (MutationObserver, SVG path length, etc.); very old browsers may not render animations correctly.
+- The UI relies on modern browser features such as `MutationObserver`, SVG, and `localStorage`; very old browsers may not render or persist the workspace correctly.
 
 - If you want to share this project with another user, share the project folder (script + templates), not your generated HTML file, because it embeds your pending tasks.
 
 ## Support
 
-If you find this tool helpful, any support will be greatly apreciated.
+If you find this tool helpful, any support will be greatly appreciated.
 
 You can do so [here](https://buymeacoffee.com/catanadj). Thank you.

@@ -19,7 +19,7 @@ OUT_HTML = Path.cwd() / "TaskCanvas.html"
 def _build_logger():
     level_name = os.environ.get("TASKCANVAS_LOG_LEVEL", "INFO").upper()
     level = getattr(logging, level_name, logging.INFO)
-    logger = logging.getLogger("TaskCanvas")
+    logger = logging.getLogger("Kyanbasu")
     if not logger.handlers:
         handler = logging.StreamHandler(sys.stderr)
         handler.setFormatter(logging.Formatter("[%(name)s][%(levelname)s] %(message)s"))
@@ -129,10 +129,10 @@ def _render_html(tasks_all: list[dict], payload: dict) -> str:
 def _apply_background(html: str, bg_arg: str | None, bg_opacity: str | None) -> str:
     bg_path = _find_bg_file(bg_arg, base_dir=BASE_DIR, include_demo=bool(bg_arg))
     if bg_path:
-        print(f"[TaskCanvas] Using background: {bg_path.name}")
+        eprint(f"Using background: {bg_path.name}")
         return inject_custom_background(html, bg_path, OUT_HTML, eprint, bg_opacity)
 
-    eprint("[TaskCanvas] No custom bg found. Put 'taskcanvas-bg.(jpg|png|webp|svg)' next to the script or pass --bg=FILE.")
+    eprint("No custom bg found. Put 'taskcanvas-bg.(jpg|png|webp|svg)' next to the script or pass --bg=FILE.")
     return html
 
 

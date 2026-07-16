@@ -179,7 +179,8 @@ class TestTaskIO(unittest.TestCase):
 
         self.assertEqual(tasks, [])
         self.assertTrue(any("task export failed" in m for m in logs))
-        self.assertTrue(any("fallback task export failed" in m for m in logs))
+        self.assertTrue(any("fallback task export failed" in m.lower() for m in logs))
+        self.assertTrue(all("[TaskCanvas]" not in m for m in logs))
 
     @patch("taskcanvas.task_io.run_quiet")
     def test_fetch_tasks_raises_when_strict_and_both_exports_fail(self, mock_run_quiet):

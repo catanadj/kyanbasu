@@ -237,10 +237,10 @@ def inject_custom_background(
                 out_dir.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(str(img_path), str(out_img))
                 if log_fn:
-                    log_fn(f"[TaskCanvas] Copied bg → {out_img.name}")
+                    log_fn(f"Copied background to {out_img.name}")
             except Exception as e:
                 if log_fn:
-                    log_fn(f"[TaskCanvas] Copy bg failed: {e}; will still reference original name.")
+                    log_fn(f"Background copy failed: {e}; will still reference original name.")
         op = opacity if (opacity and opacity.strip()) else "0.18"
         css = f"""
 <style id="FEATURE_CUSTOM_BG_V1">
@@ -258,7 +258,7 @@ def inject_custom_background(
         return inject_head(html, css + "\n")
     except Exception as e:
         if log_fn:
-            log_fn(f"[TaskCanvas] custom bg inject failed: {e}")
+            log_fn(f"Custom background injection failed: {e}")
         return html
 
 

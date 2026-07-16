@@ -174,7 +174,7 @@ class TestInjectors(unittest.TestCase):
             self.assertTrue(copied.exists())
             self.assertIn("FEATURE_CUSTOM_BG_V1", out)
             self.assertIn("opacity:0.33", out)
-            self.assertTrue(any("Copied bg" in line for line in logs))
+            self.assertTrue(any("Copied background" in line for line in logs))
 
 
 if __name__ == "__main__":
