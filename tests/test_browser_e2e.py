@@ -3271,6 +3271,64 @@ window.addEventListener('load', function(){
         self.assertIn("task add 'Build branch with details'", result["lines"])
         self.assertFalse(result["ignorePresent"])
 
+    def test_shell_uses_kyanbasu_brand_wordmark(self):
+        base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_KYANBASU_BRAND_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var title = document.querySelector('.shellTitle');
+      var kana = document.querySelector('.shellKana');
+      var eyebrow = document.querySelector('.shellEyebrow');
+      var subtitle = document.querySelector('.shellSubtitle');
+      document.getElementById('toggleHeaderTools').click();
+      var out = {
+        documentTitle:document.title,
+        applicationName:(document.querySelector('meta[name="application-name"]') || {}).content || '',
+        description:(document.querySelector('meta[name="description"]') || {}).content || '',
+        title:title && title.textContent,
+        kana:kana && kana.textContent,
+        kanaLang:kana && kana.getAttribute('lang'),
+        kanaDecorative:kana && kana.getAttribute('aria-hidden'),
+        eyebrow:eyebrow && eyebrow.textContent,
+        subtitle:subtitle && subtitle.textContent,
+        compactWordmarkVisible:getComputedStyle(document.querySelector('.shellWordmark')).display !== 'none',
+        oldVisibleName:Array.from(document.querySelectorAll('.shellBrand *')).some(function(el){ return el.textContent.trim() === 'TaskCanvas'; })
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out';
+      pre.textContent = JSON.stringify(out);
+      document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["documentTitle"], "Kyanbasu — Visual planning for Taskwarrior", msg=json.dumps(result))
+        self.assertEqual(result["applicationName"], "Kyanbasu", msg=json.dumps(result))
+        self.assertIn("visual planning workspace", result["description"].lower(), msg=json.dumps(result))
+        self.assertEqual(result["title"], "Kyanbasu", msg=json.dumps(result))
+        self.assertEqual(result["kana"], "キャンバス", msg=json.dumps(result))
+        self.assertEqual(result["kanaLang"], "ja", msg=json.dumps(result))
+        self.assertEqual(result["kanaDecorative"], "true", msg=json.dumps(result))
+        self.assertEqual(result["eyebrow"], "Visual planning for Taskwarrior", msg=json.dumps(result))
+        self.assertIn("Stage dependencies", result["subtitle"], msg=json.dumps(result))
+        self.assertTrue(result["compactWordmarkVisible"], msg=json.dumps(result))
+        self.assertFalse(result["oldVisibleName"], msg=json.dumps(result))
+
     def test_top_toolbar_groups_note_and_command_actions(self):
         base_html = Path("taskcanvas/templates/taskcanvas.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Taskwarrior — Master Life... One Task At A Time</title>
+<meta name="application-name" content="Kyanbasu"/>
+<meta name="description" content="Kyanbasu is a visual planning workspace for Taskwarrior."/>
+<title>Kyanbasu — Visual planning for Taskwarrior</title>
 <style>
   :root{
     --bg:#08111d;
@@ -114,6 +116,19 @@
   .shellTitle{
     font:700 22px/1 var(--font-display);
     letter-spacing:.02em;
+  }
+  .shellWordmark{
+    display:flex;
+    align-items:baseline;
+    gap:8px;
+    min-width:0;
+  }
+  .shellKana{
+    color:rgba(97,208,255,.78);
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:.08em;
+    white-space:nowrap;
   }
   .shellSubtitle{
     color:var(--muted);
@@ -1531,8 +1546,8 @@
     <div class="shellIntro">
       <div class="shellIntroTop">
         <div class="shellBrand">
-          <div class="shellEyebrow">Taskwarrior Visual Planner</div>
-          <div class="shellTitle">TaskCanvas</div>
+          <div class="shellEyebrow">Visual planning for Taskwarrior</div>
+          <div class="shellWordmark"><div class="shellTitle">Kyanbasu</div><div class="shellKana" lang="ja" aria-hidden="true">キャンバス</div></div>
           <div class="shellSubtitle">Stage dependencies and task changes without touching live data.</div>
         </div>
         <div class="shellModeControls">
