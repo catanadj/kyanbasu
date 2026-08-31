@@ -1133,6 +1133,88 @@ window.addEventListener('load', function(){
         self.assertEqual(result["firstOrderLabel"], "Add 2nd-order consequence", msg=json.dumps(result))
         self.assertEqual(result["thirdOrderLabel"], "Add parallel 3rd-order consequence", msg=json.dumps(result))
 
+    def test_canvas_decision_action_adapter_advances_real_branches(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_DECISION_ACTION_ADAPTER_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var api = window.KyanbasuNotes;
+      if (!api || typeof api.decisionActions !== 'function' || typeof api.executeDecisionAction !== 'function'){
+        throw new Error('Decision action adapter missing');
+      }
+      var events = [];
+      document.addEventListener('kyanbasu:note-state', function(event){ events.push(event.detail || {}); });
+      var created = api.createDecisionMap(180, 300, 'Decisions');
+      api.setContent(created.root.id, 'Decision: Choose a planning workflow\\nTarget outcome: Make decisions with less friction\\nSuccess means: Used consistently for one week\\nDecision needed by: Friday\\nReassess by: Next Friday');
+      var option = created.options[0];
+      api.setContent(option.id, 'Option: Use contextual guidance');
+
+      var initialContext = api.decisionActionContext(option.id);
+      var initial = api.decisionActions(option.id);
+      var firstResult = api.executeDecisionAction(initial.recommended.id, option.id);
+      var first = api.notes().filter(function(note){ return note.id === firstResult.noteId; })[0];
+      var firstActions = api.decisionActions(first.id);
+      var secondResult = api.executeDecisionAction(firstActions.recommended.id, first.id);
+      var second = api.notes().filter(function(note){ return note.id === secondResult.noteId; })[0];
+      var secondActions = api.decisionActions(second.id);
+      var thirdResult = api.executeDecisionAction(secondActions.recommended.id, second.id);
+      var third = api.notes().filter(function(note){ return note.id === thirdResult.noteId; })[0];
+      var beforeStale = api.notes().length;
+      var stale = api.executeDecisionAction('add-next-consequence', third.id);
+      var review = api.reviewContext(option.id);
+      var out = {
+        initialType:initialContext && initialContext.type,
+        recommendations:[initial.recommended.id, firstActions.recommended.id, secondActions.recommended.id],
+        results:[firstResult.ok, secondResult.ok, thirdResult.ok],
+        orders:[first.analysis && first.analysis.order, second.analysis && second.analysis.order, third.analysis && third.analysis.order],
+        primary:api.primaryNote(),
+        expectedPrimary:third.id,
+        eventCount:events.length,
+        eventShape:events.every(function(event){ return typeof event.selectedId === 'string' && typeof event.reason === 'string'; }),
+        staleOk:stale.ok,
+        staleReason:stale.reason,
+        staleCreated:api.notes().length !== beforeStale,
+        reviewDecision:review && review.decisionId,
+        reviewOption:review && review.proposedOptionId,
+        expectedDecision:created.root.id,
+        expectedOption:option.id
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out';
+      pre.textContent = JSON.stringify(out);
+      document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 800);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["initialType"], "option", msg=json.dumps(result))
+        self.assertEqual(result["recommendations"], ["explore-consequences", "add-next-consequence", "add-next-consequence"], msg=json.dumps(result))
+        self.assertEqual(result["results"], [True, True, True], msg=json.dumps(result))
+        self.assertEqual(result["orders"], [1, 2, 3], msg=json.dumps(result))
+        self.assertEqual(result["primary"], result["expectedPrimary"], msg=json.dumps(result))
+        self.assertGreaterEqual(result["eventCount"], 3, msg=json.dumps(result))
+        self.assertTrue(result["eventShape"], msg=json.dumps(result))
+        self.assertFalse(result["staleOk"], msg=json.dumps(result))
+        self.assertTrue(result["staleReason"], msg=json.dumps(result))
+        self.assertFalse(result["staleCreated"], msg=json.dumps(result))
+        self.assertEqual(result["reviewDecision"], result["expectedDecision"], msg=json.dumps(result))
+        self.assertEqual(result["reviewOption"], result["expectedOption"], msg=json.dumps(result))
+
     def test_canvas_decision_maps_commit_immutable_history_and_round_trip(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
@@ -1295,6 +1377,8 @@ window.addEventListener('load', function(){
                 return note.kind === 'action' && api.links().some(function(link){ return link.type === 'child' && link.from === failure.id && link.to === note.id; });
               })[0];
               if (!safeguard) throw new Error('Safeguard missing');
+              var blankSafeguard = api.inversionContext(inversionRoot.id);
+              var blankAdapter = api.decisionActionContext(option.id);
               api.setContent(safeguard.id, 'Prevent: Freeze scope\\nDetect early: Check use daily\\nRespond if it happens: Remove unused scope');
               var ready = api.inversionContext(inversionRoot.id);
               var siblingFailure = api.createSiblingNote(failure.id);
@@ -1327,6 +1411,8 @@ window.addEventListener('load', function(){
                   desiredOutcomeIncluded:inversionRoot.content.indexOf('Deliver a useful release') >= 0,
                   failureKind:failure.kind,
                   safeguardKind:safeguard.kind,
+                  blankSafeguardIncomplete:!blankSafeguard.complete && blankSafeguard.incompleteSafeguards === 1,
+                  blankAdapterIncomplete:!blankAdapter.inversionComplete,
                   ready:ready,
                   siblingKind:siblingFailure.kind,
                   siblingTemplate:siblingFailure.content.indexOf('Failure mode:') === 0,
@@ -1373,6 +1459,8 @@ window.addEventListener('load', function(){
         self.assertTrue(result["desiredOutcomeIncluded"], msg=json.dumps(result))
         self.assertEqual(result["failureKind"], "factor", msg=json.dumps(result))
         self.assertEqual(result["safeguardKind"], "action", msg=json.dumps(result))
+        self.assertTrue(result["blankSafeguardIncomplete"], msg=json.dumps(result))
+        self.assertTrue(result["blankAdapterIncomplete"], msg=json.dumps(result))
         self.assertTrue(result["ready"]["complete"], msg=json.dumps(result))
         self.assertEqual(result["ready"]["missingSignals"], 0, msg=json.dumps(result))
         self.assertEqual(result["ready"]["unprotected"], 0, msg=json.dumps(result))

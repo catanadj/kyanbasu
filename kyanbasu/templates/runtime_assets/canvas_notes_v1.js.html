@@ -119,6 +119,7 @@
     if (text && text.textContent !== next) text.textContent = next;
     syncNoteTaskBadges();
     saveSoon();
+    publishNoteState('content');
     return true;
   }
   function noteBucket(n){
@@ -298,6 +299,10 @@
     var unprotected = failures.filter(function(note){
       return !childLinksFrom(note.id).some(function(link){ var child = noteById(link.to); return child && noteKind(child) === 'action'; });
     }).length;
+    var incompleteSafeguards = failures.filter(function(note){
+      var safeguards = safeguardNotesForFailure(note.id);
+      return safeguards.length > 0 && !safeguards.some(safeguardComplete);
+    }).length;
     var oppositeRecorded = !!templateValue(root.content, 'Opposite outcome');
     return {
       ownerId:owner ? owner.id : (analysis && analysis.ownerId) || '',
@@ -311,8 +316,9 @@
       failureCount:failures.length,
       missingSignals:missingSignals,
       unprotected:unprotected,
+      incompleteSafeguards:incompleteSafeguards,
       oppositeRecorded:oppositeRecorded,
-      complete:oppositeRecorded && failures.length > 0 && missingSignals === 0 && unprotected === 0
+      complete:oppositeRecorded && failures.length > 0 && missingSignals === 0 && unprotected === 0 && incompleteSafeguards === 0
     };
   }
   function consequenceOrderLabel(order){
@@ -418,6 +424,354 @@
       options:options,
       checklist:decisionChecklist(root)
     };
+  }
+  function directDecisionFactors(rootId){
+    return childLinksFrom(rootId).map(function(link){ return noteById(link.to); }).filter(function(note){
+      return note && noteKind(note) === 'factor';
+    });
+  }
+  function safeguardNotesForFailure(failureId){
+    return childLinksFrom(failureId).map(function(link){ return noteById(link.to); }).filter(function(note){
+      return note && noteKind(note) === 'action';
+    });
+  }
+  function safeguardComplete(note){
+    return !!note && !!templateValue(note.content, 'Prevent') && !!templateValue(note.content, 'Detect early') && !!templateValue(note.content, 'Respond if it happens');
+  }
+  function consequenceHasNext(note, analysis){
+    if (!note || !analysis || Number(analysis.order) >= 3) return false;
+    return childLinksFrom(note.id).some(function(link){
+      var childAnalysis = consequenceAnalysis(noteById(link.to));
+      return childAnalysis && childAnalysis.ownerId === analysis.ownerId && childAnalysis.runId === analysis.runId && Number(childAnalysis.order) === Number(analysis.order) + 1;
+    });
+  }
+  function firstIncompleteConsequence(ownerId){
+    var nodes = consequenceNodesForOwner(ownerId);
+    for (var i=0; i<nodes.length; i++){
+      var analysis = consequenceAnalysis(nodes[i]);
+      if (analysis && Number(analysis.order) < 3 && !consequenceHasNext(nodes[i], analysis)) return nodes[i];
+    }
+    return null;
+  }
+  function inversionCompletionState(root){
+    if (!root) return {complete:false, oppositeComplete:false, failures:[], missingSignals:0, unprotected:0, incompleteSafeguards:0};
+    var failures = inversionFailures(root.id);
+    var context = inversionContextFor(root.id);
+    return {
+      complete:!!(context && context.complete),
+      oppositeComplete:!!(context && context.oppositeRecorded),
+      failures:failures,
+      missingSignals:context ? context.missingSignals : 0,
+      unprotected:context ? context.unprotected : 0,
+      incompleteSafeguards:context ? context.incompleteSafeguards : 0
+    };
+  }
+  function optionAnalysisComplete(option){
+    var consequence = consequenceContextFor(option.id);
+    var inversion = inversionContextFor(option.id);
+    var root = directInversionForOwner(option.id);
+    return !!(consequence && consequence.complete && inversion && root && inversionCompletionState(root).complete);
+  }
+  function decisionRootActionContext(root){
+    var options = decisionOptions(root.id);
+    var framingLabels = ['Decision', 'Target outcome', 'Success means', 'Decision needed by', 'Reassess by'];
+    var valid = ['add-option','add-factor'];
+    if (options.length) valid.push('review-decision');
+    valid = valid.concat(['focus-branch','edit-role','edit-status','edit-bucket','manage-links','delete-note']);
+    return {
+      noteId:root.id,
+      type:'decision',
+      decisionId:root.id,
+      frameComplete:framingLabels.every(function(label){ return !!templateValue(root.content, label); }),
+      optionCount:options.length,
+      factorCount:directDecisionFactors(root.id).length,
+      allOptionsAnalyzed:options.length > 0 && options.every(optionAnalysisComplete),
+      validActionIds:valid
+    };
+  }
+  function optionActionContext(option){
+    var root = decisionRootFor(option.id);
+    if (!root) return null;
+    var consequence = consequenceContextFor(option.id);
+    var inversionRoot = directInversionForOwner(option.id);
+    var inversion = inversionRoot ? inversionCompletionState(inversionRoot) : null;
+    var valid = [];
+    if (!consequence || !consequence.hasRun) valid.push('explore-consequences');
+    if (consequence && consequence.earlyStops > 0) valid.push('continue-consequences');
+    if (!inversionRoot) valid.push('run-inversion');
+    if (inversionRoot && !inversion.complete) valid.push('continue-inversion');
+    valid = valid.concat(['review-option','focus-branch','go-decision','edit-role','edit-status','edit-bucket','manage-links','delete-note']);
+    return {
+      noteId:option.id,
+      type:'option',
+      ownerId:option.id,
+      decisionId:root.id,
+      hasConsequences:!!(consequence && consequence.hasRun),
+      consequenceComplete:!!(consequence && consequence.complete),
+      inversionExists:!!inversionRoot,
+      inversionComplete:!!(inversion && inversion.complete),
+      validActionIds:valid
+    };
+  }
+  function consequenceActionContext(note, analysis){
+    var root = decisionRootFor(note.id);
+    var hasNext = consequenceHasNext(note, analysis);
+    var valid = [];
+    if (Number(analysis.order) < 3 && !hasNext) valid.push('add-next-consequence');
+    valid = valid.concat(['add-parallel-consequence','go-owner-option','go-decision','focus-branch','edit-role','edit-status','edit-bucket','manage-links','delete-note']);
+    return {
+      noteId:note.id,
+      type:'consequence',
+      ownerId:analysis.ownerId,
+      decisionId:root ? root.id : '',
+      order:Number(analysis.order),
+      hasNextOrder:hasNext,
+      validActionIds:valid
+    };
+  }
+  function inversionRootActionContext(root){
+    var analysis = noteAnalysis(root);
+    var decision = decisionRootFor(root.id);
+    var state = inversionCompletionState(root);
+    var valid = ['add-failure'];
+    if (state.complete) valid.push('review-owner-option');
+    valid = valid.concat(['go-owner-option','go-decision','focus-branch','edit-role','edit-status','edit-bucket','manage-links','delete-note']);
+    return {
+      noteId:root.id,
+      type:'inversion-root',
+      ownerId:analysis && analysis.ownerId || '',
+      decisionId:decision ? decision.id : '',
+      oppositeComplete:state.oppositeComplete,
+      failureCount:state.failures.length,
+      inversionComplete:state.complete,
+      validActionIds:valid
+    };
+  }
+  function failureActionContext(note){
+    var inversionRoot = inversionRootFor(note.id);
+    var rootAnalysis = noteAnalysis(inversionRoot);
+    var decision = decisionRootFor(note.id);
+    var safeguards = safeguardNotesForFailure(note.id);
+    var valid = [];
+    if (!safeguards.length) valid.push('add-safeguard');
+    valid = valid.concat(['add-parallel-failure','go-owner-option','go-decision','focus-branch','edit-role','edit-status','edit-bucket','manage-links','delete-note']);
+    return {
+      noteId:note.id,
+      type:'failure',
+      ownerId:rootAnalysis && rootAnalysis.ownerId || '',
+      inversionRootId:inversionRoot ? inversionRoot.id : '',
+      decisionId:decision ? decision.id : '',
+      warningComplete:!!templateValue(note.content, 'Early warning'),
+      hasSafeguard:safeguards.length > 0,
+      validActionIds:valid
+    };
+  }
+  function safeguardActionContext(note){
+    var inversionRoot = inversionRootFor(note.id);
+    var rootAnalysis = noteAnalysis(inversionRoot);
+    var decision = decisionRootFor(note.id);
+    return {
+      noteId:note.id,
+      type:'safeguard',
+      ownerId:rootAnalysis && rootAnalysis.ownerId || '',
+      inversionRootId:inversionRoot ? inversionRoot.id : '',
+      decisionId:decision ? decision.id : '',
+      safeguardComplete:safeguardComplete(note),
+      validActionIds:['add-failure','go-owner-option','go-decision','focus-branch','edit-role','edit-status','edit-bucket','manage-links','delete-note']
+    };
+  }
+  function decisionActionContextFor(id){
+    var note = noteById(id);
+    if (!note) return null;
+    var kind = noteKind(note);
+    var consequence = consequenceAnalysis(note);
+    var inversion = noteAnalysis(note);
+    if (kind === 'decision') return decisionRootActionContext(note);
+    if (kind === 'option') return optionActionContext(note);
+    if (consequence) return consequenceActionContext(note, consequence);
+    if (inversion && inversion.tool === 'inversion' && inversion.role === 'root') return inversionRootActionContext(note);
+    if (isInversionFailure(note.id)) return failureActionContext(note);
+    if (kind === 'action' && inversionRootFor(note.id)) return safeguardActionContext(note);
+    if (kind === 'factor' && decisionRootFor(note.id)){
+      var decision = decisionRootFor(note.id);
+      return {
+        noteId:note.id,
+        type:'factor',
+        decisionId:decision.id,
+        validActionIds:['add-parallel-factor','go-decision','edit-role','edit-status','edit-bucket','manage-links','delete-note']
+      };
+    }
+    return null;
+  }
+  function decisionActionsFor(id){
+    var context = decisionActionContextFor(id);
+    var guidance = window.KyanbasuDecisionGuidance;
+    return context && guidance && typeof guidance.guidanceFor === 'function' ? guidance.guidanceFor(context) : null;
+  }
+  function reviewContextFor(id){
+    var selected = noteById(id);
+    var root = decisionRootFor(id);
+    if (!selected || !root) return null;
+    var options = decisionOptions(root.id);
+    if (!options.length) return null;
+    var record = NoteCore.normalizeDecisionRecord(root.decisionRecord) || {chosenOptionId:'', commits:[]};
+    var proposed = noteKind(selected) === 'option' ? selected : null;
+    if (!proposed && record.chosenOptionId) proposed = noteById(record.chosenOptionId);
+    if (!proposed || options.indexOf(proposed) < 0) proposed = options[0];
+    var checks = decisionChecklist(root).map(function(check){
+      var targetId = check.id === 'outcomes' ? proposed.id : root.id;
+      return {id:check.id, label:check.label, complete:!!check.complete, targetId:targetId};
+    });
+    var consequence = consequenceContextFor(proposed.id);
+    var inversionRoot = directInversionForOwner(proposed.id);
+    var inversion = inversionRoot ? inversionCompletionState(inversionRoot) : null;
+    checks.push({id:'consequences', label:'Three orders of consequences completed', complete:!!(consequence && consequence.complete), targetId:(consequence && consequence.firstId) || proposed.id});
+    checks.push({id:'inversion', label:'Inversion analysis completed', complete:!!(inversion && inversion.complete), targetId:inversionRoot ? inversionRoot.id : proposed.id});
+    return {
+      decisionId:root.id,
+      proposedOptionId:proposed.id,
+      options:options.map(function(option){ return {id:option.id, label:oneLine(option.content, 'Option')}; }),
+      checks:checks
+    };
+  }
+  function firstMissingTemplateLabel(note, labels){
+    for (var i=0; i<labels.length; i++) if (!templateValue(note && note.content, labels[i])) return labels[i];
+    return '';
+  }
+  function focusTemplateField(noteId, label){
+    var note = noteById(noteId);
+    if (!note) return false;
+    selectNote(note.id);
+    var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(note.id)+'"] .tcNoteText');
+    if (!el) return false;
+    el.focus();
+    var text = String(el.textContent || '');
+    var escaped = String(label || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    var match = new RegExp('(?:^|\\n)[ \\t]*' + escaped + '[ \\t]*:').exec(text);
+    var offset = match ? match.index + match[0].length : text.length;
+    try{
+      var node = el.firstChild;
+      if (!node){ node = document.createTextNode(''); el.appendChild(node); }
+      var range = document.createRange();
+      range.setStart(node, Math.min(offset, node.nodeValue.length));
+      range.collapse(true);
+      var selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }catch(_){}
+    return !!match;
+  }
+  function selectActionTarget(id){
+    var note = noteById(id);
+    if (!note) return null;
+    selectNote(note.id);
+    return note;
+  }
+  function firstIncompleteInversion(root){
+    if (!root) return null;
+    if (!templateValue(root.content, 'Opposite outcome')) return {note:root, label:'Opposite outcome'};
+    var failures = inversionFailures(root.id);
+    for (var i=0; i<failures.length; i++){
+      if (!templateValue(failures[i].content, 'Early warning')) return {note:failures[i], label:'Early warning'};
+      var safeguards = safeguardNotesForFailure(failures[i].id);
+      if (!safeguards.length) return {note:failures[i], label:''};
+      for (var j=0; j<safeguards.length; j++){
+        var missing = firstMissingTemplateLabel(safeguards[j], ['Prevent','Detect early','Respond if it happens']);
+        if (missing) return {note:safeguards[j], label:missing};
+      }
+    }
+    return null;
+  }
+  function openInspectorSection(section){
+    if (window.KyanbasuInspector && typeof window.KyanbasuInspector.openSection === 'function') window.KyanbasuInspector.openSection(section);
+  }
+  function executeValidatedDecisionAction(actionId, context){
+    var current = noteById(context.noteId);
+    var target;
+    var result;
+    if (actionId === 'add-option') return createDecisionChild(context.decisionId, 'option');
+    if (actionId === 'add-factor') return createDecisionChild(context.decisionId, 'factor');
+    if (actionId === 'add-parallel-factor') return createSiblingNote(context.noteId, '', '');
+    if (actionId === 'explore-consequences'){
+      result = runConsequences(context.ownerId || context.noteId);
+      return result && result.first;
+    }
+    if (actionId === 'add-next-consequence') return createNextConsequence(context.noteId);
+    if (actionId === 'add-parallel-consequence') return createParallelConsequence(context.noteId);
+    if (actionId === 'run-inversion'){
+      result = runInversion(context.ownerId || context.noteId);
+      return result && result.root;
+    }
+    if (actionId === 'add-failure' || actionId === 'add-parallel-failure'){
+      return createInversionFailure(context.inversionRootId || (inversionRootFor(context.noteId) || {}).id || context.noteId);
+    }
+    if (actionId === 'add-safeguard') return createInversionSafeguard(context.noteId);
+    if (actionId === 'explore-next-option'){
+      target = decisionOptions(context.decisionId).filter(function(option){ return !optionAnalysisComplete(option); })[0];
+      return target ? selectActionTarget(target.id) : null;
+    }
+    if (actionId === 'continue-consequences'){
+      target = firstIncompleteConsequence(context.ownerId || context.noteId);
+      return target ? selectActionTarget(target.id) : null;
+    }
+    if (actionId === 'continue-inversion'){
+      var inversionRoot = directInversionForOwner(context.ownerId || context.noteId) || inversionRootFor(context.noteId);
+      var incomplete = firstIncompleteInversion(inversionRoot);
+      if (!incomplete) return null;
+      if (incomplete.label) focusTemplateField(incomplete.note.id, incomplete.label);
+      else selectNote(incomplete.note.id);
+      return incomplete.note;
+    }
+    if (actionId === 'review-owner-option' || actionId === 'go-owner-option') return selectActionTarget(context.ownerId);
+    if (actionId === 'go-decision') return selectActionTarget(context.decisionId);
+    if (actionId === 'complete-decision-frame'){
+      focusTemplateField(context.noteId, firstMissingTemplateLabel(current, ['Decision','Target outcome','Success means','Decision needed by','Reassess by']));
+      return current;
+    }
+    if (actionId === 'complete-opposite'){
+      focusTemplateField(context.noteId, 'Opposite outcome');
+      return current;
+    }
+    if (actionId === 'complete-failure'){
+      focusTemplateField(context.noteId, 'Early warning');
+      return current;
+    }
+    if (actionId === 'complete-safeguard'){
+      focusTemplateField(context.noteId, firstMissingTemplateLabel(current, ['Prevent','Detect early','Respond if it happens']));
+      return current;
+    }
+    if (actionId === 'review-decision' || actionId === 'review-option'){
+      var review = reviewContextFor(context.noteId);
+      if (!review) return null;
+      document.dispatchEvent(new CustomEvent('kyanbasu:decision-review', {detail:review}));
+      return current;
+    }
+    if (actionId === 'focus-branch') return focusNoteBranch(context.noteId) ? noteById(context.noteId) : null;
+    if (actionId === 'edit-role') openInspectorSection('role');
+    else if (actionId === 'edit-status') openInspectorSection('status');
+    else if (actionId === 'edit-bucket') openInspectorSection('bucket');
+    else if (actionId === 'manage-links') openInspectorSection('links');
+    else if (actionId === 'delete-note'){
+      selectNote(context.noteId);
+      deleteSelectedNotes();
+      return {id:''};
+    }
+    else return null;
+    return current;
+  }
+  function executeDecisionAction(actionId, noteId){
+    actionId = String(actionId || '');
+    var context = decisionActionContextFor(noteId);
+    var guidance = context && window.KyanbasuDecisionGuidance && window.KyanbasuDecisionGuidance.guidanceFor(context);
+    var valid = [];
+    (guidance && guidance.groups || []).forEach(function(group){
+      group.actions.forEach(function(action){ if (valid.indexOf(action.id) < 0) valid.push(action.id); });
+    });
+    if (!context || valid.indexOf(actionId) < 0) return {ok:false, noteId:'', reason:'That action is no longer available.'};
+    var result = executeValidatedDecisionAction(actionId, context);
+    if (!result) return {ok:false, noteId:'', reason:'The action could not be completed.'};
+    publishNoteState('action');
+    return {ok:true, noteId:result.id || context.noteId, reason:''};
   }
   function focusedNoteIds(){
     var ids = Object.create(null);
@@ -2917,6 +3271,10 @@
     try{
       if (typeof window.queueInspectorRender === 'function') window.queueInspectorRender(0);
     }catch(_){}
+    publishNoteState('selection');
+  }
+  function publishNoteState(reason){
+    document.dispatchEvent(new CustomEvent('kyanbasu:note-state', {detail:{selectedId:selectedNoteId || '', reason:reason || 'selection'}}));
   }
   function publishContextSelection(){
     if (!window.KyanbasuContextBar || typeof window.KyanbasuContextBar.update !== 'function') return;
@@ -4427,6 +4785,10 @@
     decisionContext: decisionContextFor,
     inversionContext: inversionContextFor,
     consequenceContext: consequenceContextFor,
+    decisionActionContext: decisionActionContextFor,
+    decisionActions: decisionActionsFor,
+    executeDecisionAction: executeDecisionAction,
+    reviewContext: reviewContextFor,
     startReview: startNoteReview,
     stopReview: stopNoteReview,
     nextReview: function(){ return moveNoteReview(1); },
