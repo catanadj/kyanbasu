@@ -1,0 +1,260 @@
+<script id="FEATURE_CANVAS_NOTE_ACTIONS_V1">
+(function(){
+  'use strict';
+  if (window.KyanbasuNoteActions) return;
+
+  var toolbar = null;
+  var primaryButton = null;
+  var overflowButton = null;
+  var menu = null;
+  var toolbarNoteId = '';
+  var menuNoteId = '';
+  var refreshFrame = 0;
+
+  function notesApi(){ return window.KyanbasuNotes || null; }
+  function escAttr(value){ return String(value || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"'); }
+  function noteCard(noteId){ return document.querySelector('.tcNoteNode[data-note-id="' + escAttr(noteId) + '"]'); }
+  function oneSelectedNote(){
+    var api = notesApi();
+    if (!api || typeof api.selectedNotes !== 'function') return '';
+    var ids = api.selectedNotes();
+    return ids.length === 1 ? ids[0] : '';
+  }
+  function isEditable(target){
+    return !!(target && target.closest && target.closest('input,textarea,select,[contenteditable="true"]'));
+  }
+  function ensureUi(){
+    if (toolbar && menu) return;
+    toolbar = document.createElement('div');
+    toolbar.id = 'noteActionToolbar';
+    toolbar.setAttribute('role', 'toolbar');
+    toolbar.setAttribute('aria-label', 'Recommended note action');
+    toolbar.hidden = true;
+    primaryButton = document.createElement('button');
+    primaryButton.type = 'button';
+    primaryButton.className = 'noteActionPrimary';
+    overflowButton = document.createElement('button');
+    overflowButton.type = 'button';
+    overflowButton.className = 'noteActionOverflow';
+    overflowButton.textContent = '\u2022\u2022\u2022';
+    overflowButton.setAttribute('aria-label', 'More note actions');
+    overflowButton.setAttribute('aria-haspopup', 'menu');
+    toolbar.appendChild(primaryButton);
+    toolbar.appendChild(overflowButton);
+    document.body.appendChild(toolbar);
+
+    menu = document.createElement('div');
+    menu.id = 'noteActionMenu';
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-label', 'Note actions');
+    menu.hidden = true;
+    document.body.appendChild(menu);
+
+    primaryButton.addEventListener('click', function(){
+      activateAction(primaryButton.getAttribute('data-action-id'), toolbarNoteId);
+    });
+    overflowButton.addEventListener('click', function(){
+      if (!toolbarNoteId) return;
+      openMenu(toolbarNoteId, overflowButton.getBoundingClientRect());
+    });
+    menu.addEventListener('keydown', handleMenuKeydown);
+  }
+  function clamp(value, min, max){ return Math.max(min, Math.min(max, value)); }
+  function positionToolbar(card){
+    if (!toolbar || !card) return;
+    var rect = card.getBoundingClientRect();
+    var width = toolbar.offsetWidth || 240;
+    var height = toolbar.offsetHeight || 48;
+    var left = clamp(rect.left + (rect.width - width) / 2, 8, Math.max(8, window.innerWidth - width - 8));
+    var top = rect.bottom + 8;
+    if (top + height > window.innerHeight - 8) top = rect.top - height - 8;
+    toolbar.style.left = Math.round(left) + 'px';
+    toolbar.style.top = Math.round(clamp(top, 8, Math.max(8, window.innerHeight - height - 8))) + 'px';
+  }
+  function positionMenu(anchor){
+    anchor = anchor || {left:8, top:8, bottom:8};
+    var width = menu.offsetWidth || 260;
+    var height = menu.offsetHeight || 240;
+    var left = clamp(Number(anchor.left) || 8, 8, Math.max(8, window.innerWidth - width - 8));
+    var top = Number(anchor.bottom);
+    if (!isFinite(top)) top = Number(anchor.top) || 8;
+    top += 6;
+    if (top + height > window.innerHeight - 8) top = (Number(anchor.top) || top) - height - 6;
+    menu.style.left = Math.round(left) + 'px';
+    menu.style.top = Math.round(clamp(top, 8, Math.max(8, window.innerHeight - height - 8))) + 'px';
+  }
+  function closeMenu(restoreFocus){
+    if (!menu) return;
+    var restoreId = menuNoteId || oneSelectedNote();
+    menu.hidden = true;
+    menu.innerHTML = '';
+    menuNoteId = '';
+    if (restoreFocus && restoreId){
+      var card = noteCard(restoreId);
+      if (card){
+        card.setAttribute('tabindex', '-1');
+        try{ card.focus({preventScroll:true}); }catch(_){ card.focus(); }
+      }
+    }
+  }
+  function closeAll(){
+    closeMenu(false);
+    if (toolbar) toolbar.hidden = true;
+    toolbarNoteId = '';
+  }
+  function menuButton(action, current){
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'noteActionMenuItem' + (action.dangerous ? ' dangerous' : '');
+    button.setAttribute('role', 'menuitem');
+    button.setAttribute('data-action-id', action.id);
+    button.setAttribute('aria-current', current ? 'true' : 'false');
+    var title = document.createElement('strong');
+    title.textContent = action.label;
+    button.appendChild(title);
+    if (action.reason){
+      var reason = document.createElement('span');
+      reason.textContent = action.reason;
+      button.appendChild(reason);
+    }
+    button.addEventListener('click', function(){ activateAction(action.id, menuNoteId); });
+    return button;
+  }
+  function renderMenu(model){
+    menu.innerHTML = '';
+    var seen = Object.create(null);
+    if (model.recommended){
+      menu.appendChild(menuButton(model.recommended, true));
+      seen[model.recommended.id] = true;
+    }
+    (model.groups || []).forEach(function(group){
+      var actions = (group.actions || []).filter(function(action){ return action && !seen[action.id]; });
+      if (!actions.length) return;
+      var label = document.createElement('div');
+      label.className = 'noteActionMenuGroupLabel';
+      label.textContent = group.label;
+      menu.appendChild(label);
+      actions.forEach(function(action){
+        seen[action.id] = true;
+        menu.appendChild(menuButton(action, false));
+      });
+    });
+  }
+  function focusFirstMenuItem(){
+    var first = menu && menu.querySelector('.noteActionMenuItem:not(:disabled)');
+    if (first) first.focus();
+  }
+  function openMenu(noteId, anchor){
+    ensureUi();
+    var api = notesApi();
+    var model = api && typeof api.decisionActions === 'function' ? api.decisionActions(noteId) : null;
+    if (!model) return closeMenu(true);
+    menuNoteId = noteId;
+    renderMenu(model);
+    menu.hidden = false;
+    positionMenu(anchor);
+    focusFirstMenuItem();
+  }
+  function activateAction(actionId, noteId){
+    var api = notesApi();
+    if (!api || !actionId || !noteId || typeof api.executeDecisionAction !== 'function') return;
+    var result = api.executeDecisionAction(actionId, noteId);
+    closeMenu(false);
+    if (!result || !result.ok){
+      try{ if (typeof window.showToast === 'function') window.showToast(result && result.reason || 'That action is no longer available.'); }catch(_){}
+    }
+    queueRefresh();
+  }
+  function refreshNow(){
+    refreshFrame = 0;
+    ensureUi();
+    if (document.body.classList.contains('viewer-mode')) return closeAll();
+    var noteId = oneSelectedNote();
+    var api = notesApi();
+    var card = noteId && noteCard(noteId);
+    var model = noteId && api && typeof api.decisionActions === 'function' ? api.decisionActions(noteId) : null;
+    if (!noteId || !card || !model || !model.recommended) return closeAll();
+    toolbarNoteId = noteId;
+    primaryButton.textContent = model.recommended.label;
+    primaryButton.title = model.recommended.reason || model.recommended.label;
+    primaryButton.setAttribute('data-action-id', model.recommended.id);
+    toolbar.hidden = false;
+    positionToolbar(card);
+    if (!menu.hidden && menuNoteId !== noteId) closeMenu(false);
+  }
+  function queueRefresh(){
+    if (refreshFrame) return;
+    if (typeof window.requestAnimationFrame === 'function'){
+      refreshFrame = window.requestAnimationFrame(refreshNow);
+      var expectedFrame = refreshFrame;
+      window.setTimeout(function(){
+        if (refreshFrame !== expectedFrame) return;
+        window.cancelAnimationFrame(expectedFrame);
+        refreshNow();
+      }, 32);
+    } else refreshFrame = window.setTimeout(refreshNow, 0);
+  }
+  function handleMenuKeydown(event){
+    var items = Array.prototype.slice.call(menu.querySelectorAll('.noteActionMenuItem:not(:disabled)'));
+    if (!items.length) return;
+    var index = items.indexOf(document.activeElement);
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp'){
+      event.preventDefault(); event.stopPropagation();
+      var step = event.key === 'ArrowDown' ? 1 : -1;
+      items[(index + step + items.length) % items.length].focus();
+    } else if (event.key === 'Enter' || event.key === ' '){
+      if (index >= 0){ event.preventDefault(); event.stopPropagation(); items[index].click(); }
+    } else if (event.key === 'Escape'){
+      event.preventDefault(); event.stopPropagation(); closeMenu(true);
+    }
+  }
+  function install(){
+    ensureUi();
+    document.addEventListener('kyanbasu:note-state', queueRefresh);
+    window.addEventListener('resize', queueRefresh);
+    var canvas = document.querySelector('#builderWrap .canvas');
+    if (canvas) canvas.addEventListener('scroll', queueRefresh, {passive:true});
+    var zoom = document.getElementById('zoom');
+    if (zoom) zoom.addEventListener('input', queueRefresh);
+    document.addEventListener('mouseup', queueRefresh, true);
+    document.addEventListener('contextmenu', function(event){
+      var card = event.target && event.target.closest ? event.target.closest('.tcNoteNode[data-note-id]') : null;
+      if (!card) return;
+      var noteId = card.getAttribute('data-note-id');
+      var api = notesApi();
+      if (!api || !api.decisionActions(noteId)) return;
+      event.preventDefault();
+      api.selectNote(noteId);
+      openMenu(noteId, {left:event.clientX, top:event.clientY, bottom:event.clientY});
+    });
+    document.addEventListener('keydown', function(event){
+      if (isEditable(event.target)) return;
+      if (!(event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))) return;
+      var noteId = oneSelectedNote();
+      var card = noteId && noteCard(noteId);
+      if (!noteId || !card) return;
+      event.preventDefault();
+      openMenu(noteId, card.getBoundingClientRect());
+    });
+    document.addEventListener('mousedown', function(event){
+      if (!menu || menu.hidden) return;
+      if (menu.contains(event.target) || toolbar.contains(event.target)) return;
+      closeMenu(false);
+    }, true);
+    document.addEventListener('click', function(event){
+      if (event.target && event.target.closest && event.target.closest('[data-workbench-switch],.tcWorkbenchAdd')){
+        closeAll();
+        window.setTimeout(queueRefresh, 0);
+      }
+    });
+    try{
+      new MutationObserver(function(){ queueRefresh(); }).observe(document.body, {attributes:true, attributeFilter:['class']});
+    }catch(_){}
+    queueRefresh();
+  }
+
+  window.KyanbasuNoteActions = {refresh:queueRefresh, close:closeAll, openMenu:openMenu};
+  if (document.readyState === 'loading') window.addEventListener('load', function(){ window.setTimeout(install, 180); });
+  else window.setTimeout(install, 180);
+})();
+</script>

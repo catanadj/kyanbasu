@@ -1,0 +1,16 @@
+<style id="FEATURE_CANVAS_NOTE_ACTIONS_V1_CSS">
+#noteActionToolbar,#noteActionMenu{position:fixed;z-index:16000;color:var(--fg,#eef4fb);font:13px/1.35 var(--font-ui,sans-serif)}
+#noteActionToolbar{display:flex;align-items:center;gap:6px;padding:6px;border:1px solid var(--line,rgba(164,185,214,.18));border-radius:10px;background:var(--panel,var(--surface-3,#18273c));box-shadow:var(--shadow-2,0 18px 44px rgba(0,0,0,.34))}
+#noteActionToolbar[hidden],#noteActionMenu[hidden]{display:none!important}
+#noteActionToolbar button,#noteActionMenu button{color:inherit;font:inherit}
+#noteActionToolbar .noteActionPrimary{min-height:34px;padding:7px 12px;border:1px solid var(--accent,#61d0ff);border-radius:8px;background:rgba(42,134,255,.2);font-weight:800;cursor:pointer}
+#noteActionToolbar .noteActionOverflow{width:34px;height:34px;padding:0;border:1px solid var(--line,rgba(164,185,214,.18));border-radius:8px;background:var(--surface-2,#111c2d);font-size:18px;font-weight:800;cursor:pointer}
+#noteActionToolbar button:hover,#noteActionToolbar button:focus-visible,#noteActionMenu button:hover,#noteActionMenu button:focus-visible{outline:2px solid var(--accent,#61d0ff);outline-offset:1px}
+#noteActionMenu{min-width:230px;max-width:min(320px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow:auto;padding:7px;border:1px solid var(--line,rgba(164,185,214,.18));border-radius:12px;background:var(--panel,var(--surface-3,#18273c));box-shadow:var(--shadow-2,0 18px 44px rgba(0,0,0,.34))}
+.noteActionMenuItem{display:block;width:100%;padding:8px;border:1px solid transparent;border-radius:8px;background:transparent;text-align:left;cursor:pointer}
+.noteActionMenuItem strong,.noteActionMenuItem span{display:block}
+.noteActionMenuItem span{margin-top:2px;color:var(--muted,#90a3bd);font-size:11px}
+.noteActionMenuItem[aria-current="true"]{border-color:var(--accent,#61d0ff);background:var(--accent-soft,rgba(97,208,255,.12))}
+.noteActionMenuItem.dangerous{color:var(--danger,#ff6c7c)}
+.noteActionMenuGroupLabel{padding:8px 8px 4px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted,#90a3bd)}
+</style>

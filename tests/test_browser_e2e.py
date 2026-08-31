@@ -1215,6 +1215,147 @@ window.addEventListener('load', function(){
         self.assertEqual(result["reviewDecision"], result["expectedDecision"], msg=json.dumps(result))
         self.assertEqual(result["reviewOption"], result["expectedOption"], msg=json.dumps(result))
 
+    def test_canvas_contextual_toolbar_and_menu_share_actions(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_CONTEXTUAL_ACTIONS_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var api = window.KyanbasuNotes;
+      var ui = window.KyanbasuNoteActions;
+      if (!api || !ui) throw new Error('Contextual note actions missing');
+      var created = api.createDecisionMap(180, 300, 'Decisions');
+      var option = created.options[0];
+      api.setContent(option.id, 'Option: Use contextual guidance');
+      api.selectNote(option.id);
+      setTimeout(function(){
+        try{
+          var toolbar = document.getElementById('noteActionToolbar');
+          var menu = document.getElementById('noteActionMenu');
+          var primary = toolbar && toolbar.querySelector('.noteActionPrimary');
+          var overflow = toolbar && toolbar.querySelector('.noteActionOverflow');
+          if (!toolbar || !menu || !primary || !overflow) throw new Error('Contextual action controls missing');
+          var initialVisible = !toolbar.hidden;
+          var initialLabel = primary.textContent.trim();
+          primary.click();
+          setTimeout(function(){
+            try{
+              var firstId = api.primaryNote();
+              var first = api.notes().filter(function(note){ return note.id === firstId; })[0];
+              var afterFirstLabel = primary.textContent.trim();
+              overflow.click();
+              var overflowIds = Array.prototype.map.call(menu.querySelectorAll('[data-action-id]'), function(item){ return item.getAttribute('data-action-id'); });
+              var deleteItem = menu.querySelector('[data-action-id="delete-note"]');
+              var deleteDangerous = !!(deleteItem && deleteItem.classList.contains('dangerous'));
+              var uniqueMenu = overflowIds.filter(function(id, index){ return overflowIds.indexOf(id) === index; }).length === overflowIds.length;
+              menu.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
+              var firstCard = document.querySelector('.tcNoteNode[data-note-id="'+firstId+'"]');
+              firstCard.dispatchEvent(new MouseEvent('contextmenu', {bubbles:true, cancelable:true, clientX:360, clientY:320}));
+              var contextIds = Array.prototype.map.call(menu.querySelectorAll('[data-action-id]'), function(item){ return item.getAttribute('data-action-id'); });
+              menu.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
+              document.body.classList.add('inspector-collapsed');
+              var manageResult = api.executeDecisionAction('edit-role', firstId);
+              var manageExpanded = !document.body.classList.contains('inspector-collapsed');
+              var roleSectionPresent = !!document.querySelector('[data-inspector-section="role"]');
+              document.body.classList.add('inspector-collapsed');
+              primary.click();
+              setTimeout(function(){
+                try{
+                  var secondId = api.primaryNote();
+                  var second = api.notes().filter(function(note){ return note.id === secondId; })[0];
+                  api.selectNote(firstId);
+                  api.selectNote(secondId, true);
+                  setTimeout(function(){
+                    try{
+                      var hiddenForMulti = toolbar.hidden;
+                      var multiCount = api.selectedNotes().length;
+                      api.selectNote(secondId);
+                      setTimeout(function(){
+                        document.dispatchEvent(new KeyboardEvent('keydown', {key:'F10', shiftKey:true, bubbles:true, cancelable:true}));
+                        var keyboardOpened = !menu.hidden;
+                        menu.dispatchEvent(new KeyboardEvent('keydown', {key:'ArrowDown', bubbles:true, cancelable:true}));
+                        menu.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true, cancelable:true}));
+                        var selectedCard = document.querySelector('.tcNoteNode[data-note-id="'+secondId+'"]');
+                        var focusRestored = document.activeElement === selectedCard;
+                        window.KyanbasuWorkbenches.create();
+                        setTimeout(function(){
+                          var out = {
+                            initialVisible:initialVisible,
+                            initialLabel:initialLabel,
+                            toolbarFixed:window.getComputedStyle(toolbar).position === 'fixed',
+                            toolbarOutsideCanvas:toolbar.parentNode === document.body,
+                            firstOrder:first && first.analysis && first.analysis.order,
+                            afterFirstLabel:afterFirstLabel,
+                            sharedMenu:JSON.stringify(overflowIds) === JSON.stringify(contextIds),
+                            uniqueMenu:uniqueMenu,
+                            deleteDangerous:deleteDangerous,
+                            menuIds:overflowIds,
+                            manageOk:manageResult && manageResult.ok,
+                            manageExpanded:manageExpanded,
+                            roleSectionPresent:roleSectionPresent,
+                            inspectorCollapsed:document.body.classList.contains('inspector-collapsed'),
+                            secondOrder:second && second.analysis && second.analysis.order,
+                            multiCount:multiCount,
+                            hiddenForMulti:hiddenForMulti,
+                            keyboardOpened:keyboardOpened,
+                            focusRestored:focusRestored,
+                            hiddenAfterWorkbench:toolbar.hidden
+                          };
+                          var pre = document.createElement('pre');
+                          pre.id = 'e2e-out';
+                          pre.textContent = JSON.stringify(out);
+                          document.body.appendChild(pre);
+                        }, 80);
+                      }, 80);
+                    }catch(e4){ fail(e4); }
+                  }, 80);
+                }catch(e3){ fail(e3); }
+              }, 100);
+            }catch(e2){ fail(e2); }
+          }, 100);
+        }catch(e1){ fail(e1); }
+      }, 100);
+    }catch(e){ fail(e); }
+  }, 800);
+  function fail(error){
+    if (document.getElementById('e2e-out')) return;
+    var pre = document.createElement('pre');
+    pre.id = 'e2e-out';
+    pre.textContent = 'ERR:' + (error && error.message ? error.message : String(error));
+    document.body.appendChild(pre);
+  }
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["initialVisible"], msg=json.dumps(result))
+        self.assertEqual(result["initialLabel"], "Explore consequences", msg=json.dumps(result))
+        self.assertTrue(result["toolbarFixed"], msg=json.dumps(result))
+        self.assertTrue(result["toolbarOutsideCanvas"], msg=json.dumps(result))
+        self.assertEqual(result["firstOrder"], 1, msg=json.dumps(result))
+        self.assertIn(result["afterFirstLabel"], ["Add next-order consequence", "Add 2nd-order consequence"], msg=json.dumps(result))
+        self.assertTrue(result["sharedMenu"], msg=json.dumps(result))
+        self.assertTrue(result["uniqueMenu"], msg=json.dumps(result))
+        self.assertTrue(result["deleteDangerous"], msg=json.dumps(result))
+        self.assertTrue(result["menuIds"], msg=json.dumps(result))
+        self.assertTrue(result["manageOk"], msg=json.dumps(result))
+        self.assertTrue(result["manageExpanded"], msg=json.dumps(result))
+        self.assertTrue(result["roleSectionPresent"], msg=json.dumps(result))
+        self.assertTrue(result["inspectorCollapsed"], msg=json.dumps(result))
+        self.assertEqual(result["secondOrder"], 2, msg=json.dumps(result))
+        self.assertEqual(result["multiCount"], 2, msg=json.dumps(result))
+        self.assertTrue(result["hiddenForMulti"], msg=json.dumps(result))
+        self.assertTrue(result["keyboardOpened"], msg=json.dumps(result))
+        self.assertTrue(result["focusRestored"], msg=json.dumps(result))
+        self.assertTrue(result["hiddenAfterWorkbench"], msg=json.dumps(result))
+
     def test_canvas_decision_maps_commit_immutable_history_and_round_trip(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
