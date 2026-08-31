@@ -1,0 +1,119 @@
+<script id="FEATURE_CANVAS_DECISION_GUIDANCE_V1">
+(function(){
+  'use strict';
+
+  var GROUPS = [
+    {id:'develop', label:'Develop'},
+    {id:'analyze', label:'Analyze'},
+    {id:'navigate', label:'Navigate'},
+    {id:'manage', label:'Manage'}
+  ];
+  var ACTIONS = {
+    'complete-decision-frame':['Complete decision frame','Fill the first missing decision-framing field.','develop'],
+    'add-option':['Add option','Compare at least two genuine choices.','develop'],
+    'add-factor':['Add factor','Record an important state or constraint.','develop'],
+    'explore-next-option':['Explore next option','Develop the first option that has not been analysed.','navigate'],
+    'review-decision':['Review decision','Compare the developed options before commitment.','analyze'],
+    'add-parallel-factor':['Add parallel factor','Record another state or constraint.','develop'],
+    'explore-consequences':['Explore consequences','Trace immediate, downstream, and longer-range effects.','analyze'],
+    'continue-consequences':['Continue consequence chain','Continue the first branch that ends before third order.','navigate'],
+    'run-inversion':['Run inversion','Expose avoidable failure modes before commitment.','analyze'],
+    'continue-inversion':['Continue inversion','Complete the first unfinished inversion item.','navigate'],
+    'review-option':['Review this option','Review this option in the context of the whole decision.','analyze'],
+    'add-next-consequence':['Add next-order consequence','Trace what follows from this consequence.','develop'],
+    'add-parallel-consequence':['Add parallel consequence','Record another plausible consequence at this order.','develop'],
+    'complete-opposite':['Complete opposite outcome','State the opposite of the desired outcome.','develop'],
+    'add-failure':['Add failure mode','Identify another way the opposite outcome could occur.','develop'],
+    'review-owner-option':['Review owning option','Return to the option after completing inversion.','navigate'],
+    'complete-failure':['Complete failure mode','Record an early warning for this failure mode.','develop'],
+    'add-safeguard':['Add safeguard','Add prevention, detection, and response.','develop'],
+    'add-parallel-failure':['Add parallel failure mode','Identify another plausible failure mode.','develop'],
+    'complete-safeguard':['Complete safeguard','Fill prevention, detection, and response.','develop'],
+    'focus-branch':['Focus branch','Show only this note and its descendants.','navigate'],
+    'go-owner-option':['Go to owning option','Return to the option that owns this analysis.','navigate'],
+    'go-decision':['Go to decision','Return to the root decision.','navigate'],
+    'edit-role':['Change role','Open the selected note role control.','manage'],
+    'edit-status':['Change status','Open the selected note status control.','manage'],
+    'edit-bucket':['Change bucket','Open the selected note bucket control.','manage'],
+    'manage-links':['Manage links','Open link controls for the selected note.','manage'],
+    'delete-note':['Delete note','Delete the selected note after explicit activation.','manage',true]
+  };
+
+  function descriptor(id){
+    var row = ACTIONS[id];
+    return row ? {id:id, label:row[0], reason:row[1], group:row[2], dangerous:!!row[3]} : null;
+  }
+
+  function contextualize(action, context){
+    if (!action) return null;
+    var row = {
+      id:action.id,
+      label:action.label,
+      reason:action.reason,
+      group:action.group,
+      dangerous:action.dangerous
+    };
+    if (row.id === 'add-next-consequence'){
+      row.label = Number(context.order) === 1 ? 'Add 2nd-order consequence' : 'Add 3rd-order consequence';
+    }
+    if (row.id === 'add-parallel-consequence'){
+      row.label = 'Add parallel ' + (Number(context.order) === 1 ? '1st' : (Number(context.order) === 2 ? '2nd' : '3rd')) + '-order consequence';
+    }
+    return row;
+  }
+
+  function recommendedId(context){
+    if (!context || !context.noteId) return '';
+    if (context.type === 'decision'){
+      if (!context.frameComplete) return 'complete-decision-frame';
+      if ((context.optionCount || 0) < 2) return 'add-option';
+      if ((context.factorCount || 0) < 1) return 'add-factor';
+      return context.allOptionsAnalyzed ? 'review-decision' : 'explore-next-option';
+    }
+    if (context.type === 'factor') return 'add-parallel-factor';
+    if (context.type === 'option'){
+      if (!context.hasConsequences) return 'explore-consequences';
+      if (!context.consequenceComplete) return 'continue-consequences';
+      if (!context.inversionExists) return 'run-inversion';
+      return context.inversionComplete ? 'review-option' : 'continue-inversion';
+    }
+    if (context.type === 'consequence'){
+      return Number(context.order) < 3 && !context.hasNextOrder ? 'add-next-consequence' : 'add-parallel-consequence';
+    }
+    if (context.type === 'inversion-root'){
+      if (!context.oppositeComplete) return 'complete-opposite';
+      if (!(context.failureCount > 0)) return 'add-failure';
+      return context.inversionComplete ? 'review-owner-option' : 'continue-inversion';
+    }
+    if (context.type === 'failure'){
+      if (!context.warningComplete) return 'complete-failure';
+      return context.hasSafeguard ? 'add-parallel-failure' : 'add-safeguard';
+    }
+    if (context.type === 'safeguard') return context.safeguardComplete ? 'add-failure' : 'complete-safeguard';
+    return '';
+  }
+
+  function guidanceFor(context){
+    context = context || {};
+    var primary = contextualize(descriptor(recommendedId(context)), context);
+    var valid = Array.isArray(context.validActionIds) ? context.validActionIds.slice() : [];
+    if (primary && valid.indexOf(primary.id) < 0) valid.unshift(primary.id);
+    var groups = GROUPS.map(function(group){
+      return {
+        id:group.id,
+        label:group.label,
+        actions:valid.map(function(id){
+          return contextualize(descriptor(id), context);
+        }).filter(function(action){
+          return action && action.group === group.id;
+        })
+      };
+    }).filter(function(group){
+      return group.actions.length > 0;
+    });
+    return {recommended:primary, groups:groups};
+  }
+
+  window.KyanbasuDecisionGuidance = {guidanceFor:guidanceFor};
+})();
+</script>

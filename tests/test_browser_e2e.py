@@ -1048,6 +1048,91 @@ window.addEventListener('load', function(){
         self.assertEqual(result["exportedStatus"], "parked")
         self.assertEqual(result["viewerSemantics"], ["Decision", "Parked"])
 
+    def test_canvas_decision_guidance_matrix_is_deterministic(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_DECISION_GUIDANCE_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var guide = window.KyanbasuDecisionGuidance;
+      if (!guide) throw new Error('Decision guidance API missing');
+      var cases = [
+        [{noteId:'d', type:'decision', frameComplete:false}, 'complete-decision-frame'],
+        [{noteId:'d', type:'decision', frameComplete:true, optionCount:1}, 'add-option'],
+        [{noteId:'d', type:'decision', frameComplete:true, optionCount:2, factorCount:0}, 'add-factor'],
+        [{noteId:'d', type:'decision', frameComplete:true, optionCount:2, factorCount:1, allOptionsAnalyzed:false}, 'explore-next-option'],
+        [{noteId:'d', type:'decision', frameComplete:true, optionCount:2, factorCount:1, allOptionsAnalyzed:true}, 'review-decision'],
+        [{noteId:'f', type:'factor'}, 'add-parallel-factor'],
+        [{noteId:'o', type:'option', hasConsequences:false}, 'explore-consequences'],
+        [{noteId:'o', type:'option', hasConsequences:true, consequenceComplete:false}, 'continue-consequences'],
+        [{noteId:'o', type:'option', hasConsequences:true, consequenceComplete:true, inversionExists:false}, 'run-inversion'],
+        [{noteId:'o', type:'option', hasConsequences:true, consequenceComplete:true, inversionExists:true, inversionComplete:false}, 'continue-inversion'],
+        [{noteId:'o', type:'option', hasConsequences:true, consequenceComplete:true, inversionExists:true, inversionComplete:true}, 'review-option'],
+        [{noteId:'c1', type:'consequence', order:1, hasNextOrder:false}, 'add-next-consequence'],
+        [{noteId:'c2', type:'consequence', order:2, hasNextOrder:false}, 'add-next-consequence'],
+        [{noteId:'c3', type:'consequence', order:3}, 'add-parallel-consequence'],
+        [{noteId:'ir', type:'inversion-root', oppositeComplete:false}, 'complete-opposite'],
+        [{noteId:'ir', type:'inversion-root', oppositeComplete:true, failureCount:0}, 'add-failure'],
+        [{noteId:'ir', type:'inversion-root', oppositeComplete:true, failureCount:1, inversionComplete:true}, 'review-owner-option'],
+        [{noteId:'fm', type:'failure', warningComplete:false}, 'complete-failure'],
+        [{noteId:'fm', type:'failure', warningComplete:true, hasSafeguard:false}, 'add-safeguard'],
+        [{noteId:'fm', type:'failure', warningComplete:true, hasSafeguard:true}, 'add-parallel-failure'],
+        [{noteId:'sg', type:'safeguard', safeguardComplete:false}, 'complete-safeguard'],
+        [{noteId:'sg', type:'safeguard', safeguardComplete:true}, 'add-failure']
+      ];
+      var actual = cases.map(function(row){
+        var first = guide.guidanceFor(row[0]);
+        var second = guide.guidanceFor(row[0]);
+        return {
+          expected:row[1],
+          actual:first.recommended && first.recommended.id,
+          deterministic:JSON.stringify(first) === JSON.stringify(second),
+          dangerous:first.recommended && first.recommended.dangerous
+        };
+      });
+      var grouped = guide.guidanceFor({
+        noteId:'menu', type:'option', hasConsequences:false,
+        validActionIds:['add-option','run-inversion','go-decision','delete-note']
+      });
+      var firstOrder = guide.guidanceFor({noteId:'c1', type:'consequence', order:1, hasNextOrder:false});
+      var thirdOrder = guide.guidanceFor({noteId:'c3', type:'consequence', order:3});
+      var out = {
+        actual:actual,
+        groups:grouped.groups.map(function(group){ return group.id; }),
+        deleteDangerous:grouped.groups.some(function(group){ return group.actions.some(function(action){ return action.id === 'delete-note' && action.dangerous; }); }),
+        firstOrderLabel:firstOrder.recommended && firstOrder.recommended.label,
+        thirdOrderLabel:thirdOrder.recommended && thirdOrder.recommended.label
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out';
+      pre.textContent = JSON.stringify(out);
+      document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 800);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(all(row["actual"] == row["expected"] for row in result["actual"]), msg=json.dumps(result))
+        self.assertTrue(all(row["deterministic"] for row in result["actual"]), msg=json.dumps(result))
+        self.assertTrue(all(not row["dangerous"] for row in result["actual"]), msg=json.dumps(result))
+        self.assertEqual(result["groups"], ["develop", "analyze", "navigate", "manage"], msg=json.dumps(result))
+        self.assertTrue(result["deleteDangerous"], msg=json.dumps(result))
+        self.assertEqual(result["firstOrderLabel"], "Add 2nd-order consequence", msg=json.dumps(result))
+        self.assertEqual(result["thirdOrderLabel"], "Add parallel 3rd-order consequence", msg=json.dumps(result))
+
     def test_canvas_decision_maps_commit_immutable_history_and_round_trip(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
