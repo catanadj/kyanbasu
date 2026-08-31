@@ -958,7 +958,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["directionChevrons"], 1)
         self.assertEqual(result["apiNotes"], 2)
         self.assertEqual(result["apiLinks"], 1)
-        self.assertEqual(result["coreVersion"], 7)
+        self.assertEqual(result["coreVersion"], 8)
         self.assertTrue(result["rejectsSelfChild"])
         self.assertEqual(result["legacyContent"], "Old title\nOld body")
         self.assertEqual(result["legacyKind"], "note")
@@ -1043,7 +1043,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["status"], "parked")
         self.assertEqual(result["cardKind"], "Decision")
         self.assertEqual(result["cardStatus"], "Status: Parked")
-        self.assertEqual(result["exportedVersion"], 7)
+        self.assertEqual(result["exportedVersion"], 8)
         self.assertEqual(result["exportedKind"], "decision")
         self.assertEqual(result["exportedStatus"], "parked")
         self.assertEqual(result["viewerSemantics"], ["Decision", "Parked"])
@@ -1356,6 +1356,165 @@ window.addEventListener('load', function(){
         self.assertTrue(result["focusRestored"], msg=json.dumps(result))
         self.assertTrue(result["hiddenAfterWorkbench"], msg=json.dumps(result))
 
+    def test_canvas_decision_review_soft_gate_round_trips_unresolved_checks(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_DECISION_REVIEW_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var api = window.KyanbasuNotes;
+      var reviewUi = window.KyanbasuDecisionReview;
+      if (!api || !reviewUi) throw new Error('Decision review UI missing');
+      var created = api.createDecisionMap(180, 300, 'Decisions');
+      var root = created.root;
+      var option = created.options[0];
+      api.setContent(option.id, 'Option: Choose under current time constraints');
+      var directBlankRejected = api.commitDecision(root.id, option.id, '   ') === null;
+      var directLongRejected = api.commitDecision(root.id, option.id, new Array(502).join('x')) === null;
+      var expectedChecks = api.reviewContext(option.id).checks.filter(function(check){ return !check.complete; }).map(function(check){ return {id:check.id, label:check.label}; });
+      var opened = api.executeDecisionAction('review-option', option.id);
+      if (!opened.ok) throw new Error('Could not open decision review');
+      setTimeout(function(){
+        try{
+          var backdrop = document.getElementById('decisionReviewBackdrop');
+          var dialog = document.getElementById('decisionReviewDialog');
+          var rationale = document.getElementById('decisionReviewRationale');
+          var commit = document.getElementById('decisionReviewCommit');
+          var initialDialogVisible = !!(backdrop && !backdrop.hidden);
+          var initialProposedOption = (document.querySelector('input[name="decisionReviewOption"]:checked') || {}).value || '';
+          var blankDisabled = commit.disabled;
+          rationale.value = '   ';
+          rationale.dispatchEvent(new Event('input', {bubbles:true}));
+          var whitespaceDisabled = commit.disabled;
+          rationale.value = new Array(502).join('x');
+          rationale.dispatchEvent(new Event('input', {bubbles:true}));
+          var overLimitDisabled = commit.disabled;
+          rationale.value = new Array(501).join('x');
+          rationale.dispatchEvent(new Event('input', {bubbles:true}));
+          var fiveHundredEnabled = !commit.disabled;
+          var initialUnresolved = Array.prototype.map.call(document.querySelectorAll('.decisionReviewCheck.incomplete'), function(row){ return row.getAttribute('data-check-id'); });
+          var firstFix = document.querySelector('[data-review-fix]');
+          var firstFixTarget = firstFix && firstFix.getAttribute('data-review-fix');
+          firstFix.click();
+          setTimeout(function(){
+            try{
+              var fixedSelection = api.primaryNote();
+              api.executeDecisionAction('review-option', option.id);
+              setTimeout(function(){
+                try{
+                  var rationale2 = document.getElementById('decisionReviewRationale');
+                  var commit2 = document.getElementById('decisionReviewCommit');
+                  rationale2.value = 'Chosen under current time constraints';
+                  rationale2.dispatchEvent(new Event('input', {bubbles:true}));
+                  commit2.click();
+                  var confirmText = (document.getElementById('decisionReviewUnresolved') || {}).textContent || '';
+                  var namedConfirmation = expectedChecks.every(function(check){ return confirmText.indexOf(check.label) >= 0; });
+                  document.getElementById('decisionReviewConfirmBack').click();
+                  var retainedRationale = document.getElementById('decisionReviewRationale').value;
+                  document.getElementById('decisionReviewCommit').click();
+                  document.getElementById('decisionReviewConfirmCommit').click();
+                  setTimeout(function(){
+                    try{
+                      var history = api.decisionHistory(root.id);
+                      var committed = history.commits[0];
+                      var exported = api.exportData();
+                      window.KyanbasuWorkbenches.capture();
+                      var workbenches = window.KyanbasuWorkbenches.exportData();
+                      var nested = workbenches.workbenches.filter(function(workbench){ return workbench.id === workbenches.activeId; })[0];
+                      api.importData(exported);
+                      var imported = api.decisionHistory(root.id).commits[0];
+                      var legacy = JSON.parse(JSON.stringify(exported));
+                      legacy.version = 7;
+                      var legacyRoot = legacy.notes.filter(function(note){ return note.id === root.id; })[0];
+                      delete legacyRoot.decisionRecord.commits[0].unresolvedChecks;
+                      api.importData(legacy);
+                      var legacyCommit = api.decisionHistory(root.id).commits[0];
+                      var out = {
+                        directBlankRejected:directBlankRejected,
+                        directLongRejected:directLongRejected,
+                        dialogVisible:initialDialogVisible,
+                        dialogRole:dialog && dialog.getAttribute('role'),
+                        dialogModal:dialog && dialog.getAttribute('aria-modal'),
+                        proposedOption:initialProposedOption,
+                        expectedOption:option.id,
+                        blankDisabled:blankDisabled,
+                        whitespaceDisabled:whitespaceDisabled,
+                        overLimitDisabled:overLimitDisabled,
+                        fiveHundredEnabled:fiveHundredEnabled,
+                        unresolvedCount:initialUnresolved.length,
+                        expectedUnresolvedCount:expectedChecks.length,
+                        fixedSelection:fixedSelection,
+                        firstFixTarget:firstFixTarget,
+                        namedConfirmation:namedConfirmation,
+                        retainedRationale:retainedRationale,
+                        commitCount:history.commits.length,
+                        rationale:committed && committed.rationale,
+                        unresolved:committed && committed.unresolvedChecks,
+                        expectedUnresolved:expectedChecks,
+                        exportedVersion:exported.version,
+                        workbenchVersion:workbenches.version,
+                        nestedVersion:nested && nested.notes && nested.notes.version,
+                        importedUnresolved:imported && imported.unresolvedChecks,
+                        legacyImported:!!legacyCommit,
+                        legacyHasUnresolved:!!(legacyCommit && legacyCommit.unresolvedChecks)
+                      };
+                      var pre = document.createElement('pre');
+                      pre.id = 'e2e-out';
+                      pre.textContent = JSON.stringify(out);
+                      document.body.appendChild(pre);
+                    }catch(e4){ fail(e4); }
+                  }, 120);
+                }catch(e3){ fail(e3); }
+              }, 80);
+            }catch(e2){ fail(e2); }
+          }, 80);
+        }catch(e1){ fail(e1); }
+      }, 80);
+    }catch(e){ fail(e); }
+  }, 800);
+  function fail(error){
+    if (document.getElementById('e2e-out')) return;
+    var pre = document.createElement('pre');
+    pre.id = 'e2e-out';
+    pre.textContent = 'ERR:' + (error && error.message ? error.message : String(error));
+    document.body.appendChild(pre);
+  }
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["directBlankRejected"], msg=json.dumps(result))
+        self.assertTrue(result["directLongRejected"], msg=json.dumps(result))
+        self.assertTrue(result["dialogVisible"], msg=json.dumps(result))
+        self.assertEqual(result["dialogRole"], "dialog", msg=json.dumps(result))
+        self.assertEqual(result["dialogModal"], "true", msg=json.dumps(result))
+        self.assertEqual(result["proposedOption"], result["expectedOption"], msg=json.dumps(result))
+        self.assertTrue(result["blankDisabled"], msg=json.dumps(result))
+        self.assertTrue(result["whitespaceDisabled"], msg=json.dumps(result))
+        self.assertTrue(result["overLimitDisabled"], msg=json.dumps(result))
+        self.assertTrue(result["fiveHundredEnabled"], msg=json.dumps(result))
+        self.assertGreater(result["unresolvedCount"], 0, msg=json.dumps(result))
+        self.assertEqual(result["unresolvedCount"], result["expectedUnresolvedCount"], msg=json.dumps(result))
+        self.assertEqual(result["fixedSelection"], result["firstFixTarget"], msg=json.dumps(result))
+        self.assertTrue(result["namedConfirmation"], msg=json.dumps(result))
+        self.assertEqual(result["retainedRationale"], "Chosen under current time constraints", msg=json.dumps(result))
+        self.assertEqual(result["commitCount"], 1, msg=json.dumps(result))
+        self.assertEqual(result["rationale"], "Chosen under current time constraints", msg=json.dumps(result))
+        self.assertEqual(result["unresolved"], result["expectedUnresolved"], msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 8, msg=json.dumps(result))
+        self.assertEqual(result["workbenchVersion"], 1, msg=json.dumps(result))
+        self.assertEqual(result["nestedVersion"], 8, msg=json.dumps(result))
+        self.assertEqual(result["importedUnresolved"], result["expectedUnresolved"], msg=json.dumps(result))
+        self.assertTrue(result["legacyImported"], msg=json.dumps(result))
+        self.assertFalse(result["legacyHasUnresolved"], msg=json.dumps(result))
+
     def test_canvas_decision_maps_commit_immutable_history_and_round_trip(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
@@ -1471,7 +1630,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["alternativeStatuses"], ["open", "open"], msg=json.dumps(result))
         self.assertEqual(result["chosenBadge"], "Chosen", msg=json.dumps(result))
         self.assertTrue(result["chosenClass"], msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 7, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 8, msg=json.dumps(result))
         self.assertEqual(result["exportedCommits"], 2, msg=json.dumps(result))
         self.assertEqual(result["workbenchCommits"], 2, msg=json.dumps(result))
         self.assertEqual(result["importedCommits"], 2, msg=json.dumps(result))
@@ -1610,7 +1769,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["duplicateExisting"], msg=json.dumps(result))
         self.assertEqual(result["inversionRootCount"], 1, msg=json.dumps(result))
         self.assertEqual(result["snapshotAnalysis"]["tool"], "inversion", msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 7, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 8, msg=json.dumps(result))
         self.assertEqual(result["exportedAnalysis"]["tool"], "inversion", msg=json.dumps(result))
         self.assertEqual(result["workbenchAnalysis"]["tool"], "inversion", msg=json.dumps(result))
         self.assertEqual(result["importedAnalysis"]["tool"], "inversion", msg=json.dumps(result))
@@ -1733,7 +1892,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["duplicateExisting"], msg=json.dumps(result))
         self.assertEqual(result["countAfterDuplicate"], 6, msg=json.dumps(result))
         self.assertEqual(result["snapshotAnalysis"]["order"], 3, msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 7, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 8, msg=json.dumps(result))
         self.assertEqual(result["exportedAnalysis"]["order"], 2, msg=json.dumps(result))
         self.assertEqual(result["workbenchAnalysis"]["order"], 3, msg=json.dumps(result))
         self.assertEqual(result["importedAnalysis"]["order"], 1, msg=json.dumps(result))
@@ -2039,7 +2198,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["pathTitle"], "Challenges")
         self.assertEqual(result["animationName"], "none")
         self.assertEqual(result["toolbarType"], "Challenges")
-        self.assertEqual(result["exportedVersion"], 7)
+        self.assertEqual(result["exportedVersion"], 8)
         self.assertEqual(result["exportedType"], "challenges")
         self.assertEqual(result["relationLabel"], "Challenges")
         self.assertEqual(result["inverseLabel"], "Challenged by")
@@ -2172,7 +2331,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["initial"]["icon"], "?", msg=json.dumps(result))
         self.assertIn("evidence current", result["initial"]["label"], msg=json.dumps(result))
         self.assertEqual(result["selectedKind"], "link", msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 7, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 8, msg=json.dumps(result))
         self.assertEqual(result["exportedAnnotation"], {"kind": "condition", "text": "Only if validation passes"}, msg=json.dumps(result))
         self.assertEqual(result["importedKind"], "condition", msg=json.dumps(result))
         self.assertIn("validation passes", result["importedLabel"], msg=json.dumps(result))
@@ -2655,7 +2814,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["resultNotes"], 2)
         self.assertEqual(result["resultLinks"], 1)
         self.assertEqual(result["exportedKind"], "kyanbasu.notes")
-        self.assertEqual(result["exportedVersion"], 7)
+        self.assertEqual(result["exportedVersion"], 8)
         self.assertEqual(result["exportedNotes"], 2)
         self.assertEqual(result["exportedLinks"], 1)
         self.assertEqual(result["firstContent"], "Imported root\nLegacy body")
@@ -6247,7 +6406,7 @@ window.addEventListener('load', function(){
         self.assertGreater(result["marked"]["reviewedAt"], 0, msg=json.dumps(result))
         self.assertEqual(result["marked"]["updatedAt"], result["beforeUpdated"], msg=json.dumps(result))
         self.assertNotIn("never-recent", result["neverAfterMark"], msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 7, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 8, msg=json.dumps(result))
         self.assertEqual(result["exportedMarked"]["reviewedAt"], result["marked"]["reviewedAt"], msg=json.dumps(result))
         self.assertIn("never-reviewed", result["lensIds"], msg=json.dumps(result))
         self.assertIn("stale-open", result["lensIds"], msg=json.dumps(result))

@@ -1,0 +1,25 @@
+<style id="FEATURE_CANVAS_DECISION_REVIEW_V1_CSS">
+#decisionReviewBackdrop{position:fixed;inset:0;z-index:17000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(3,8,15,.72);backdrop-filter:blur(3px)}
+#decisionReviewBackdrop[hidden]{display:none!important}
+#decisionReviewDialog{width:min(720px,calc(100vw - 32px));max-height:min(820px,calc(100vh - 32px));display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--line-strong,rgba(164,185,214,.28));border-radius:18px;background:var(--surface-1,#0c1421);color:var(--fg,#eef4fb);box-shadow:0 28px 90px rgba(0,0,0,.58);font:14px/1.45 var(--font-ui,sans-serif)}
+.decisionReviewHead{padding:20px 22px 15px;border-bottom:1px solid var(--line,rgba(164,185,214,.18))}
+.decisionReviewEyebrow{margin-bottom:4px;color:var(--accent,#61d0ff);font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+#decisionReviewTitle{margin:0;font-size:22px;line-height:1.2}
+.decisionReviewSub{margin:7px 0 0;color:var(--muted,#90a3bd)}
+#decisionReviewContent{overflow:auto;padding:18px 22px 22px}
+.decisionReviewSection{margin:0 0 18px}
+.decisionReviewSectionTitle{margin:0 0 9px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted,#90a3bd)}
+.decisionReviewFrame{display:grid;gap:5px;padding:12px;border:1px solid var(--line,rgba(164,185,214,.18));border-radius:12px;background:var(--surface-2,#111c2d)}
+.decisionReviewFrame strong{font-size:16px}.decisionReviewFrame span{color:var(--muted,#90a3bd)}
+.decisionReviewOptions{display:grid;gap:8px}.decisionReviewOption{display:flex;align-items:flex-start;gap:9px;padding:10px 12px;border:1px solid var(--line,rgba(164,185,214,.18));border-radius:10px;background:var(--surface-2,#111c2d);cursor:pointer}.decisionReviewOption:has(input:checked){border-color:var(--accent,#61d0ff);background:rgba(97,208,255,.1)}
+.decisionReviewChecks{display:grid;gap:7px}.decisionReviewCheck{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:9px 11px;border:1px solid var(--line,rgba(164,185,214,.18));border-radius:10px;background:var(--surface-2,#111c2d)}
+.decisionReviewCheck.complete{border-color:rgba(66,212,129,.28)}.decisionReviewCheck.incomplete{border-color:rgba(242,177,74,.34)}
+.decisionReviewCheckState{margin-right:7px;font-weight:900}.decisionReviewCheck.complete .decisionReviewCheckState{color:var(--success,#42d481)}.decisionReviewCheck.incomplete .decisionReviewCheckState{color:var(--warn,#f2b14a)}
+.decisionReviewFix,.decisionReviewButton{min-height:36px;padding:7px 11px;border:1px solid var(--line,rgba(164,185,214,.18));border-radius:9px;background:var(--surface-3,#18273c);color:var(--fg,#eef4fb);font:inherit;font-weight:700;cursor:pointer}
+.decisionReviewFix:hover,.decisionReviewButton:hover,.decisionReviewFix:focus-visible,.decisionReviewButton:focus-visible{outline:2px solid var(--accent,#61d0ff);outline-offset:1px}
+.decisionReviewRationale{width:100%;min-height:94px;box-sizing:border-box;resize:vertical;padding:10px 12px;border:1px solid var(--line-strong,rgba(164,185,214,.28));border-radius:10px;background:var(--bg-deep,#050b14);color:var(--fg,#eef4fb);font:inherit}
+.decisionReviewRationaleMeta{display:flex;justify-content:space-between;gap:12px;margin-top:5px;color:var(--muted,#90a3bd);font-size:11px}.decisionReviewRationaleMeta .invalid{color:var(--danger,#ff6c7c)}
+.decisionReviewActions{display:flex;justify-content:flex-end;gap:9px;margin-top:18px}.decisionReviewButton.primary{border-color:var(--accent,#61d0ff);background:rgba(42,134,255,.25)}.decisionReviewButton.danger{border-color:var(--warn,#f2b14a);background:rgba(242,177,74,.14)}.decisionReviewButton:disabled{cursor:not-allowed;opacity:.45}
+#decisionReviewUnresolved{display:grid;gap:7px;margin:14px 0;padding:0;list-style:none}#decisionReviewUnresolved li{padding:9px 11px;border:1px solid rgba(242,177,74,.3);border-radius:9px;background:rgba(242,177,74,.08)}
+@media (max-width:640px){#decisionReviewBackdrop{padding:10px;align-items:flex-end}#decisionReviewDialog{width:100%;max-height:92vh;border-radius:16px}.decisionReviewCheck{grid-template-columns:1fr}.decisionReviewActions{flex-wrap:wrap}.decisionReviewButton{flex:1}}
+</style>

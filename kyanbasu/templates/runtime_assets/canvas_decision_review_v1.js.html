@@ -1,0 +1,172 @@
+<script id="FEATURE_CANVAS_DECISION_REVIEW_V1">
+(function(){
+  'use strict';
+  if (window.KyanbasuDecisionReview) return;
+
+  var backdrop = null;
+  var dialog = null;
+  var content = null;
+  var title = null;
+  var context = null;
+  var rationale = '';
+  var returnFocus = null;
+
+  function api(){ return window.KyanbasuNotes || null; }
+  function escapeHtml(value){
+    return String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function ensureUi(){
+    if (backdrop) return;
+    backdrop = document.createElement('div');
+    backdrop.id = 'decisionReviewBackdrop';
+    backdrop.hidden = true;
+    backdrop.innerHTML = '<section id="decisionReviewDialog" role="dialog" aria-modal="true" aria-labelledby="decisionReviewTitle" tabindex="-1">' +
+      '<header class="decisionReviewHead"><div class="decisionReviewEyebrow">Decision checkpoint</div><h2 id="decisionReviewTitle">Review decision</h2><p class="decisionReviewSub">Compare what is known, name uncertainty, then record why this choice fits now.</p></header>' +
+      '<div id="decisionReviewContent"></div></section>';
+    document.body.appendChild(backdrop);
+    dialog = document.getElementById('decisionReviewDialog');
+    content = document.getElementById('decisionReviewContent');
+    title = document.getElementById('decisionReviewTitle');
+    backdrop.addEventListener('click', function(event){ if (event.target === backdrop) close(true); });
+    backdrop.addEventListener('keydown', trapKeys);
+  }
+  function unresolvedChecks(){
+    return (context && context.checks || []).filter(function(check){ return !check.complete; });
+  }
+  function rationaleValid(){
+    var value = String(rationale || '').trim();
+    return !!value && value.length <= 500;
+  }
+  function frameHtml(){
+    var rows = [];
+    rows.push('<strong>' + escapeHtml(context.decisionLabel || 'Decision') + '</strong>');
+    if (context.targetOutcome) rows.push('<span>Target: ' + escapeHtml(context.targetOutcome) + '</span>');
+    if (context.successMeans) rows.push('<span>Success: ' + escapeHtml(context.successMeans) + '</span>');
+    return '<div class="decisionReviewFrame">' + rows.join('') + '</div>';
+  }
+  function optionsHtml(){
+    return '<div class="decisionReviewOptions">' + (context.options || []).map(function(option){
+      return '<label class="decisionReviewOption"><input type="radio" name="decisionReviewOption" value="' + escapeHtml(option.id) + '"' + (option.id === context.proposedOptionId ? ' checked' : '') + '><span>' + escapeHtml(option.label || 'Option') + '</span></label>';
+    }).join('') + '</div>';
+  }
+  function checksHtml(){
+    return '<div class="decisionReviewChecks">' + (context.checks || []).map(function(check){
+      return '<div class="decisionReviewCheck ' + (check.complete ? 'complete' : 'incomplete') + '" data-check-id="' + escapeHtml(check.id) + '"><div><span class="decisionReviewCheckState">' + (check.complete ? '&#10003;' : '&#9675;') + '</span>' + escapeHtml(check.label) + '</div>' +
+        (check.complete ? '' : '<button type="button" class="decisionReviewFix" data-review-fix="' + escapeHtml(check.targetId) + '">Go fix</button>') + '</div>';
+    }).join('') + '</div>';
+  }
+  function updateRationaleState(){
+    var field = document.getElementById('decisionReviewRationale');
+    var count = document.getElementById('decisionReviewRationaleCount');
+    var commit = document.getElementById('decisionReviewCommit');
+    var length = String(rationale || '').trim().length;
+    if (field && field.value !== rationale) field.value = rationale;
+    if (count){
+      count.textContent = length + '/500';
+      count.classList.toggle('invalid', length > 500);
+    }
+    if (commit) commit.disabled = !rationaleValid();
+  }
+  function renderReview(){
+    if (!context) return;
+    title.textContent = 'Review decision';
+    content.innerHTML = '<div class="decisionReviewSection"><div class="decisionReviewSectionTitle">Decision frame</div>' + frameHtml() + '</div>' +
+      '<div class="decisionReviewSection"><div class="decisionReviewSectionTitle">Proposed option</div>' + optionsHtml() + '</div>' +
+      '<div class="decisionReviewSection"><div class="decisionReviewSectionTitle">Readiness checks</div>' + checksHtml() + '</div>' +
+      '<div class="decisionReviewSection"><label class="decisionReviewSectionTitle" for="decisionReviewRationale">Short choice rationale</label><textarea id="decisionReviewRationale" class="decisionReviewRationale" maxlength="500" spellcheck="true" placeholder="Why is this the best choice given what is known now?"></textarea><div class="decisionReviewRationaleMeta"><span>Required. Record the reason, not a score.</span><span id="decisionReviewRationaleCount">0/500</span></div></div>' +
+      '<div class="decisionReviewActions"><button id="decisionReviewReturn" type="button" class="decisionReviewButton">Return to map</button><button id="decisionReviewCommit" type="button" class="decisionReviewButton primary">Commit choice</button></div>';
+    var field = document.getElementById('decisionReviewRationale');
+    field.value = rationale;
+    field.addEventListener('input', function(){ rationale = field.value; updateRationaleState(); });
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="decisionReviewOption"]'), function(input){
+      input.addEventListener('change', function(){
+        if (!input.checked) return;
+        var next = api() && api().reviewContext(input.value);
+        if (next){ context = next; renderReview(); }
+      });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-review-fix]'), function(button){
+      button.addEventListener('click', function(){ goFix(button.getAttribute('data-review-fix')); });
+    });
+    document.getElementById('decisionReviewReturn').addEventListener('click', function(){ close(true); });
+    document.getElementById('decisionReviewCommit').addEventListener('click', function(){
+      if (!rationaleValid()) return;
+      if (unresolvedChecks().length) renderConfirmation();
+      else commitChoice([]);
+    });
+    updateRationaleState();
+  }
+  function renderConfirmation(){
+    var unresolved = unresolvedChecks();
+    title.textContent = 'Commit with unresolved checks?';
+    content.innerHTML = '<p>This decision can still be committed. The following open checks will be recorded with the snapshot:</p>' +
+      '<ul id="decisionReviewUnresolved">' + unresolved.map(function(check){ return '<li>' + escapeHtml(check.label) + '</li>'; }).join('') + '</ul>' +
+      '<div class="decisionReviewFrame"><strong>Rationale</strong><span>' + escapeHtml(String(rationale || '').trim()) + '</span></div>' +
+      '<div class="decisionReviewActions"><button id="decisionReviewConfirmBack" type="button" class="decisionReviewButton">Back</button><button id="decisionReviewConfirmCommit" type="button" class="decisionReviewButton danger">Commit with unresolved checks</button></div>';
+    document.getElementById('decisionReviewConfirmBack').addEventListener('click', renderReview);
+    document.getElementById('decisionReviewConfirmCommit').addEventListener('click', function(){ commitChoice(unresolved); });
+    document.getElementById('decisionReviewConfirmBack').focus();
+  }
+  function commitChoice(unresolved){
+    var notes = api();
+    var normalized = unresolved.map(function(check){ return {id:check.id, label:check.label}; });
+    var committed = notes && notes.commitDecision(context.decisionId, context.proposedOptionId, String(rationale || '').trim(), normalized);
+    if (!committed){
+      try{ if (typeof window.showToast === 'function') window.showToast('Enter a short rationale before committing.'); }catch(_){}
+      return;
+    }
+    close(true);
+  }
+  function goFix(targetId){
+    var notes = api();
+    close(true);
+    if (notes){
+      if (typeof notes.focusSearchResult === 'function') notes.focusSearchResult(targetId);
+      else if (typeof notes.selectNote === 'function') notes.selectNote(targetId);
+    }
+    if (window.KyanbasuNoteActions && typeof window.KyanbasuNoteActions.refresh === 'function') window.KyanbasuNoteActions.refresh();
+  }
+  function open(nextContext){
+    if (!nextContext || !nextContext.decisionId || !nextContext.proposedOptionId) return false;
+    ensureUi();
+    context = nextContext;
+    rationale = '';
+    returnFocus = document.activeElement;
+    if (window.KyanbasuNoteActions && typeof window.KyanbasuNoteActions.close === 'function') window.KyanbasuNoteActions.close();
+    renderReview();
+    backdrop.hidden = false;
+    window.setTimeout(function(){
+      var checked = dialog.querySelector('input[name="decisionReviewOption"]:checked');
+      (checked || document.getElementById('decisionReviewRationale') || dialog).focus();
+    }, 0);
+    return true;
+  }
+  function close(clearSession){
+    ensureUi();
+    backdrop.hidden = true;
+    if (clearSession !== false){ context = null; rationale = ''; }
+    var focus = returnFocus;
+    returnFocus = null;
+    if (focus && focus.isConnected){ try{ focus.focus({preventScroll:true}); }catch(_){ focus.focus(); } }
+  }
+  function focusables(){
+    return Array.prototype.slice.call(dialog.querySelectorAll('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),[tabindex]:not([tabindex="-1"])'));
+  }
+  function trapKeys(event){
+    if (event.key === 'Escape'){
+      event.preventDefault(); close(true); return;
+    }
+    if (event.key !== 'Tab') return;
+    var items = focusables();
+    if (!items.length){ event.preventDefault(); dialog.focus(); return; }
+    var first = items[0];
+    var last = items[items.length - 1];
+    if (event.shiftKey && document.activeElement === first){ event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last){ event.preventDefault(); first.focus(); }
+  }
+
+  ensureUi();
+  document.addEventListener('kyanbasu:decision-review', function(event){ open(event.detail); });
+  window.KyanbasuDecisionReview = {open:open, close:function(){ close(true); }};
+})();
+</script>

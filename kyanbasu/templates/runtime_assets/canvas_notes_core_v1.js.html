@@ -195,12 +195,19 @@
     return row;
   }
 
+  function normalizeUnresolvedCheck(check){
+    if (!check || typeof check !== 'object') return null;
+    var id = String(check.id || '').trim();
+    var label = String(check.label || '').trim();
+    return id && label ? {id:id, label:label} : null;
+  }
+
   function normalizeDecisionCommit(commit){
     if (!commit || typeof commit !== 'object') return null;
     var committedAt = timestamp(commit.committedAt, 0);
     var chosenOptionId = String(commit.chosenOptionId || '').trim();
     if (!committedAt || !chosenOptionId) return null;
-    return {
+    var row = {
       id: String(commit.id || ('commit-' + committedAt)),
       committedAt: committedAt,
       chosenOptionId: chosenOptionId,
@@ -208,6 +215,9 @@
       notes: Array.isArray(commit.notes) ? commit.notes.map(normalizeDecisionSnapshotNote).filter(Boolean) : [],
       links: Array.isArray(commit.links) ? commit.links.map(normalizeDecisionSnapshotLink).filter(Boolean) : []
     };
+    var unresolvedChecks = Array.isArray(commit.unresolvedChecks) ? commit.unresolvedChecks.map(normalizeUnresolvedCheck).filter(Boolean) : [];
+    if (unresolvedChecks.length) row.unresolvedChecks = unresolvedChecks;
+    return row;
   }
 
   function normalizeDecisionRecord(record){
@@ -525,11 +535,12 @@
   }
 
   window.KyanbasuNotesCore = {
-    version: 7,
+    version: 8,
     bucketText: bucketText,
     noteText: noteText,
     normalizeTaskRef: normalizeTaskRef,
     normalizeAnalysis: normalizeAnalysis,
+    normalizeUnresolvedCheck: normalizeUnresolvedCheck,
     normalizeDecisionRecord: normalizeDecisionRecord,
     normalizeNote: normalizeNote,
     normalizeKind: normalizeKind,

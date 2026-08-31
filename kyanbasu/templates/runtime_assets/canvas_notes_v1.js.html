@@ -629,6 +629,9 @@
     checks.push({id:'inversion', label:'Inversion analysis completed', complete:!!(inversion && inversion.complete), targetId:inversionRoot ? inversionRoot.id : proposed.id});
     return {
       decisionId:root.id,
+      decisionLabel:templateValue(root.content, 'Decision') || 'Decision',
+      targetOutcome:templateValue(root.content, 'Target outcome'),
+      successMeans:templateValue(root.content, 'Success means'),
       proposedOptionId:proposed.id,
       options:options.map(function(option){ return {id:option.id, label:oneLine(option.content, 'Option')}; }),
       checks:checks
@@ -2939,7 +2942,7 @@
     var analysis = consequenceAnalysis(note);
     return analysis && Number(analysis.order) < 3 ? createChildNote(note.id, '', '') : null;
   }
-  function decisionCommitSnapshot(root, chosenOptionId, rationale){
+  function decisionCommitSnapshot(root, chosenOptionId, rationale, unresolvedChecks){
     var branchIds = descendantNoteIds(root.id);
     var included = Object.create(null);
     branchIds.forEach(function(id){ included[id] = true; });
@@ -2963,7 +2966,7 @@
       return row;
     });
     var committedAt = Date.now();
-    return {
+    var row = {
       id:'commit-' + committedAt.toString(36) + '-' + Math.random().toString(36).slice(2, 7),
       committedAt:committedAt,
       chosenOptionId:chosenOptionId,
@@ -2971,14 +2974,19 @@
       notes:snapshotNotes,
       links:snapshotLinks
     };
+    unresolvedChecks = Array.isArray(unresolvedChecks) ? unresolvedChecks.map(NoteCore.normalizeUnresolvedCheck).filter(Boolean) : [];
+    if (unresolvedChecks.length) row.unresolvedChecks = unresolvedChecks;
+    return row;
   }
-  function commitDecision(decisionId, optionId, rationale){
+  function commitDecision(decisionId, optionId, rationale, unresolvedChecks){
+    rationale = String(rationale || '').trim();
+    if (!rationale || rationale.length > 500) return null;
     var root = noteById(decisionId);
     var option = noteById(optionId);
     if (!root || noteKind(root) !== 'decision' || !option || noteKind(option) !== 'option') return null;
     if (!decisionOptions(root.id).some(function(candidate){ return candidate.id === option.id; })) return null;
     var record = NoteCore.normalizeDecisionRecord(root.decisionRecord) || {chosenOptionId:'', commits:[]};
-    var commit = decisionCommitSnapshot(root, option.id, rationale);
+    var commit = decisionCommitSnapshot(root, option.id, rationale, unresolvedChecks);
     root.decisionRecord = NoteCore.normalizeDecisionRecord({
       chosenOptionId:option.id,
       commits:record.commits.concat([commit])
@@ -4574,7 +4582,7 @@
     });
     return {
       kind: 'kyanbasu.notes',
-      version: 7,
+      version: 8,
       exportedAt: new Date().toISOString(),
       notes: notes.map(function(n){
         var row = {id:n.id, x:toInt(n.x, 160), y:toInt(n.y, 160), content:n.content || 'New note', bucket:noteBucket(n), kind:noteKind(n), status:noteStatus(n), collapsed:!!n.collapsed, taskRefs:noteTaskRefs(n).slice(), createdAt:Number(n.createdAt) || 0, updatedAt:Number(n.updatedAt) || 0, reviewedAt:Number(n.reviewedAt) || 0};

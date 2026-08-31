@@ -39,10 +39,12 @@ class TestRuntimeHtml(unittest.TestCase):
             'id="FEATURE_CANVAS_NAVIGATOR_V1"',
             'id="FEATURE_CANVAS_NOTES_V1_CSS"',
             'id="FEATURE_CANVAS_NOTE_ACTIONS_V1_CSS"',
+            'id="FEATURE_CANVAS_DECISION_REVIEW_V1_CSS"',
             'id="FEATURE_CANVAS_NOTES_CORE_V1"',
             'id="FEATURE_CANVAS_DECISION_GUIDANCE_V1"',
             'id="FEATURE_CANVAS_NOTES_V1"',
             'id="FEATURE_CANVAS_NOTE_ACTIONS_V1"',
+            'id="FEATURE_CANVAS_DECISION_REVIEW_V1"',
             'id="FEATURE_CONSOLE_EDITOR_V1_CSS"',
             'id="FEATURE_CONSOLE_EDITOR_V1"',
             "__ENERGY_ARROW_CSS__",
@@ -63,9 +65,13 @@ class TestRuntimeHtml(unittest.TestCase):
         self.assertLess(out.index('id="FEATURE_CANVAS_DECISION_GUIDANCE_V1"'), out.index('id="FEATURE_CANVAS_NOTES_V1"'))
         self.assertLess(out.index('id="FEATURE_CANVAS_NOTES_V1_CSS"'), out.index('id="FEATURE_CANVAS_NOTE_ACTIONS_V1_CSS"'))
         self.assertLess(out.index('id="FEATURE_CANVAS_NOTES_V1"'), out.index('id="FEATURE_CANVAS_NOTE_ACTIONS_V1"'))
+        self.assertLess(out.index('id="FEATURE_CANVAS_NOTE_ACTIONS_V1_CSS"'), out.index('id="FEATURE_CANVAS_DECISION_REVIEW_V1_CSS"'))
+        self.assertLess(out.index('id="FEATURE_CANVAS_NOTE_ACTIONS_V1"'), out.index('id="FEATURE_CANVAS_DECISION_REVIEW_V1"'))
         self.assertEqual(out.count('id="FEATURE_CANVAS_DECISION_GUIDANCE_V1"'), 1)
         self.assertEqual(out.count('id="FEATURE_CANVAS_NOTE_ACTIONS_V1_CSS"'), 1)
         self.assertEqual(out.count('id="FEATURE_CANVAS_NOTE_ACTIONS_V1"'), 1)
+        self.assertEqual(out.count('id="FEATURE_CANVAS_DECISION_REVIEW_V1_CSS"'), 1)
+        self.assertEqual(out.count('id="FEATURE_CANVAS_DECISION_REVIEW_V1"'), 1)
         self.assertIn("rawRuntimeText: rawRuntimeText", out)
         self.assertIn("rawTaskLines", out)
         self.assertNotIn("var lines=[]", out)
