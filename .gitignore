@@ -11,3 +11,5 @@ TaskCanvas.html
 .pytest_cache/
 .mypy_cache/
 .coverage
+.superpowers/
+.worktrees/
