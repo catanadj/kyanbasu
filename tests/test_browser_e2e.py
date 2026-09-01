@@ -2441,13 +2441,24 @@ window.addEventListener('load', function(){
 (function(){
   var browserErrors = [];
   window.addEventListener('error', function(event){ browserErrors.push(event && event.message || 'Browser error'); });
+  window.addEventListener('unhandledrejection', function(event){ browserErrors.push(event && event.reason && event.reason.message || 'Unhandled rejection'); });
   window.addEventListener('load', function(){
     setTimeout(function(){
       var api = window.KyanbasuNotes;
       var ui = window.KyanbasuNoteActions;
       var toolbar = document.getElementById('noteActionToolbar');
       var menu = document.getElementById('noteActionMenu');
-      var created, option, secondOption, factor, inversionRoot, failure, safeguard;
+      var created, root, state, optionA, optionB, inversionRoot, failure, safeguard;
+      var createdRootOnly = false;
+      var noOptionBeforeTriageConfirmation = false;
+      var noAnalysisBeforeTriageConfirmation = false;
+      var noOptionBeforeState = false;
+      var oneStateBeforeOptions = false;
+      var inspectorStayedCollapsed = true;
+      var acceptedModules = [];
+      var recommendedModules = [];
+      var primaryLabels = [];
+      var menuActions = [];
       var orders = [];
       var flippedAbove = false;
       var leftClamped = false;
@@ -2458,12 +2469,17 @@ window.addEventListener('load', function(){
       function expectLabel(label){
         if (primaryLabel() !== label) throw new Error('Expected primary "' + label + '", got "' + primaryLabel() + '"');
       }
-      function clickPrimary(label){ expectLabel(label); primary().click(); }
+      function clickPrimary(label){
+        expectLabel(label);
+        primaryLabels.push(label);
+        primary().click();
+      }
       function clickMenu(actionId){
         var overflow = toolbar.querySelector('.noteActionOverflow');
         overflow.click();
         var item = menu.querySelector('[data-action-id="' + actionId + '"]');
         if (!item) throw new Error('Menu action missing: ' + actionId);
+        menuActions.push(actionId);
         item.click();
       }
       function editSelected(text){
@@ -2477,6 +2493,14 @@ window.addEventListener('load', function(){
         var id = api.primaryNote();
         return api.notes().filter(function(note){ return note.id === id; })[0];
       }
+      function notesOfKind(kind){
+        return api.notes().filter(function(note){ return note.kind === kind; });
+      }
+      function chooseTriage(dimension, value){
+        var button = document.querySelector('[data-triage-dimension="' + dimension + '"][data-triage-value="' + value + '"]');
+        if (!button) throw new Error('Triage control missing: ' + dimension + '=' + value);
+        button.click();
+      }
       function fail(error){
         if (document.getElementById('e2e-out')) return;
         var pre = document.createElement('pre');
@@ -2487,29 +2511,83 @@ window.addEventListener('load', function(){
       var steps = [
         function(){
           if (!api || !ui || !toolbar || !menu) throw new Error('Guided decision UI missing');
-          document.body.classList.add('inspector-collapsed');
+          var collapse = document.getElementById('hideInspector');
+          if (!collapse) throw new Error('Collapse inspector control missing');
+          collapse.click();
           created = api.createDecisionMap(180, 300, 'Decisions');
-          factor = api.createDecisionChild(created.root.id, 'factor');
-          option = api.createDecisionChild(created.root.id, 'option');
-          secondOption = api.createDecisionChild(created.root.id, 'option');
-          api.createDecisionTriage(created.root.id);
-          api.selectNote(created.root.id);
+          root = created.root;
+          createdRootOnly = api.notes().length === 1 && api.notes()[0].id === root.id && api.links().length === 0;
           editSelected('Problem / decision: Choose a planning workflow\\nDesired outcome: Make decisions with less friction\\nSuccess means: Used consistently for one week\\nDecision needed by: Friday\\nReassess by: Next Friday');
-          var prepared = api.exportData();
-          var preparedRoot = prepared.notes.filter(function(note){ return note.id === created.root.id; })[0];
-          preparedRoot.decisionProcess.triageProfile = {answers:{magnitude:'high', reversibility:'hard', uncertainty:'medium', emotionalPressure:'low', duration:'short'}, recommendedModuleIds:['consequences','inversion'], acceptedModuleIds:['consequences','inversion'], declinedModuleIds:[], recommendationReasons:[], confirmedAt:Date.now()};
-          api.importData(prepared);
-          api.selectNote(created.root.id);
+        },
+        function(){ clickPrimary('Assess decision rigor'); },
+        function(){
+          var triage = selectedNote();
+          if (!triage || !triage.analysis || triage.analysis.tool !== 'triage') throw new Error('Triage note was not selected');
+          noOptionBeforeTriageConfirmation = notesOfKind('option').length === 0;
+          noAnalysisBeforeTriageConfirmation = !api.notes().some(function(note){
+            return note.analysis && (note.analysis.tool === 'consequences' || note.analysis.tool === 'inversion');
+          });
+          chooseTriage('magnitude', 'high');
+          chooseTriage('reversibility', 'hard');
+          chooseTriage('uncertainty', 'medium');
+          chooseTriage('emotionalPressure', 'low');
+          chooseTriage('duration', 'short');
+        },
+        function(){
+          var triage = selectedNote();
+          var card = document.querySelector('.tcNoteNode[data-note-id="' + triage.id + '"]');
+          var checkboxes = Array.prototype.slice.call(card.querySelectorAll('.decisionTriageModule input[type="checkbox"]'));
+          if (checkboxes.length !== 2 || !checkboxes.every(function(input){ return input.checked; })) throw new Error('Both recommended modules were not accepted');
+          var confirm = card.querySelector('.decisionTriageConfirm');
+          if (!confirm || confirm.disabled) throw new Error('Triage profile could not be confirmed');
+          confirm.click();
+        },
+        function(){
+          var process = api.decisionProcess(root.id);
+          acceptedModules = process.triageProfile && process.triageProfile.acceptedModuleIds || [];
+          recommendedModules = process.triageProfile && process.triageProfile.recommendedModuleIds || [];
+          noOptionBeforeState = notesOfKind('option').length === 0;
+          clickPrimary('Add state');
+        },
+        function(){
+          state = selectedNote();
+          editSelected('State: Available time and attention\\nWhy can it affect the outcome? It limits how much process can be sustained.\\nCan I directly choose it? No\\nWhat would indicate that it is changing? Two skipped weekly reviews');
+          var rootContext = api.decisionActionContext(root.id);
+          oneStateBeforeOptions = rootContext.stateCount === 1 && rootContext.optionCount === 0;
+          clickMenu('go-decision');
+        },
+        function(){ clickPrimary('Add option'); },
+        function(){
+          optionA = selectedNote();
+          editSelected('Option: Use contextual guidance\\nWhy it may work: It keeps the next normative step visible without opening the inspector.');
+          clickMenu('go-decision');
+        },
+        function(){ clickPrimary('Add option'); },
+        function(){
+          optionB = selectedNote();
+          editSelected('Option: Keep a lightweight manual checklist\\nWhy it may work: It has almost no setup cost and remains familiar.');
+          clickMenu('go-decision');
         },
         function(){ clickPrimary('Explore next option'); },
         function(){
-          if (api.primaryNote() !== option.id) throw new Error('Guidance did not select the first option');
-          editSelected('Option: Use contextual guidance');
+          if (api.primaryNote() !== optionA.id) throw new Error('Guidance did not select the first option');
+          clickPrimary('Explore consequences');
         },
-        function(){ clickPrimary('Explore consequences'); },
-        function(){ orders.push(selectedNote().analysis && selectedNote().analysis.order); clickPrimary('Add 2nd-order consequence'); },
-        function(){ orders.push(selectedNote().analysis && selectedNote().analysis.order); clickPrimary('Add 3rd-order consequence'); },
-        function(){ orders.push(selectedNote().analysis && selectedNote().analysis.order); clickMenu('go-owner-option'); },
+        function(){
+          orders.push(selectedNote().analysis && selectedNote().analysis.order);
+          editSelected('1st-order consequence: The next useful step stays visible\\nTime horizon: Immediate\\nLikelihood: 80%\\nPayoff / cost: Less decision friction\\nValue affected: Focus');
+          clickPrimary('Add 2nd-order consequence');
+        },
+        function(){
+          orders.push(selectedNote().analysis && selectedNote().analysis.order);
+          editSelected('2nd-order consequence: Weekly use becomes more consistent\\nWhat follows from the prior consequence? Less friction increases follow-through\\nTime horizon: One month\\nLikelihood: 65%\\nPayoff / cost: Better decisions for modest effort\\nValue affected: Consistency');
+          clickPrimary('Add 3rd-order consequence');
+        },
+        function(){
+          orders.push(selectedNote().analysis && selectedNote().analysis.order);
+          editSelected('3rd-order consequence: The workflow becomes a durable habit\\nWhat follows from the prior consequence? Consistent use reinforces the practice\\nTime horizon: One quarter\\nLikelihood: 50%\\nPayoff / cost: Durable clarity with maintenance cost\\nValue affected: Reliability');
+          clickMenu('go-owner-option');
+        },
         function(){ clickPrimary('Run inversion'); },
         function(){
           inversionRoot = selectedNote();
@@ -2529,10 +2607,22 @@ window.addEventListener('load', function(){
           editSelected('Prevent: Keep only the guided next action\\nDetect early: Review skipped uses weekly\\nRespond if it happens: Remove the unused control');
         },
         function(){ expectLabel('Add failure mode'); clickMenu('go-owner-option'); },
-        function(){ clickPrimary('Review this option'); },
+        function(){
+          expectLabel('Review this option');
+          clickMenu('go-decision');
+        },
+        function(){ clickPrimary('Explore next option'); },
+        function(){
+          if (api.primaryNote() !== optionB.id) throw new Error('Guidance did not select the second option');
+          expectLabel('Explore consequences');
+          clickMenu('review-option');
+        },
         function(){
           var backdrop = document.getElementById('decisionReviewBackdrop');
           if (!backdrop || backdrop.hidden) throw new Error('Review dialog did not open');
+          var chooseFirst = document.querySelector('input[name="decisionReviewOption"][value="' + optionA.id + '"]');
+          if (!chooseFirst) throw new Error('First option was not available for commitment');
+          chooseFirst.click();
           var rationale = document.getElementById('decisionReviewRationale');
           rationale.value = 'Best fit for the current constraints';
           rationale.dispatchEvent(new Event('input', {bubbles:true}));
@@ -2540,19 +2630,19 @@ window.addEventListener('load', function(){
         },
         function(){
           var confirmation = document.getElementById('decisionReviewConfirmCommit');
-          if (!confirmation) throw new Error('Named soft-gate confirmation missing');
+          if (!confirmation || confirmation.textContent.trim() !== 'Commit with unresolved checks') throw new Error('Named soft-gate confirmation missing');
           confirmation.click();
         },
         function(){
           var zoom = document.getElementById('zoom');
           zoom.value = '175';
           zoom.dispatchEvent(new Event('input', {bubbles:true}));
-          var card = document.querySelector('.tcNoteNode[data-note-id="' + option.id + '"]');
+          var card = document.querySelector('.tcNoteNode[data-note-id="' + optionA.id + '"]');
           card.getBoundingClientRect = function(){ return {left:-48, right:172, top:window.innerHeight - 72, bottom:window.innerHeight - 2, width:220, height:70}; };
           ui.refresh();
         },
         function(){
-          var card = document.querySelector('.tcNoteNode[data-note-id="' + option.id + '"]');
+          var card = document.querySelector('.tcNoteNode[data-note-id="' + optionA.id + '"]');
           flippedAbove = parseFloat(toolbar.style.top) + toolbar.offsetHeight <= card.getBoundingClientRect().top;
           leftClamped = parseFloat(toolbar.style.left) >= 8;
           card.getBoundingClientRect = function(){ return {left:window.innerWidth - 120, right:window.innerWidth + 100, top:180, bottom:250, width:220, height:70}; };
@@ -2560,19 +2650,38 @@ window.addEventListener('load', function(){
         },
         function(){
           rightClamped = parseFloat(toolbar.style.left) + toolbar.offsetWidth <= window.innerWidth - 8;
-          var history = api.decisionHistory(created.root.id);
+          var history = api.decisionHistory(root.id);
           var currentNotes = api.notes();
+          var commitRoot = history.commits[0] && history.commits[0].notes.filter(function(note){ return note.id === root.id; })[0];
+          var commitProfile = commitRoot && commitRoot.decisionProcess && commitRoot.decisionProcess.triageProfile;
+          var triageNotes = currentNotes.filter(function(note){ return note.analysis && note.analysis.tool === 'triage' && note.analysis.role === 'assessment'; });
+          var consequenceNotes = currentNotes.filter(function(note){ return note.analysis && note.analysis.tool === 'consequences' && note.analysis.ownerId === optionA.id; });
+          var inversionNotes = currentNotes.filter(function(note){ return note.analysis && note.analysis.tool === 'inversion' && note.analysis.ownerId === optionA.id; });
           var out = {
+            createdRootOnly:createdRootOnly,
+            noOptionBeforeTriageConfirmation:noOptionBeforeTriageConfirmation,
+            noAnalysisBeforeTriageConfirmation:noAnalysisBeforeTriageConfirmation,
+            noOptionBeforeState:noOptionBeforeState,
+            oneStateBeforeOptions:oneStateBeforeOptions,
             inspectorCollapsed:document.body.classList.contains('inspector-collapsed'),
-            optionCount:[option, secondOption].filter(function(item){ return currentNotes.some(function(note){ return note.id === item.id && note.kind === 'option'; }); }).length,
-            factorRetained:currentNotes.some(function(note){ return note.id === factor.id && note.kind === 'factor'; }),
+            inspectorStayedCollapsed:inspectorStayedCollapsed,
+            optionCount:[optionA, optionB].filter(function(item){ return currentNotes.some(function(note){ return note.id === item.id && note.kind === 'option'; }); }).length,
+            stateRetained:currentNotes.some(function(note){ return note.id === state.id && note.kind === 'factor'; }),
+            triageCount:triageNotes.length,
+            acceptedModules:acceptedModules,
+            recommendedModules:recommendedModules,
+            consequenceActivated:consequenceNotes.length > 0,
+            inversionActivated:inversionNotes.length > 0,
+            primaryLabels:primaryLabels,
+            menuActions:menuActions,
             consequenceOrders:orders,
             inversionRole:inversionRoot && inversionRoot.analysis && inversionRoot.analysis.role,
             failureKind:failure && failure.kind,
             safeguardKind:safeguard && safeguard.kind,
             commitCount:history.commits.length,
             commitRationale:history.commits[0] && history.commits[0].rationale,
-            unresolvedCount:history.commits[0] && history.commits[0].unresolvedChecks && history.commits[0].unresolvedChecks.length,
+            unresolvedChecks:history.commits[0] && history.commits[0].unresolvedChecks,
+            commitProfile:commitProfile,
             stagedCommands:(window.STAGED_CMDS || []).length,
             browserErrors:browserErrors,
             flippedAbove:flippedAbove,
@@ -2590,6 +2699,7 @@ window.addEventListener('load', function(){
         if (index >= steps.length) return;
         try{ steps[index++](); }
         catch(error){ fail(error); return; }
+        inspectorStayedCollapsed = inspectorStayedCollapsed && document.body.classList.contains('inspector-collapsed');
         setTimeout(advance, 70);
       }
       advance();
@@ -2602,16 +2712,49 @@ window.addEventListener('load', function(){
         raw = self._run_html_harness(html)
         self.assertNotIn("ERR:", raw)
         result = json.loads(raw)
+        self.assertTrue(result["createdRootOnly"], msg=json.dumps(result))
+        self.assertTrue(result["noOptionBeforeTriageConfirmation"], msg=json.dumps(result))
+        self.assertTrue(result["noAnalysisBeforeTriageConfirmation"], msg=json.dumps(result))
+        self.assertTrue(result["noOptionBeforeState"], msg=json.dumps(result))
+        self.assertTrue(result["oneStateBeforeOptions"], msg=json.dumps(result))
         self.assertTrue(result["inspectorCollapsed"], msg=json.dumps(result))
+        self.assertTrue(result["inspectorStayedCollapsed"], msg=json.dumps(result))
         self.assertEqual(result["optionCount"], 2, msg=json.dumps(result))
-        self.assertTrue(result["factorRetained"], msg=json.dumps(result))
+        self.assertTrue(result["stateRetained"], msg=json.dumps(result))
+        self.assertEqual(result["triageCount"], 1, msg=json.dumps(result))
+        self.assertEqual(result["recommendedModules"], ["consequences", "inversion"], msg=json.dumps(result))
+        self.assertEqual(result["acceptedModules"], ["consequences", "inversion"], msg=json.dumps(result))
+        self.assertTrue(result["consequenceActivated"], msg=json.dumps(result))
+        self.assertTrue(result["inversionActivated"], msg=json.dumps(result))
+        self.assertEqual(
+            result["primaryLabels"],
+            [
+                "Assess decision rigor",
+                "Add state",
+                "Add option",
+                "Add option",
+                "Explore next option",
+                "Explore consequences",
+                "Add 2nd-order consequence",
+                "Add 3rd-order consequence",
+                "Run inversion",
+                "Continue inversion",
+                "Add safeguard",
+                "Explore next option",
+            ],
+            msg=json.dumps(result),
+        )
+        self.assertEqual(result["menuActions"], ["go-decision", "go-decision", "go-decision", "go-owner-option", "go-owner-option", "go-decision", "review-option"], msg=json.dumps(result))
         self.assertEqual(result["consequenceOrders"], [1, 2, 3], msg=json.dumps(result))
         self.assertEqual(result["inversionRole"], "root", msg=json.dumps(result))
         self.assertEqual(result["failureKind"], "factor", msg=json.dumps(result))
         self.assertEqual(result["safeguardKind"], "action", msg=json.dumps(result))
         self.assertEqual(result["commitCount"], 1, msg=json.dumps(result))
         self.assertEqual(result["commitRationale"], "Best fit for the current constraints", msg=json.dumps(result))
-        self.assertGreater(result["unresolvedCount"], 0, msg=json.dumps(result))
+        self.assertGreater(len(result["unresolvedChecks"]), 0, msg=json.dumps(result))
+        self.assertEqual(result["commitProfile"]["answers"], {"magnitude":"high", "reversibility":"hard", "uncertainty":"medium", "emotionalPressure":"low", "duration":"short"}, msg=json.dumps(result))
+        self.assertEqual(result["commitProfile"]["recommendedModuleIds"], ["consequences", "inversion"], msg=json.dumps(result))
+        self.assertEqual(result["commitProfile"]["acceptedModuleIds"], ["consequences", "inversion"], msg=json.dumps(result))
         self.assertEqual(result["stagedCommands"], 0, msg=json.dumps(result))
         self.assertEqual(result["browserErrors"], [], msg=json.dumps(result))
         self.assertTrue(result["flippedAbove"], msg=json.dumps(result))
