@@ -513,7 +513,7 @@
     var existing = triageNoteFor(root.id);
     if (existing){
       selectNote(existing.id);
-      focusNoteText(existing.id);
+      document.dispatchEvent(new CustomEvent('kyanbasu:decision-triage-focus', {detail:{decisionId:root.id, noteId:existing.id}}));
       return existing;
     }
     normalizedDecisionProcess(root);
@@ -523,10 +523,116 @@
     });
     if (!triage) return null;
     selectNote(triage.id);
-    focusNoteText(triage.id);
     saveSoon();
     publishNoteState('triage');
+    document.dispatchEvent(new CustomEvent('kyanbasu:decision-triage-focus', {detail:{decisionId:root.id, noteId:triage.id}}));
     return triage;
+  }
+  function decisionTriageAssessment(process){
+    var engine = window.KyanbasuDecisionTriage;
+    if (!engine || typeof engine.assess !== 'function') return null;
+    var modules = engine.availableModules();
+    var availableIds = modules.map(function(module){ return module.id; });
+    var raw = engine.assess(process.triageDraft, availableIds);
+    var recommendedModuleIds = raw.recommendations.map(function(recommendation){ return recommendation.id; });
+    var recommendationReasons = [];
+    raw.recommendations.forEach(function(recommendation){
+      var reasons = Array.isArray(recommendation.reasons) ? recommendation.reasons : [recommendation.reason];
+      reasons.forEach(function(reason){
+        reason = String(reason || '').trim();
+        if (reason) recommendationReasons.push({moduleId:recommendation.id, reason:reason});
+      });
+    });
+    return {
+      answers:raw.answers,
+      complete:raw.complete,
+      recommendations:raw.recommendations,
+      recommendedModuleIds:recommendedModuleIds,
+      recommendationReasons:recommendationReasons,
+      profileExplanation:raw.profileExplanation,
+      availableModules:modules
+    };
+  }
+  function sameValues(left, right){
+    return JSON.stringify(left) === JSON.stringify(right);
+  }
+  function decisionTriageContextFor(id){
+    var root = decisionRootFor(id);
+    if (!root) return null;
+    var triage = triageNoteFor(root.id);
+    if (!triage) return null;
+    var process = normalizedDecisionProcess(root);
+    var assessment = decisionTriageAssessment(process);
+    if (!assessment) return null;
+    var availableIds = assessment.availableModules.map(function(module){ return module.id; });
+    var accepted = process.moduleDraftIds === null
+      ? assessment.recommendedModuleIds.slice()
+      : process.moduleDraftIds.filter(function(moduleId){ return availableIds.indexOf(moduleId) >= 0; });
+    var profile = process.triageProfile;
+    var pending = !!profile && (!sameValues(profile.answers, assessment.answers) || !sameValues(profile.acceptedModuleIds, accepted));
+    return {
+      rootId:root.id,
+      noteId:triage.id,
+      selected:selectedNoteId === triage.id,
+      process:cloneValue(process),
+      assessment:cloneValue(assessment),
+      acceptedModuleIds:accepted.slice(),
+      pending:pending
+    };
+  }
+  function setDecisionTriageAnswer(id, dimensionId, value){
+    var root = decisionRootFor(id);
+    var engine = window.KyanbasuDecisionTriage;
+    if (!root || !triageNoteFor(root.id) || !engine) return false;
+    var dimension = engine.dimensions().filter(function(candidate){ return candidate.id === dimensionId; })[0];
+    if (!dimension || dimension.values.indexOf(value) < 0) return false;
+    var process = normalizedDecisionProcess(root);
+    process.triageDraft[dimension.id] = value;
+    process.moduleDraftIds = null;
+    touchNote(root);
+    saveSoon();
+    publishNoteState('triage-answer');
+    return true;
+  }
+  function setDecisionTriageModules(id, moduleIds){
+    var root = decisionRootFor(id);
+    var engine = window.KyanbasuDecisionTriage;
+    if (!root || !triageNoteFor(root.id) || !engine || !Array.isArray(moduleIds)) return false;
+    var known = engine.availableModules().map(function(module){ return module.id; });
+    var retained = [];
+    moduleIds.forEach(function(moduleId){
+      if (known.indexOf(moduleId) >= 0 && retained.indexOf(moduleId) < 0) retained.push(moduleId);
+    });
+    var process = normalizedDecisionProcess(root);
+    process.moduleDraftIds = retained;
+    touchNote(root);
+    saveSoon();
+    publishNoteState('triage-modules');
+    return true;
+  }
+  function confirmDecisionTriage(id){
+    var context = decisionTriageContextFor(id);
+    if (!context || !context.assessment.complete) return null;
+    var root = noteById(context.rootId);
+    var process = normalizedDecisionProcess(root);
+    var assessment = context.assessment;
+    var accepted = context.acceptedModuleIds.slice();
+    process.triageProfile = {
+      answers:assessment.answers,
+      recommendedModuleIds:assessment.recommendedModuleIds,
+      acceptedModuleIds:accepted,
+      declinedModuleIds:assessment.recommendedModuleIds.filter(function(moduleId){
+        return accepted.indexOf(moduleId) < 0;
+      }),
+      recommendationReasons:assessment.recommendationReasons,
+      confirmedAt:Date.now()
+    };
+    touchNote(root);
+    selectNote(root.id);
+    renderAll();
+    saveNow();
+    publishNoteState('triage-confirmed');
+    return cloneValue(process.triageProfile);
   }
   function directStateIsControllable(note){
     var label = 'Can I directly choose it?'.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -4840,6 +4946,10 @@
     createDecisionMap: createDecisionMap,
     createDecisionChild: createDecisionChild,
     createDecisionTriage: createDecisionTriage,
+    decisionTriageContext: function(id){ return cloneValue(decisionTriageContextFor(id)); },
+    setDecisionTriageAnswer: setDecisionTriageAnswer,
+    setDecisionTriageModules: setDecisionTriageModules,
+    confirmDecisionTriage: confirmDecisionTriage,
     runInversion: runInversion,
     createInversionFailure: createInversionFailure,
     createInversionSafeguard: createInversionSafeguard,

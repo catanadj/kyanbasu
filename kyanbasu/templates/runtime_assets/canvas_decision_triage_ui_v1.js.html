@@ -1,0 +1,199 @@
+<script id="FEATURE_CANVAS_DECISION_TRIAGE_UI_V1">
+(function(){
+  'use strict';
+  if (window.KyanbasuDecisionTriageUI) return;
+
+  function api(){ return window.KyanbasuNotes || null; }
+  function engine(){ return window.KyanbasuDecisionTriage || null; }
+  function escAttr(value){ return String(value || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"'); }
+  function title(value){
+    value = String(value || '');
+    return value ? value.charAt(0).toUpperCase() + value.slice(1) : '';
+  }
+  function triageNotes(){
+    var notes = api() && api().notes ? api().notes() : [];
+    return notes.filter(function(note){
+      var analysis = note && note.analysis;
+      return analysis && analysis.tool === 'triage' && analysis.role === 'assessment';
+    });
+  }
+  function cardFor(noteId){
+    return document.querySelector('.tcNoteNode[data-note-id="' + escAttr(noteId) + '"]');
+  }
+  function answerButton(noteId, dimensionId, value){
+    var card = cardFor(noteId);
+    return card && card.querySelector('[data-triage-dimension="' + escAttr(dimensionId) + '"][data-triage-value="' + escAttr(value) + '"]');
+  }
+  function focusAnswer(noteId, dimensionId, value){
+    var button = answerButton(noteId, dimensionId, value);
+    if (button) button.focus();
+  }
+  function selectedModules(panel){
+    return Array.prototype.map.call(panel.querySelectorAll('.decisionTriageModule input[type="checkbox"]:checked'), function(input){
+      return input.value;
+    });
+  }
+  function renderDimension(panel, context, dimension){
+    var group = document.createElement('div');
+    var labelId = 'decision-triage-' + context.noteId + '-' + dimension.id;
+    group.className = 'decisionTriageDimension';
+    group.setAttribute('role', 'radiogroup');
+    group.setAttribute('aria-labelledby', labelId);
+    var label = document.createElement('span');
+    label.id = labelId;
+    label.textContent = dimension.label;
+    group.appendChild(label);
+    var choices = document.createElement('div');
+    choices.className = 'decisionTriageChoices';
+    var answer = context.assessment.answers[dimension.id];
+    dimension.values.forEach(function(value, index){
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.setAttribute('role', 'radio');
+      button.setAttribute('aria-checked', answer === value ? 'true' : 'false');
+      button.setAttribute('tabindex', (answer ? answer === value : index === 0) ? '0' : '-1');
+      button.setAttribute('data-triage-dimension', dimension.id);
+      button.setAttribute('data-triage-value', value);
+      button.textContent = title(value);
+      button.addEventListener('click', function(event){
+        event.stopPropagation();
+        if (api().setDecisionTriageAnswer(context.noteId, dimension.id, value)) focusAnswer(context.noteId, dimension.id, value);
+      });
+      button.addEventListener('keydown', function(event){
+        var buttons = Array.prototype.slice.call(choices.querySelectorAll('button[role="radio"]'));
+        var current = buttons.indexOf(button);
+        var next = current;
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = (current + buttons.length - 1) % buttons.length;
+        else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (current + 1) % buttons.length;
+        else if (event.key === 'Home') next = 0;
+        else if (event.key === 'End') next = buttons.length - 1;
+        else if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.stopPropagation();
+        var nextValue = dimension.values[next];
+        if (api().setDecisionTriageAnswer(context.noteId, dimension.id, nextValue)) focusAnswer(context.noteId, dimension.id, nextValue);
+      });
+      choices.appendChild(button);
+    });
+    group.appendChild(choices);
+    panel.appendChild(group);
+  }
+  function renderModules(panel, context){
+    var assessment = context.assessment;
+    var section = document.createElement('div');
+    section.className = 'decisionTriageModules';
+    var heading = document.createElement('h3');
+    heading.textContent = 'Optional analysis modules';
+    section.appendChild(heading);
+    var explanation = document.createElement('p');
+    explanation.className = 'decisionTriageExplanation';
+    explanation.textContent = assessment.profileExplanation;
+    section.appendChild(explanation);
+    assessment.recommendations.forEach(function(recommendation){
+      var reason = document.createElement('p');
+      reason.className = 'decisionTriageReason';
+      reason.textContent = recommendation.label + ': ' + recommendation.reason;
+      section.appendChild(reason);
+    });
+    assessment.availableModules.forEach(function(module){
+      var row = document.createElement('label');
+      row.className = 'decisionTriageModule';
+      var checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = module.id;
+      checkbox.checked = context.acceptedModuleIds.indexOf(module.id) >= 0;
+      checkbox.addEventListener('click', function(event){ event.stopPropagation(); });
+      checkbox.addEventListener('change', function(){ api().setDecisionTriageModules(context.noteId, selectedModules(section)); });
+      var text = document.createElement('span');
+      text.textContent = module.label;
+      var state = document.createElement('span');
+      state.className = 'decisionTriageModuleState';
+      row.appendChild(checkbox);
+      row.appendChild(text);
+      row.appendChild(state);
+      section.appendChild(row);
+    });
+    var status = document.createElement('p');
+    status.className = 'decisionTriageStatus' + (context.pending ? ' pending' : '');
+    status.textContent = context.pending ? 'Pending changes — confirm to apply this profile.' : (context.process.triageProfile ? 'Confirmed profile.' : 'Not yet confirmed.');
+    section.appendChild(status);
+    var confirm = document.createElement('button');
+    confirm.type = 'button';
+    confirm.className = 'decisionTriageConfirm';
+    confirm.textContent = context.process.triageProfile ? 'Confirm changes' : 'Confirm profile';
+    confirm.disabled = !assessment.complete;
+    confirm.addEventListener('click', function(event){
+      event.preventDefault();
+      event.stopPropagation();
+      api().confirmDecisionTriage(context.noteId);
+    });
+    section.appendChild(confirm);
+    panel.appendChild(section);
+  }
+  function renderSummary(panel, context){
+    var profile = context.process.triageProfile;
+    var summary = document.createElement('div');
+    summary.className = 'decisionTriageSummary';
+    summary.textContent = 'Profile: ' + engine().dimensions().map(function(dimension){ return profile.answers[dimension.id]; }).join(' / ') + ' · ' + profile.acceptedModuleIds.length + ' module' + (profile.acceptedModuleIds.length === 1 ? '' : 's') + ' accepted. Select this triage note to review.';
+    panel.appendChild(summary);
+  }
+  function renderCard(note){
+    var notes = api();
+    var card = cardFor(note.id);
+    var context = notes && notes.decisionTriageContext ? notes.decisionTriageContext(note.id) : null;
+    if (!card || !context) return;
+    card.classList.add('decisionTriageCard');
+    var generic = card.querySelector('.tcNoteText');
+    if (generic) generic.hidden = true;
+    var old = card.querySelector('.decisionTriagePanel');
+    if (old) old.remove();
+    var panel = document.createElement('div');
+    panel.className = 'decisionTriagePanel';
+    panel.setAttribute('data-triage-note-id', note.id);
+    if (context.process.triageProfile && !context.selected && !context.pending){
+      renderSummary(panel, context);
+    } else {
+      var dimensions = document.createElement('div');
+      dimensions.className = 'decisionTriageDimensions';
+      engine().dimensions().forEach(function(dimension){ renderDimension(dimensions, context, dimension); });
+      panel.appendChild(dimensions);
+      renderModules(panel, context);
+    }
+    card.appendChild(panel);
+  }
+  function renderAll(){
+    var active = document.activeElement;
+    var dimensionId = active && active.getAttribute ? active.getAttribute('data-triage-dimension') : '';
+    var value = active && active.getAttribute ? active.getAttribute('data-triage-value') : '';
+    var activeCard = active && active.closest ? active.closest('.tcNoteNode[data-note-id]') : null;
+    var noteId = activeCard && activeCard.getAttribute('data-note-id');
+    triageNotes().forEach(renderCard);
+    if (noteId && dimensionId && value) focusAnswer(noteId, dimensionId, value);
+  }
+  function focusTriage(event){
+    var detail = event.detail || {};
+    renderAll();
+    var context = api() && api().decisionTriageContext ? api().decisionTriageContext(detail.noteId) : null;
+    if (!context) return;
+    var dimensions = engine().dimensions();
+    var target = null;
+    for (var i=0; i<dimensions.length; i++){
+      if (!context.assessment.answers[dimensions[i].id]){
+        target = answerButton(context.noteId, dimensions[i].id, dimensions[i].values[0]);
+        break;
+      }
+    }
+    if (!target) target = answerButton(context.noteId, dimensions[0].id, context.assessment.answers[dimensions[0].id] || dimensions[0].values[0]);
+    if (target) target.focus();
+  }
+  function install(){
+    renderAll();
+    document.addEventListener('kyanbasu:note-state', renderAll);
+    document.addEventListener('kyanbasu:decision-triage-focus', focusTriage);
+  }
+
+  window.KyanbasuDecisionTriageUI = {render:renderAll};
+  if (document.readyState === 'loading') window.addEventListener('load', function(){ window.setTimeout(install, 140); });
+  else window.setTimeout(install, 140);
+})();
+</script>

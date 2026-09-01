@@ -1268,6 +1268,228 @@ window.addEventListener('load', function(){
         self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
         self.assertEqual(result["nestedVersion"], 9, msg=json.dumps(result))
 
+    def test_canvas_triage_note_is_accessible_overridable_and_collapsible(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_TRIAGE_UI_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      document.body.classList.add('inspector-collapsed');
+      window.STAGED_CMDS = [];
+      var api = window.KyanbasuNotes;
+      var created = api.createDecisionMap(180, 300, 'Decisions');
+      var root = created.root;
+      api.setContent(root.id, 'Problem / decision: Choose a planning workflow\\nDesired outcome: Make decisions with less friction\\nSuccess means: Used consistently for one week\\nDecision needed by: Friday\\nReassess by: Next Friday');
+      api.selectNote(root.id);
+      setTimeout(function(){
+        try{
+          var primary = document.querySelector('#noteActionToolbar .noteActionPrimary');
+          var initialRecommendation = primary && primary.textContent.trim();
+          primary.click();
+          setTimeout(function(){
+            try{
+              var triageNotes = api.notes().filter(function(note){
+                return note.analysis && note.analysis.tool === 'triage' && note.analysis.role === 'assessment';
+              });
+              var triage = triageNotes[0];
+              var firstFocused = document.activeElement && document.activeElement.getAttribute('role') === 'radio';
+              var repeated = api.createDecisionTriage(root.id);
+              var repeatedFocused = document.activeElement && document.activeElement.getAttribute('role') === 'radio';
+              var card = document.querySelector('.tcNoteNode[data-note-id="'+triage.id+'"]');
+              var groups = Array.prototype.slice.call(card.querySelectorAll('.decisionTriageDimension[role="radiogroup"]'));
+              var labels = groups.map(function(group){
+                var label = document.getElementById(group.getAttribute('aria-labelledby'));
+                return label && label.textContent.trim();
+              });
+              var radios = Array.prototype.slice.call(card.querySelectorAll('button[role="radio"]'));
+              var radioSemantics = radios.every(function(radio){
+                return radio.type === 'button' && ['true','false'].indexOf(radio.getAttribute('aria-checked')) >= 0;
+              });
+              var oneTabStopPerGroup = groups.every(function(group){
+                return group.querySelectorAll('button[role="radio"][tabindex="0"]').length === 1;
+              });
+              var noneSelected = radios.every(function(radio){ return radio.getAttribute('aria-checked') === 'false'; });
+              var incompleteRejected = api.confirmDecisionTriage(triage.id) === null;
+              var confirmInitiallyDisabled = card.querySelector('.decisionTriageConfirm').disabled;
+
+              function key(groupIndex, keyName){
+                var current = groups[groupIndex].querySelector('button[tabindex="0"]');
+                current.focus();
+                current.dispatchEvent(new KeyboardEvent('keydown', {key:keyName, bubbles:true, cancelable:true}));
+                groups = Array.prototype.slice.call(card.querySelectorAll('.decisionTriageDimension[role="radiogroup"]'));
+              }
+              key(0, 'End');
+              key(1, 'End');
+              key(2, 'ArrowRight');
+              key(3, 'Enter');
+              key(4, ' ');
+
+              setTimeout(function(){
+                try{
+                  card = document.querySelector('.tcNoteNode[data-note-id="'+triage.id+'"]');
+                  var reasonText = Array.prototype.map.call(card.querySelectorAll('.decisionTriageReason'), function(el){ return el.textContent.trim(); }).join(' ');
+                  var checkboxes = Array.prototype.slice.call(card.querySelectorAll('.decisionTriageModule input[type="checkbox"]'));
+                  var initialChecked = checkboxes.map(function(input){ return input.checked; });
+                  var inversion = card.querySelector('.decisionTriageModule input[value="inversion"]');
+                  inversion.click();
+                  var explicitOverride = api.decisionProcess(root.id).moduleDraftIds;
+                  var confirm = card.querySelector('.decisionTriageConfirm');
+                  var confirmEnabled = !confirm.disabled;
+                  confirm.click();
+
+                  setTimeout(function(){
+                    try{
+                      var firstProfile = api.decisionProcess(root.id).triageProfile;
+                      card = document.querySelector('.tcNoteNode[data-note-id="'+triage.id+'"]');
+                      var firstSummary = card.querySelector('.decisionTriageSummary');
+                      var firstCollapsed = !!firstSummary && !card.querySelector('.decisionTriageDimensions');
+                      card.click();
+                      setTimeout(function(){
+                        try{
+                          card = document.querySelector('.tcNoteNode[data-note-id="'+triage.id+'"]');
+                          var restored = !!card.querySelector('.decisionTriageDimensions');
+                          var magnitudeLow = card.querySelector('[data-triage-dimension="magnitude"][data-triage-value="low"]');
+                          magnitudeLow.click();
+                          var processAfterChange = api.decisionProcess(root.id);
+                          var pending = /pending changes/i.test(card.querySelector('.decisionTriageStatus').textContent);
+                          var activeModulesUnchanged = JSON.stringify(processAfterChange.triageProfile.acceptedModuleIds) === JSON.stringify(['consequences']);
+                          card.querySelector('[data-triage-dimension="reversibility"][data-triage-value="easy"]').click();
+                          card.querySelector('[data-triage-dimension="uncertainty"][data-triage-value="low"]').click();
+                          card.querySelector('[data-triage-dimension="emotionalPressure"][data-triage-value="low"]').click();
+                          card.querySelector('[data-triage-dimension="duration"][data-triage-value="short"]').click();
+
+                          setTimeout(function(){
+                            try{
+                              card = document.querySelector('.tcNoteNode[data-note-id="'+triage.id+'"]');
+                              var lowExplanation = card.querySelector('.decisionTriageExplanation').textContent.trim();
+                              var lowInversion = card.querySelector('.decisionTriageModule input[value="inversion"]');
+                              var lowConsequences = card.querySelector('.decisionTriageModule input[value="consequences"]');
+                              var lowDefaultUnchecked = !lowInversion.checked && !lowConsequences.checked;
+                              lowInversion.click();
+                              var addedNonRecommended = JSON.stringify(api.decisionProcess(root.id).moduleDraftIds) === JSON.stringify(['inversion']);
+                              card.querySelector('.decisionTriageModule input[value="inversion"]').click();
+                              var explicitCoreOnly = api.decisionProcess(root.id).moduleDraftIds;
+                              var coreConfirm = card.querySelector('.decisionTriageConfirm');
+                              var coreOnlyConfirmable = !coreConfirm.disabled;
+                              coreConfirm.click();
+
+                              setTimeout(function(){
+                                try{
+                                  var finalProcess = api.decisionProcess(root.id);
+                                  card = document.querySelector('.tcNoteNode[data-note-id="'+triage.id+'"]');
+                                  var finalSummary = card.querySelector('.decisionTriageSummary');
+                                  var out = {
+                                    initialRecommendation:initialRecommendation,
+                                    triageCount:triageNotes.length,
+                                    repeatedSame:repeated && repeated.id === triage.id,
+                                    focusFirst:firstFocused,
+                                    focusRepeated:repeatedFocused,
+                                    groupCount:groups.length,
+                                    labels:labels,
+                                    labelsDistinct:(new Set(labels)).size === 5,
+                                    radioSemantics:radioSemantics,
+                                    oneTabStopPerGroup:oneTabStopPerGroup,
+                                    noneSelected:noneSelected,
+                                    incompleteRejected:incompleteRejected,
+                                    confirmInitiallyDisabled:confirmInitiallyDisabled,
+                                    highAnswers:firstProfile.answers,
+                                    reasonsVisible:/High magnitude/.test(reasonText) && /Hard reversibility/.test(reasonText),
+                                    initialChecked:initialChecked,
+                                    explicitOverride:explicitOverride,
+                                    confirmEnabled:confirmEnabled,
+                                    firstRecommended:firstProfile.recommendedModuleIds,
+                                    firstAccepted:firstProfile.acceptedModuleIds,
+                                    firstDeclined:firstProfile.declinedModuleIds,
+                                    firstCollapsed:firstCollapsed,
+                                    firstSummary:firstSummary && firstSummary.textContent.trim(),
+                                    restored:restored,
+                                    pending:pending,
+                                    activeModulesUnchanged:activeModulesUnchanged,
+                                    lowExplanation:lowExplanation,
+                                    lowDefaultUnchecked:lowDefaultUnchecked,
+                                    addedNonRecommended:addedNonRecommended,
+                                    explicitCoreOnly:explicitCoreOnly,
+                                    coreOnlyConfirmable:coreOnlyConfirmable,
+                                    finalAnswers:finalProcess.triageProfile.answers,
+                                    finalRecommended:finalProcess.triageProfile.recommendedModuleIds,
+                                    finalAccepted:finalProcess.triageProfile.acceptedModuleIds,
+                                    finalSummary:finalSummary && finalSummary.textContent.trim(),
+                                    finalCollapsed:!!finalSummary && !card.querySelector('.decisionTriageDimensions'),
+                                    inspectorCollapsed:document.body.classList.contains('inspector-collapsed'),
+                                    staged:window.STAGED_CMDS.slice()
+                                  };
+                                  var pre = document.createElement('pre'); pre.id = 'e2e-out'; pre.textContent = JSON.stringify(out); document.body.appendChild(pre);
+                                }catch(e){ fail(e); }
+                              }, 90);
+                            }catch(e){ fail(e); }
+                          }, 90);
+                        }catch(e){ fail(e); }
+                      }, 90);
+                    }catch(e){ fail(e); }
+                  }, 90);
+                }catch(e){ fail(e); }
+              }, 90);
+            }catch(e){ fail(e); }
+          }, 90);
+        }catch(e){ fail(e); }
+      }, 100);
+    }catch(e){ fail(e); }
+  }, 900);
+  function fail(e){
+    var pre = document.createElement('pre'); pre.id = 'e2e-out'; pre.textContent = 'ERR:' + (e && e.message ? e.message : String(e)); document.body.appendChild(pre);
+  }
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["initialRecommendation"], "Assess decision rigor", msg=json.dumps(result))
+        self.assertEqual(result["triageCount"], 1, msg=json.dumps(result))
+        self.assertTrue(result["repeatedSame"], msg=json.dumps(result))
+        self.assertTrue(result["focusFirst"], msg=json.dumps(result))
+        self.assertTrue(result["focusRepeated"], msg=json.dumps(result))
+        self.assertEqual(result["groupCount"], 5, msg=json.dumps(result))
+        self.assertEqual(result["labels"], ["Magnitude", "Reversibility", "Uncertainty", "Emotional pressure", "Duration / repetition"], msg=json.dumps(result))
+        self.assertTrue(result["labelsDistinct"], msg=json.dumps(result))
+        self.assertTrue(result["radioSemantics"], msg=json.dumps(result))
+        self.assertTrue(result["oneTabStopPerGroup"], msg=json.dumps(result))
+        self.assertTrue(result["noneSelected"], msg=json.dumps(result))
+        self.assertTrue(result["incompleteRejected"], msg=json.dumps(result))
+        self.assertTrue(result["confirmInitiallyDisabled"], msg=json.dumps(result))
+        self.assertEqual(result["highAnswers"], {"magnitude":"high", "reversibility":"hard", "uncertainty":"medium", "emotionalPressure":"low", "duration":"short"}, msg=json.dumps(result))
+        self.assertTrue(result["reasonsVisible"], msg=json.dumps(result))
+        self.assertEqual(result["initialChecked"], [True, True], msg=json.dumps(result))
+        self.assertEqual(result["explicitOverride"], ["consequences"], msg=json.dumps(result))
+        self.assertTrue(result["confirmEnabled"], msg=json.dumps(result))
+        self.assertEqual(result["firstRecommended"], ["consequences", "inversion"], msg=json.dumps(result))
+        self.assertEqual(result["firstAccepted"], ["consequences"], msg=json.dumps(result))
+        self.assertEqual(result["firstDeclined"], ["inversion"], msg=json.dumps(result))
+        self.assertTrue(result["firstCollapsed"], msg=json.dumps(result))
+        self.assertIn("1 module", result["firstSummary"], msg=json.dumps(result))
+        self.assertIn("high / hard / medium / low / short", result["firstSummary"].lower(), msg=json.dumps(result))
+        self.assertTrue(result["restored"], msg=json.dumps(result))
+        self.assertTrue(result["pending"], msg=json.dumps(result))
+        self.assertTrue(result["activeModulesUnchanged"], msg=json.dumps(result))
+        self.assertIn("no available module was triggered", result["lowExplanation"].lower(), msg=json.dumps(result))
+        self.assertTrue(result["lowDefaultUnchecked"], msg=json.dumps(result))
+        self.assertTrue(result["addedNonRecommended"], msg=json.dumps(result))
+        self.assertEqual(result["explicitCoreOnly"], [], msg=json.dumps(result))
+        self.assertTrue(result["coreOnlyConfirmable"], msg=json.dumps(result))
+        self.assertEqual(result["finalAnswers"], {"magnitude":"low", "reversibility":"easy", "uncertainty":"low", "emotionalPressure":"low", "duration":"short"}, msg=json.dumps(result))
+        self.assertEqual(result["finalRecommended"], [], msg=json.dumps(result))
+        self.assertEqual(result["finalAccepted"], [], msg=json.dumps(result))
+        self.assertIn("0 modules", result["finalSummary"], msg=json.dumps(result))
+        self.assertIn("low / easy / low / low / short", result["finalSummary"].lower(), msg=json.dumps(result))
+        self.assertTrue(result["finalCollapsed"], msg=json.dumps(result))
+        self.assertTrue(result["inspectorCollapsed"], msg=json.dumps(result))
+        self.assertEqual(result["staged"], [], msg=json.dumps(result))
+
     def test_canvas_decision_guidance_matrix_is_deterministic(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

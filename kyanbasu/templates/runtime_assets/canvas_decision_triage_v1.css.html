@@ -1,0 +1,105 @@
+<style id="FEATURE_CANVAS_DECISION_TRIAGE_V1_CSS">
+  .tcNoteNode.decisionTriageCard {
+    width: min(420px, calc(100vw - 48px));
+  }
+  .decisionTriageCard > .tcNoteText[hidden] {
+    display: none;
+  }
+  .decisionTriagePanel {
+    padding: 10px;
+    color: #e8dcc7;
+    font: 12px/1.4 var(--font-ui, system-ui);
+  }
+  .decisionTriageDimensions {
+    display: grid;
+    gap: 10px;
+  }
+  .decisionTriageDimension > span {
+    display: block;
+    margin-bottom: 4px;
+    color: #f4ead7;
+    font-weight: 700;
+  }
+  .decisionTriageChoices {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .decisionTriageChoices button {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 5px 7px;
+    border: 1px solid var(--note-accent-soft, rgba(242,177,74,.28));
+    background: rgba(0,0,0,.16);
+    color: #e8dcc7;
+    cursor: pointer;
+    font: 700 11px/1.1 var(--font-ui, system-ui);
+  }
+  .decisionTriageChoices button:first-child { border-radius: 6px 0 0 6px; }
+  .decisionTriageChoices button:last-child { border-radius: 0 6px 6px 0; }
+  .decisionTriageChoices button + button { border-left: 0; }
+  .decisionTriageChoices button[aria-checked="true"] {
+    background: var(--note-accent-soft, rgba(242,177,74,.20));
+    color: #fff4dc;
+    box-shadow: inset 0 -3px 0 var(--note-accent, rgba(242,177,74,.82));
+  }
+  .decisionTriageChoices button[aria-checked="true"]::before {
+    content: "\2713  ";
+  }
+  .decisionTriageChoices button:focus-visible,
+  .decisionTriageModule input:focus-visible,
+  .decisionTriageConfirm:focus-visible {
+    outline: 3px solid #61d0ff;
+    outline-offset: 2px;
+  }
+  .decisionTriageModules {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--note-accent-soft, rgba(242,177,74,.20));
+  }
+  .decisionTriageModules h3 {
+    margin: 0 0 4px;
+    color: #f4ead7;
+    font-size: 12px;
+  }
+  .decisionTriageExplanation,
+  .decisionTriageStatus,
+  .decisionTriageReason {
+    margin: 4px 0;
+    color: rgba(232,220,199,.78);
+  }
+  .decisionTriageReason::before { content: "Reason: "; font-weight: 700; }
+  .decisionTriageModule {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+    margin-top: 5px;
+    padding: 4px 7px;
+    border: 1px solid var(--note-accent-faint, rgba(242,177,74,.12));
+    border-radius: 6px;
+    background: rgba(0,0,0,.12);
+    cursor: pointer;
+  }
+  .decisionTriageModule input { width: 18px; height: 18px; margin: 0; }
+  .decisionTriageModuleState { margin-left: auto; color: rgba(232,220,199,.68); }
+  .decisionTriageModule input:checked ~ .decisionTriageModuleState::after { content: "Included"; }
+  .decisionTriageModule input:not(:checked) ~ .decisionTriageModuleState::after { content: "Not included"; }
+  .decisionTriageConfirm {
+    min-height: 32px;
+    margin-top: 10px;
+    padding: 6px 10px;
+    border: 1px solid var(--note-accent, rgba(242,177,74,.48));
+    border-radius: 6px;
+    background: var(--note-accent-soft, rgba(242,177,74,.16));
+    color: #fff4dc;
+    cursor: pointer;
+    font-weight: 700;
+  }
+  .decisionTriageConfirm:disabled { opacity: .45; cursor: not-allowed; }
+  .decisionTriageStatus.pending { color: #ffe2ad; font-weight: 700; }
+  .decisionTriageSummary {
+    padding: 10px;
+    color: #e8dcc7;
+    line-height: 1.45;
+  }
+</style>
