@@ -102,6 +102,48 @@
     return '';
   }
 
+  function requiredStepIds(actionId){
+    if (actionId === 'assess-decision-rigor' || actionId === 'complete-decision-triage') return ['frame'];
+    if (actionId === 'add-factor') return ['frame', 'triage'];
+    if (actionId === 'add-option' || actionId === 'review-decision') return ['frame', 'triage', 'state'];
+    return [];
+  }
+
+  function missingStepIds(actionId, context){
+    var required = requiredStepIds(actionId);
+    var complete = {
+      frame:!!context.frameComplete,
+      triage:!!context.triageConfirmed,
+      state:Number(context.stateCount || 0) > 0
+    };
+    return required.filter(function(stepId){ return !complete[stepId]; });
+  }
+
+  function missingStepMessage(stepIds){
+    var labels = {
+      frame:'decision framing',
+      triage:'rigor assessment',
+      state:'an important state'
+    };
+    var names = stepIds.map(function(stepId){ return labels[stepId]; }).filter(Boolean);
+    if (names.length === 1) return 'This skips ' + names[0] + '.';
+    if (names.length === 2) return 'This skips ' + names[0] + ' and ' + names[1] + '.';
+    return 'This skips ' + names.slice(0, -1).join(', ') + ', and ' + names[names.length - 1] + '.';
+  }
+
+  function warningFor(actionId, context){
+    context = context || {};
+    actionId = String(actionId || '');
+    if (!actionId || actionId === recommendedId(context)) return null;
+    var missing = missingStepIds(actionId, context);
+    if (!missing.length) return null;
+    return {
+      actionId:actionId,
+      missingStepIds:missing,
+      message:missingStepMessage(missing)
+    };
+  }
+
   function guidanceFor(context){
     context = context || {};
     var primary = contextualize(descriptor(recommendedId(context)), context);
@@ -128,6 +170,6 @@
     return {recommended:primary, groups:groups};
   }
 
-  window.KyanbasuDecisionGuidance = {guidanceFor:guidanceFor};
+  window.KyanbasuDecisionGuidance = {guidanceFor:guidanceFor, warningFor:warningFor};
 })();
 </script>

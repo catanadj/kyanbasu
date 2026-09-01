@@ -962,8 +962,9 @@
     else return null;
     return current;
   }
-  function executeDecisionAction(actionId, noteId){
+  function executeDecisionAction(actionId, noteId, options){
     actionId = String(actionId || '');
+    options = options || {};
     var context = decisionActionContextFor(noteId);
     var guidance = context && window.KyanbasuDecisionGuidance && window.KyanbasuDecisionGuidance.guidanceFor(context);
     var valid = [];
@@ -971,6 +972,17 @@
       group.actions.forEach(function(action){ if (valid.indexOf(action.id) < 0) valid.push(action.id); });
     });
     if (!context || valid.indexOf(actionId) < 0) return {ok:false, noteId:'', reason:'That action is no longer available.'};
+    var warning = window.KyanbasuDecisionGuidance && typeof window.KyanbasuDecisionGuidance.warningFor === 'function' ? window.KyanbasuDecisionGuidance.warningFor(actionId, context) : null;
+    if (warning && options.allowSkip !== true){
+      return {
+        ok:false,
+        requiresConfirmation:true,
+        noteId:context.noteId,
+        actionId:actionId,
+        warning:warning,
+        reason:warning.message
+      };
+    }
     var result = executeValidatedDecisionAction(actionId, context);
     if (!result) return {ok:false, noteId:'', reason:'The action could not be completed.'};
     publishNoteState('action');

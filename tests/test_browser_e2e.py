@@ -2043,6 +2043,125 @@ window.addEventListener('load', function(){
         self.assertTrue(result["focusRestored"], msg=json.dumps(result))
         self.assertTrue(result["hiddenAfterWorkbench"], msg=json.dumps(result))
 
+    def test_canvas_normative_soft_skip_explains_and_continues(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NORMATIVE_SOFT_SKIP_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var api = window.KyanbasuNotes;
+      var ui = window.KyanbasuNoteActions;
+      if (!api || !ui) throw new Error('Decision actions missing');
+      document.body.classList.add('inspector-collapsed');
+      var direct = api.createDecisionMap(80, 100, 'Direct API').root;
+      var directBefore = api.notes().length;
+      var directResult = api.executeDecisionAction('add-option', direct.id);
+      var directAfter = api.notes().length;
+      var created = api.createDecisionMap(180, 300, 'Soft skip').root;
+      api.selectNote(created.id);
+      setTimeout(function(){
+        try{
+          var card = document.querySelector('.tcNoteNode[data-note-id="' + created.id + '"]');
+          var menu = document.getElementById('noteActionMenu');
+          if (!card || !menu) throw new Error('Decision menu missing');
+          function openAndChoose(actionId){
+            card.dispatchEvent(new MouseEvent('contextmenu', {bubbles:true, cancelable:true, clientX:360, clientY:320}));
+            var item = menu.querySelector('[data-action-id="' + actionId + '"]');
+            if (!item) throw new Error('Menu action missing: ' + actionId);
+            item.click();
+          }
+          var initialOptions = api.notes().filter(function(note){ return note.kind === 'option'; }).length;
+          openAndChoose('add-option');
+          setTimeout(function(){
+            try{
+              var backdrop = document.getElementById('decisionSkipBackdrop');
+              var dialog = document.getElementById('decisionSkipDialog');
+              var text = dialog ? dialog.textContent : '';
+              var noOptionBeforeConfirm = api.notes().filter(function(note){ return note.kind === 'option'; }).length === initialOptions;
+              var dialogExplainsAll = /framing/i.test(text) && /rigor/i.test(text) && /state/i.test(text);
+              var initialFocusBack = document.activeElement === document.getElementById('decisionSkipBack');
+              if (document.getElementById('decisionSkipBack')) document.getElementById('decisionSkipBack').click();
+              setTimeout(function(){
+                try{
+                  var focusReturned = document.activeElement === card;
+                  openAndChoose('add-option');
+                  setTimeout(function(){
+                    try{
+                      var continueButton = document.getElementById('decisionSkipContinue');
+                      if (continueButton) continueButton.click();
+                      setTimeout(function(){
+                        try{
+                          var exactlyOneOption = api.notes().filter(function(note){ return note.kind === 'option'; }).length === initialOptions + 1;
+                          var earliestStillRecommended = api.decisionActions(created.id).recommended.id === 'complete-decision-frame';
+                          api.setContent(created.id, 'Problem / decision: Choose a workflow\\nDesired outcome: Make a sound choice\\nSuccess means: Used weekly\\nDecision needed by: Friday\\nReassess by: Next Friday');
+                          openAndChoose('add-factor');
+                          setTimeout(function(){
+                            try{
+                              var laterDialog = document.getElementById('decisionSkipDialog');
+                              var laterText = laterDialog ? laterDialog.textContent : '';
+                              var laterMentionsTriageOnly = /rigor|triage/i.test(laterText) && !/framing/i.test(laterText);
+                              if (document.getElementById('decisionSkipBack')) document.getElementById('decisionSkipBack').click();
+                              setTimeout(function(){
+                                var out = {
+                                  inspectorCollapsed:document.body.classList.contains('inspector-collapsed'),
+                                  directRequiresConfirmation:!!(directResult && directResult.requiresConfirmation),
+                                  directUnchanged:directAfter === directBefore,
+                                  noOptionBeforeConfirm:noOptionBeforeConfirm,
+                                  dialogRole:dialog && dialog.getAttribute('role'),
+                                  dialogModal:dialog && dialog.getAttribute('aria-modal'),
+                                  dialogExplainsAll:dialogExplainsAll,
+                                  initialFocusBack:initialFocusBack,
+                                  focusReturned:focusReturned,
+                                  exactlyOneOption:exactlyOneOption,
+                                  earliestStillRecommended:earliestStillRecommended,
+                                  laterMentionsTriageOnly:laterMentionsTriageOnly
+                                };
+                                var pre = document.createElement('pre');
+                                pre.id = 'e2e-out'; pre.textContent = JSON.stringify(out); document.body.appendChild(pre);
+                              }, 80);
+                            }catch(e4){ fail(e4); }
+                          }, 80);
+                        }catch(e3){ fail(e3); }
+                      }, 80);
+                    }catch(e2){ fail(e2); }
+                  }, 80);
+                }catch(e1){ fail(e1); }
+              }, 80);
+            }catch(e0){ fail(e0); }
+          }, 80);
+        }catch(e){ fail(e); }
+      }, 100);
+    }catch(e){ fail(e); }
+  }, 800);
+  function fail(error){
+    if (document.getElementById('e2e-out')) return;
+    var pre = document.createElement('pre'); pre.id = 'e2e-out';
+    pre.textContent = 'ERR:' + (error && error.message ? error.message : String(error)); document.body.appendChild(pre);
+  }
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["inspectorCollapsed"], msg=json.dumps(result))
+        self.assertTrue(result["directRequiresConfirmation"], msg=json.dumps(result))
+        self.assertTrue(result["directUnchanged"], msg=json.dumps(result))
+        self.assertTrue(result["noOptionBeforeConfirm"], msg=json.dumps(result))
+        self.assertEqual(result["dialogRole"], "dialog", msg=json.dumps(result))
+        self.assertEqual(result["dialogModal"], "true", msg=json.dumps(result))
+        self.assertTrue(result["dialogExplainsAll"], msg=json.dumps(result))
+        self.assertTrue(result["initialFocusBack"], msg=json.dumps(result))
+        self.assertTrue(result["focusReturned"], msg=json.dumps(result))
+        self.assertTrue(result["exactlyOneOption"], msg=json.dumps(result))
+        self.assertTrue(result["earliestStillRecommended"], msg=json.dumps(result))
+        self.assertTrue(result["laterMentionsTriageOnly"], msg=json.dumps(result))
+
     def test_canvas_decision_review_soft_gate_round_trips_unresolved_checks(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

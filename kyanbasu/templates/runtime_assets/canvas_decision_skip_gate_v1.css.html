@@ -1,0 +1,34 @@
+<style id="FEATURE_CANVAS_DECISION_SKIP_GATE_V1_CSS">
+  #decisionSkipBackdrop{
+    position:fixed;
+    inset:0;
+    z-index:100240;
+    display:grid;
+    place-items:center;
+    padding:20px;
+    background:rgba(3,8,15,.72);
+  }
+  #decisionSkipBackdrop[hidden]{ display:none; }
+  #decisionSkipDialog{
+    width:min(460px, 100%);
+    padding:20px;
+    border:1px solid rgba(242,177,74,.46);
+    border-radius:12px;
+    background:linear-gradient(180deg, rgba(31,29,21,.99), rgba(16,20,28,.99));
+    color:var(--fg, #f4ead7);
+    box-shadow:0 24px 64px rgba(0,0,0,.52);
+  }
+  #decisionSkipDialog h2{ margin:0 0 10px; font-size:18px; }
+  #decisionSkipDialog p{ margin:0; color:var(--muted, #b7c3d4); line-height:1.45; }
+  .decisionSkipActions{ display:flex; justify-content:flex-end; gap:9px; margin-top:18px; }
+  .decisionSkipActions button{
+    min-height:34px;
+    padding:7px 11px;
+    border:1px solid rgba(164,185,214,.3);
+    border-radius:7px;
+    background:rgba(164,185,214,.10);
+    color:inherit;
+    cursor:pointer;
+  }
+  #decisionSkipContinue{ border-color:rgba(242,177,74,.48); background:rgba(242,177,74,.14); }
+</style>

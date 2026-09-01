@@ -1,0 +1,94 @@
+<script id="FEATURE_CANVAS_DECISION_SKIP_GATE_V1">
+(function(){
+  'use strict';
+  if (window.KyanbasuDecisionSkipGate) return;
+
+  var backdrop = null;
+  var dialog = null;
+  var title = null;
+  var message = null;
+  var backButton = null;
+  var continueButton = null;
+  var pending = null;
+  var originNoteId = '';
+
+  function notesApi(){ return window.KyanbasuNotes || null; }
+  function escAttr(value){ return String(value || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"'); }
+  function noteCard(noteId){ return document.querySelector('.tcNoteNode[data-note-id="' + escAttr(noteId) + '"]'); }
+  function actionLabel(noteId, actionId){
+    var api = notesApi();
+    var model = api && typeof api.decisionActions === 'function' ? api.decisionActions(noteId) : null;
+    var actions = [];
+    if (model && model.recommended) actions.push(model.recommended);
+    (model && model.groups || []).forEach(function(group){ actions = actions.concat(group.actions || []); });
+    for (var i=0; i<actions.length; i++) if (actions[i] && actions[i].id === actionId) return actions[i].label;
+    return 'this action';
+  }
+  function restoreFocus(){
+    var card = originNoteId && noteCard(originNoteId);
+    if (!card) return;
+    card.setAttribute('tabindex', '-1');
+    try{ card.focus({preventScroll:true}); }catch(_){ card.focus(); }
+  }
+  function close(){
+    if (!backdrop) return;
+    backdrop.hidden = true;
+    pending = null;
+    restoreFocus();
+    originNoteId = '';
+  }
+  function refreshActions(){
+    try{ if (window.KyanbasuNoteActions && typeof window.KyanbasuNoteActions.refresh === 'function') window.KyanbasuNoteActions.refresh(); }catch(_){}
+  }
+  function ensureUi(){
+    if (backdrop) return;
+    backdrop = document.createElement('div');
+    backdrop.id = 'decisionSkipBackdrop';
+    backdrop.hidden = true;
+    dialog = document.createElement('section');
+    dialog.id = 'decisionSkipDialog';
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.setAttribute('aria-labelledby', 'decisionSkipTitle');
+    dialog.setAttribute('aria-describedby', 'decisionSkipMessage');
+    title = document.createElement('h2'); title.id = 'decisionSkipTitle';
+    message = document.createElement('p'); message.id = 'decisionSkipMessage';
+    var actions = document.createElement('div'); actions.className = 'decisionSkipActions';
+    backButton = document.createElement('button'); backButton.type = 'button'; backButton.id = 'decisionSkipBack'; backButton.textContent = 'Go back';
+    continueButton = document.createElement('button'); continueButton.type = 'button'; continueButton.id = 'decisionSkipContinue'; continueButton.textContent = 'Continue anyway';
+    actions.appendChild(backButton); actions.appendChild(continueButton);
+    dialog.appendChild(title); dialog.appendChild(message); dialog.appendChild(actions); backdrop.appendChild(dialog); document.body.appendChild(backdrop);
+    backButton.addEventListener('click', close);
+    continueButton.addEventListener('click', function(){
+      var request = pending;
+      if (!request) return close();
+      var api = notesApi();
+      var result = api && typeof api.executeDecisionAction === 'function' ? api.executeDecisionAction(request.actionId, request.noteId, {allowSkip:true}) : null;
+      close();
+      if (!result || !result.ok){
+        try{ if (typeof window.showToast === 'function') window.showToast(result && result.reason || 'That action is no longer available.'); }catch(_){}
+      }
+      refreshActions();
+    });
+    backdrop.addEventListener('click', function(event){ if (event.target === backdrop) close(); });
+    document.addEventListener('keydown', function(event){
+      if (!backdrop.hidden && event.key === 'Escape'){
+        event.preventDefault(); event.stopPropagation(); close();
+      }
+    });
+  }
+  function open(result){
+    if (!result || !result.requiresConfirmation) return;
+    ensureUi();
+    pending = result;
+    originNoteId = result.noteId || '';
+    title.textContent = 'Continue with ' + actionLabel(originNoteId, result.actionId) + '?';
+    message.textContent = result.warning && result.warning.message || result.reason || 'This action needs confirmation.';
+    backdrop.hidden = false;
+    window.setTimeout(function(){ if (!backdrop.hidden) backButton.focus(); }, 0);
+  }
+
+  window.KyanbasuDecisionSkipGate = {open:open, close:close};
+  document.addEventListener('kyanbasu:decision-skip', function(event){ open(event.detail); });
+})();
+</script>
