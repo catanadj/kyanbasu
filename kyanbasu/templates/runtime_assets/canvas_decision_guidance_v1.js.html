@@ -10,8 +10,11 @@
   ];
   var ACTIONS = {
     'complete-decision-frame':['Complete decision frame','Fill the first missing decision-framing field.','develop'],
+    'assess-decision-rigor':['Assess decision rigor','Match the analysis effort to this decision\'s risks.','analyze'],
+    'complete-decision-triage':['Complete decision triage','Answer all five dimensions and confirm the module profile.','develop'],
     'add-option':['Add option','Compare at least two genuine choices.','develop'],
-    'add-factor':['Add factor','Record an important state or constraint.','develop'],
+    'add-factor':['Add state','Record an important condition or personal constraint.','develop'],
+    'convert-state-to-option':['Convert to option','This item is directly controllable, so treat it as an act.','develop'],
     'explore-next-option':['Explore next option','Develop the first option that has not been analysed.','navigate'],
     'review-decision':['Review decision','Compare the developed options before commitment.','analyze'],
     'add-parallel-factor':['Add parallel factor','Record another state or constraint.','develop'],
@@ -66,16 +69,22 @@
     if (!context || !context.noteId) return '';
     if (context.type === 'decision'){
       if (!context.frameComplete) return 'complete-decision-frame';
+      if (!context.triageExists) return 'assess-decision-rigor';
+      if (!context.triageConfirmed) return 'complete-decision-triage';
+      if ((context.stateCount || 0) < 1) return 'add-factor';
       if ((context.optionCount || 0) < 2) return 'add-option';
-      if ((context.factorCount || 0) < 1) return 'add-factor';
       return context.allOptionsAnalyzed ? 'review-decision' : 'explore-next-option';
     }
-    if (context.type === 'factor') return 'add-parallel-factor';
+    if (context.type === 'factor') return context.directlyControllable ? 'convert-state-to-option' : 'add-parallel-factor';
     if (context.type === 'option'){
-      if (!context.hasConsequences) return 'explore-consequences';
-      if (!context.consequenceComplete) return 'continue-consequences';
-      if (!context.inversionExists) return 'run-inversion';
-      return context.inversionComplete ? 'review-option' : 'continue-inversion';
+      var accepted = Array.isArray(context.acceptedModuleIds) ? context.acceptedModuleIds : [];
+      var consequences = accepted.indexOf('consequences') >= 0;
+      var inversion = accepted.indexOf('inversion') >= 0;
+      if (consequences && !context.hasConsequences) return 'explore-consequences';
+      if (consequences && !context.consequenceComplete) return 'continue-consequences';
+      if (inversion && !context.inversionExists) return 'run-inversion';
+      if (inversion && !context.inversionComplete) return 'continue-inversion';
+      return 'review-option';
     }
     if (context.type === 'consequence'){
       return Number(context.order) < 3 && !context.hasNextOrder ? 'add-next-consequence' : 'add-parallel-consequence';
@@ -96,7 +105,12 @@
   function guidanceFor(context){
     context = context || {};
     var primary = contextualize(descriptor(recommendedId(context)), context);
-    var valid = Array.isArray(context.validActionIds) ? context.validActionIds.slice() : [];
+    var accepted = Array.isArray(context.acceptedModuleIds) ? context.acceptedModuleIds : [];
+    var valid = (Array.isArray(context.validActionIds) ? context.validActionIds : []).filter(function(id){
+      if (id === 'explore-consequences' || id === 'continue-consequences') return accepted.indexOf('consequences') >= 0;
+      if (id === 'run-inversion' || id === 'continue-inversion') return accepted.indexOf('inversion') >= 0;
+      return true;
+    });
     if (primary && valid.indexOf(primary.id) < 0) valid.unshift(primary.id);
     var groups = GROUPS.map(function(group){
       return {

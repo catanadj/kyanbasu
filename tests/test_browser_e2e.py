@@ -1282,16 +1282,19 @@ window.addEventListener('load', function(){
       if (!guide) throw new Error('Decision guidance API missing');
       var cases = [
         [{noteId:'d', type:'decision', frameComplete:false}, 'complete-decision-frame'],
-        [{noteId:'d', type:'decision', frameComplete:true, optionCount:1}, 'add-option'],
-        [{noteId:'d', type:'decision', frameComplete:true, optionCount:2, factorCount:0}, 'add-factor'],
-        [{noteId:'d', type:'decision', frameComplete:true, optionCount:2, factorCount:1, allOptionsAnalyzed:false}, 'explore-next-option'],
-        [{noteId:'d', type:'decision', frameComplete:true, optionCount:2, factorCount:1, allOptionsAnalyzed:true}, 'review-decision'],
+        [{noteId:'d', type:'decision', frameComplete:true, triageExists:false}, 'assess-decision-rigor'],
+        [{noteId:'d', type:'decision', frameComplete:true, triageExists:true, triageConfirmed:false}, 'complete-decision-triage'],
+        [{noteId:'d', type:'decision', frameComplete:true, triageExists:true, triageConfirmed:true, stateCount:0}, 'add-factor'],
+        [{noteId:'d', type:'decision', frameComplete:true, triageExists:true, triageConfirmed:true, stateCount:1, optionCount:1}, 'add-option'],
+        [{noteId:'d', type:'decision', frameComplete:true, triageExists:true, triageConfirmed:true, stateCount:1, optionCount:2, allOptionsAnalyzed:false}, 'explore-next-option'],
+        [{noteId:'d', type:'decision', frameComplete:true, triageExists:true, triageConfirmed:true, stateCount:1, optionCount:2, allOptionsAnalyzed:true}, 'review-decision'],
         [{noteId:'f', type:'factor'}, 'add-parallel-factor'],
-        [{noteId:'o', type:'option', hasConsequences:false}, 'explore-consequences'],
-        [{noteId:'o', type:'option', hasConsequences:true, consequenceComplete:false}, 'continue-consequences'],
-        [{noteId:'o', type:'option', hasConsequences:true, consequenceComplete:true, inversionExists:false}, 'run-inversion'],
-        [{noteId:'o', type:'option', hasConsequences:true, consequenceComplete:true, inversionExists:true, inversionComplete:false}, 'continue-inversion'],
-        [{noteId:'o', type:'option', hasConsequences:true, consequenceComplete:true, inversionExists:true, inversionComplete:true}, 'review-option'],
+        [{noteId:'s', type:'factor', directlyControllable:true}, 'convert-state-to-option'],
+        [{noteId:'o', type:'option', acceptedModuleIds:['consequences'], hasConsequences:false}, 'explore-consequences'],
+        [{noteId:'o', type:'option', acceptedModuleIds:['consequences'], hasConsequences:true, consequenceComplete:false}, 'continue-consequences'],
+        [{noteId:'o', type:'option', acceptedModuleIds:['inversion'], inversionExists:false}, 'run-inversion'],
+        [{noteId:'o', type:'option', acceptedModuleIds:['inversion'], inversionExists:true, inversionComplete:false}, 'continue-inversion'],
+        [{noteId:'o', type:'option', acceptedModuleIds:['consequences','inversion'], hasConsequences:true, consequenceComplete:true, inversionExists:true, inversionComplete:true}, 'review-option'],
         [{noteId:'c1', type:'consequence', order:1, hasNextOrder:false}, 'add-next-consequence'],
         [{noteId:'c2', type:'consequence', order:2, hasNextOrder:false}, 'add-next-consequence'],
         [{noteId:'c3', type:'consequence', order:3}, 'add-parallel-consequence'],
@@ -1315,14 +1318,15 @@ window.addEventListener('load', function(){
         };
       });
       var grouped = guide.guidanceFor({
-        noteId:'menu', type:'option', hasConsequences:false,
-        validActionIds:['add-option','run-inversion','go-decision','delete-note']
+        noteId:'menu', type:'option', acceptedModuleIds:['consequences'], hasConsequences:false,
+        validActionIds:['add-option','explore-consequences','run-inversion','go-decision','delete-note']
       });
       var firstOrder = guide.guidanceFor({noteId:'c1', type:'consequence', order:1, hasNextOrder:false});
       var thirdOrder = guide.guidanceFor({noteId:'c3', type:'consequence', order:3});
       var out = {
         actual:actual,
         groups:grouped.groups.map(function(group){ return group.id; }),
+        groupedActionIds:grouped.groups.reduce(function(ids, group){ return ids.concat(group.actions.map(function(action){ return action.id; })); }, []),
         deleteDangerous:grouped.groups.some(function(group){ return group.actions.some(function(action){ return action.id === 'delete-note' && action.dangerous; }); }),
         firstOrderLabel:firstOrder.recommended && firstOrder.recommended.label,
         thirdOrderLabel:thirdOrder.recommended && thirdOrder.recommended.label
@@ -1349,6 +1353,7 @@ window.addEventListener('load', function(){
         self.assertTrue(all(row["deterministic"] for row in result["actual"]), msg=json.dumps(result))
         self.assertTrue(all(not row["dangerous"] for row in result["actual"]), msg=json.dumps(result))
         self.assertEqual(result["groups"], ["develop", "analyze", "navigate", "manage"], msg=json.dumps(result))
+        self.assertNotIn("run-inversion", result["groupedActionIds"], msg=json.dumps(result))
         self.assertTrue(result["deleteDangerous"], msg=json.dumps(result))
         self.assertEqual(result["firstOrderLabel"], "Add 2nd-order consequence", msg=json.dumps(result))
         self.assertEqual(result["thirdOrderLabel"], "Add parallel 3rd-order consequence", msg=json.dumps(result))
@@ -1368,10 +1373,34 @@ window.addEventListener('load', function(){
         throw new Error('Decision action adapter missing');
       }
       var events = [];
+      var triageFocuses = [];
       document.addEventListener('kyanbasu:note-state', function(event){ events.push(event.detail || {}); });
+      document.addEventListener('kyanbasu:decision-triage-focus', function(event){ triageFocuses.push(event.detail || {}); });
       var created = api.createDecisionMap(180, 300, 'Decisions');
-      api.setContent(created.root.id, 'Decision: Choose a planning workflow\\nTarget outcome: Make decisions with less friction\\nSuccess means: Used consistently for one week\\nDecision needed by: Friday\\nReassess by: Next Friday');
-      var option = created.options[0];
+      var root = created.root;
+      var triage = api.createDecisionTriage(root.id);
+      var sameTriage = api.createDecisionTriage(root.id);
+      api.setContent(root.id, 'Problem / decision: Choose a planning workflow\\nDesired outcome: Make decisions with less friction\\nSuccess means: Used consistently for one week\\nDecision needed by: Friday\\nReassess by: Next Friday');
+      var triageAction = api.executeDecisionAction('complete-decision-triage', root.id);
+      var exportedForProfile = api.exportData();
+      var rootForProfile = exportedForProfile.notes.filter(function(note){ return note.id === root.id; })[0];
+      rootForProfile.decisionProcess.triageProfile = {
+        answers:{magnitude:'high', reversibility:'hard', uncertainty:'medium', emotionalPressure:'low', duration:'short'},
+        recommendedModuleIds:['consequences','inversion'], acceptedModuleIds:['consequences','inversion'], declinedModuleIds:[],
+        recommendationReasons:[], confirmedAt:Date.now()
+      };
+      api.importData(exportedForProfile);
+      var state = api.createDecisionChild(root.id, 'factor');
+      api.setContent(state.id, 'State: Available time\\nWhy can it affect the outcome? It limits the work.\\nCan I directly choose it? directly\\nWhat would indicate that it is changing? Calendar blocks');
+      var stateActions = api.decisionActions(state.id);
+      var converted = api.executeDecisionAction('convert-state-to-option', state.id);
+      var convertedNote = api.notes().filter(function(note){ return note.id === state.id; })[0];
+      var nonDirectStates = ['no', 'partly', '', 'unknown'].map(function(value){
+        var item = api.createDecisionChild(root.id, 'factor');
+        api.setContent(item.id, 'State: Constraint\\nCan I directly choose it? ' + value);
+        return api.decisionActions(item.id).recommended.id;
+      });
+      var option = api.createDecisionChild(root.id, 'option');
       api.setContent(option.id, 'Option: Use contextual guidance');
 
       var initialContext = api.decisionActionContext(option.id);
@@ -1389,6 +1418,18 @@ window.addEventListener('load', function(){
       var review = api.reviewContext(option.id);
       var out = {
         initialType:initialContext && initialContext.type,
+        rootOnly:Object.keys(created).sort(),
+        triageKind:triage && triage.kind,
+        triageAnalysis:triage && triage.analysis,
+        triageId:triage && triage.id,
+        triageReused:sameTriage && sameTriage.id === triage.id,
+        triageAction:triageAction && triageAction.ok,
+        triageFocuses:triageFocuses,
+        statePrimary:stateActions && stateActions.recommended && stateActions.recommended.id,
+        converted:converted && converted.ok,
+        convertedKind:convertedNote && convertedNote.kind,
+        convertedContent:convertedNote && convertedNote.content,
+        nonDirectStates:nonDirectStates,
         recommendations:[initial.recommended.id, firstActions.recommended.id, secondActions.recommended.id],
         results:[firstResult.ok, secondResult.ok, thirdResult.ok],
         orders:[first.analysis && first.analysis.order, second.analysis && second.analysis.order, third.analysis && third.analysis.order],
@@ -1423,6 +1464,19 @@ window.addEventListener('load', function(){
         self.assertNotIn("ERR:", raw)
         result = json.loads(raw)
         self.assertEqual(result["initialType"], "option", msg=json.dumps(result))
+        self.assertEqual(result["rootOnly"], ["root"], msg=json.dumps(result))
+        self.assertEqual(result["triageKind"], "question", msg=json.dumps(result))
+        self.assertEqual(result["triageAnalysis"]["tool"], "triage", msg=json.dumps(result))
+        self.assertEqual(result["triageAnalysis"]["role"], "assessment", msg=json.dumps(result))
+        self.assertTrue(result["triageReused"], msg=json.dumps(result))
+        self.assertTrue(result["triageAction"], msg=json.dumps(result))
+        self.assertEqual(result["triageFocuses"][0]["decisionId"], result["expectedDecision"], msg=json.dumps(result))
+        self.assertEqual(result["triageFocuses"][0]["noteId"], result["triageId"], msg=json.dumps(result))
+        self.assertEqual(result["statePrimary"], "convert-state-to-option", msg=json.dumps(result))
+        self.assertTrue(result["converted"], msg=json.dumps(result))
+        self.assertEqual(result["convertedKind"], "option", msg=json.dumps(result))
+        self.assertTrue(result["convertedContent"].startswith("Option:"), msg=json.dumps(result))
+        self.assertEqual(result["nonDirectStates"], ["add-parallel-factor"] * 4, msg=json.dumps(result))
         self.assertEqual(result["recommendations"], ["explore-consequences", "add-next-consequence", "add-next-consequence"], msg=json.dumps(result))
         self.assertEqual(result["results"], [True, True, True], msg=json.dumps(result))
         self.assertEqual(result["orders"], [1, 2, 3], msg=json.dumps(result))
@@ -1449,7 +1503,12 @@ window.addEventListener('load', function(){
       var ui = window.KyanbasuNoteActions;
       if (!api || !ui) throw new Error('Contextual note actions missing');
       var created = api.createDecisionMap(180, 300, 'Decisions');
-      var option = created.options[0];
+      var option = api.createDecisionChild(created.root.id, 'option');
+      api.createDecisionTriage(created.root.id);
+      var prepared = api.exportData();
+      var preparedRoot = prepared.notes.filter(function(note){ return note.id === created.root.id; })[0];
+      preparedRoot.decisionProcess.triageProfile = {answers:{magnitude:'high', reversibility:'hard', uncertainty:'medium', emotionalPressure:'low', duration:'short'}, recommendedModuleIds:['consequences'], acceptedModuleIds:['consequences'], declinedModuleIds:['inversion'], recommendationReasons:[], confirmedAt:Date.now()};
+      api.importData(prepared);
       api.setContent(option.id, 'Option: Use contextual guidance');
       api.selectNote(option.id);
       setTimeout(function(){
@@ -1591,7 +1650,7 @@ window.addEventListener('load', function(){
       if (!api || !reviewUi) throw new Error('Decision review UI missing');
       var created = api.createDecisionMap(180, 300, 'Decisions');
       var root = created.root;
-      var option = created.options[0];
+      var option = api.createDecisionChild(root.id, 'option');
       api.setContent(option.id, 'Option: Choose under current time constraints');
       var directBlankRejected = api.commitDecision(root.id, option.id, '   ') === null;
       var directLongRejected = api.commitDecision(root.id, option.id, new Array(502).join('x')) === null;
@@ -1751,7 +1810,7 @@ window.addEventListener('load', function(){
       var ui = window.KyanbasuNoteActions;
       var toolbar = document.getElementById('noteActionToolbar');
       var menu = document.getElementById('noteActionMenu');
-      var created, option, inversionRoot, failure, safeguard;
+      var created, option, secondOption, factor, inversionRoot, failure, safeguard;
       var orders = [];
       var flippedAbove = false;
       var leftClamped = false;
@@ -1793,8 +1852,17 @@ window.addEventListener('load', function(){
           if (!api || !ui || !toolbar || !menu) throw new Error('Guided decision UI missing');
           document.body.classList.add('inspector-collapsed');
           created = api.createDecisionMap(180, 300, 'Decisions');
-          option = created.options[0];
-          editSelected('Decision: Choose a planning workflow\\nTarget outcome: Make decisions with less friction\\nSuccess means: Used consistently for one week\\nDecision needed by: Friday\\nReassess by: Next Friday');
+          factor = api.createDecisionChild(created.root.id, 'factor');
+          option = api.createDecisionChild(created.root.id, 'option');
+          secondOption = api.createDecisionChild(created.root.id, 'option');
+          api.createDecisionTriage(created.root.id);
+          api.selectNote(created.root.id);
+          editSelected('Problem / decision: Choose a planning workflow\\nDesired outcome: Make decisions with less friction\\nSuccess means: Used consistently for one week\\nDecision needed by: Friday\\nReassess by: Next Friday');
+          var prepared = api.exportData();
+          var preparedRoot = prepared.notes.filter(function(note){ return note.id === created.root.id; })[0];
+          preparedRoot.decisionProcess.triageProfile = {answers:{magnitude:'high', reversibility:'hard', uncertainty:'medium', emotionalPressure:'low', duration:'short'}, recommendedModuleIds:['consequences','inversion'], acceptedModuleIds:['consequences','inversion'], declinedModuleIds:[], recommendationReasons:[], confirmedAt:Date.now()};
+          api.importData(prepared);
+          api.selectNote(created.root.id);
         },
         function(){ clickPrimary('Explore next option'); },
         function(){
@@ -1859,10 +1927,8 @@ window.addEventListener('load', function(){
           var currentNotes = api.notes();
           var out = {
             inspectorCollapsed:document.body.classList.contains('inspector-collapsed'),
-            optionCount:created.options.filter(function(option){
-              return currentNotes.some(function(note){ return note.id === option.id && note.kind === 'option'; });
-            }).length,
-            factorRetained:currentNotes.some(function(note){ return note.id === created.factor.id && note.kind === 'factor'; }),
+            optionCount:[option, secondOption].filter(function(item){ return currentNotes.some(function(note){ return note.id === item.id && note.kind === 'option'; }); }).length,
+            factorRetained:currentNotes.some(function(note){ return note.id === factor.id && note.kind === 'factor'; }),
             consequenceOrders:orders,
             inversionRole:inversionRoot && inversionRoot.analysis && inversionRoot.analysis.role,
             failureKind:failure && failure.kind,
@@ -1928,8 +1994,9 @@ window.addEventListener('load', function(){
       var api = window.KyanbasuNotes;
       var created = api.createDecisionMap(180, 300, 'Decisions');
       var root = created.root;
-      var optionA = created.options[0];
-      var optionB = created.options[1];
+      var factor = api.createDecisionChild(root.id, 'factor');
+      var optionA = api.createDecisionChild(root.id, 'option');
+      var optionB = api.createDecisionChild(root.id, 'option');
       api.setContent(root.id, 'Decision: Choose a focus\\nTarget outcome: Ship a useful result\\nSuccess means: Used for one week\\nDecision needed by: Friday\\nReassess by: Next Friday');
       api.setContent(optionA.id, 'Option: Build the smaller workflow');
       api.setContent(optionB.id, 'Option: Keep the current process');
@@ -1937,7 +2004,7 @@ window.addEventListener('load', function(){
       var outcomeB = api.createChildNote(optionB.id);
       api.setContent(outcomeA.id, 'Possible outcome: Faster planning\\nBest estimate: 60%\\nReasonable range: 40-75%\\nPayoff / cost: Less friction');
       api.setContent(outcomeB.id, 'Possible outcome: No migration cost\\nBest estimate: 80%\\nReasonable range: 65-90%\\nPayoff / cost: No improvement');
-      var evidence = api.createChildNote(created.factor.id, 'Outside view: similar small workflows were adopted', '');
+      var evidence = api.createChildNote(factor.id, 'Outside view: similar small workflows were adopted', '');
       api.setNoteKind(evidence.id, 'evidence');
       api.selectNote(optionA.id);
       setTimeout(function(){
@@ -1970,7 +2037,7 @@ window.addEventListener('load', function(){
               decisionButton:!!document.getElementById('noteDecisionBtn'),
               mapKinds:api.notes().map(function(note){ return note.kind; }),
               semanticKinds:[kinds.indexOf('factor') >= 0, kinds.indexOf('option') >= 0, kinds.indexOf('outcome') >= 0],
-              optionCount:created.options.length,
+              optionCount:[optionA, optionB].length,
               outcomeKinds:[outcomeA.kind, outcomeB.kind],
               reviewComplete:checklist.filter(function(item){ return item.complete; }).length,
               reviewTotal:checklist.length,
@@ -2049,7 +2116,7 @@ window.addEventListener('load', function(){
       var api = window.KyanbasuNotes;
       var created = api.createDecisionMap(180, 300, 'Decisions');
       var root = created.root;
-      var option = created.options[0];
+      var option = api.createDecisionChild(root.id, 'option');
       api.setContent(root.id, 'Decision: Choose a delivery approach\\nTarget outcome: Deliver a useful release\\nSuccess means: Used for one week\\nDecision needed by: Friday\\nReassess by: Next Friday');
       api.setContent(option.id, 'Option: Ship the smallest coherent workflow');
       api.selectNote(option.id);
@@ -2198,7 +2265,7 @@ window.addEventListener('load', function(){
       var api = window.KyanbasuNotes;
       var created = api.createDecisionMap(180, 300, 'Decisions');
       var root = created.root;
-      var option = created.options[0];
+      var option = api.createDecisionChild(root.id, 'option');
       api.setContent(option.id, 'Option: Launch a small weekly planning practice');
       api.selectNote(option.id);
       setTimeout(function(){
