@@ -698,8 +698,10 @@
     var consequence = consequenceContextFor(proposed.id);
     var inversionRoot = directInversionForOwner(proposed.id);
     var inversion = inversionRoot ? inversionCompletionState(inversionRoot) : null;
-    checks.push({id:'consequences', label:'Three orders of consequences completed', complete:!!(consequence && consequence.complete), targetId:(consequence && consequence.firstId) || proposed.id});
-    checks.push({id:'inversion', label:'Inversion analysis completed', complete:!!(inversion && inversion.complete), targetId:inversionRoot ? inversionRoot.id : proposed.id});
+    var process = NoteCore.normalizeDecisionProcess(root.decisionProcess);
+    var accepted = process && process.triageProfile ? process.triageProfile.acceptedModuleIds : [];
+    if (accepted.indexOf('consequences') >= 0) checks.push({id:'consequences', label:'Three orders of consequences completed', complete:!!(consequence && consequence.complete), targetId:(consequence && consequence.firstId) || proposed.id});
+    if (accepted.indexOf('inversion') >= 0) checks.push({id:'inversion', label:'Inversion analysis completed', complete:!!(inversion && inversion.complete), targetId:inversionRoot ? inversionRoot.id : proposed.id});
     return {
       decisionId:root.id,
       decisionLabel:decisionProblem(root) || 'Decision',

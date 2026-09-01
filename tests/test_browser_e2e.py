@@ -1395,6 +1395,7 @@ window.addEventListener('load', function(){
       var stateActions = api.decisionActions(state.id);
       var converted = api.executeDecisionAction('convert-state-to-option', state.id);
       var convertedNote = api.notes().filter(function(note){ return note.id === state.id; })[0];
+      var convertedLinkRetained = api.links().some(function(link){ return link.type === 'child' && link.from === root.id && link.to === state.id; });
       var nonDirectStates = ['no', 'partly', '', 'unknown'].map(function(value){
         var item = api.createDecisionChild(root.id, 'factor');
         api.setContent(item.id, 'State: Constraint\\nCan I directly choose it? ' + value);
@@ -1416,6 +1417,17 @@ window.addEventListener('load', function(){
       var beforeStale = api.notes().length;
       var stale = api.executeDecisionAction('add-next-consequence', third.id);
       var review = api.reviewContext(option.id);
+      var primaryBeforeProfiles = api.primaryNote();
+      var declinedInversion = api.exportData();
+      declinedInversion.notes.filter(function(note){ return note.id === root.id; })[0].decisionProcess.triageProfile.acceptedModuleIds = ['consequences'];
+      declinedInversion.notes.filter(function(note){ return note.id === root.id; })[0].decisionProcess.triageProfile.declinedModuleIds = ['inversion'];
+      api.importData(declinedInversion);
+      var declinedInversionReviewIds = api.reviewContext(option.id).checks.map(function(check){ return check.id; });
+      var noAccepted = api.exportData();
+      noAccepted.notes.filter(function(note){ return note.id === root.id; })[0].decisionProcess.triageProfile.acceptedModuleIds = [];
+      noAccepted.notes.filter(function(note){ return note.id === root.id; })[0].decisionProcess.triageProfile.declinedModuleIds = ['consequences','inversion'];
+      api.importData(noAccepted);
+      var noAcceptedReviewIds = api.reviewContext(option.id).checks.map(function(check){ return check.id; });
       var out = {
         initialType:initialContext && initialContext.type,
         rootOnly:Object.keys(created).sort(),
@@ -1428,12 +1440,15 @@ window.addEventListener('load', function(){
         statePrimary:stateActions && stateActions.recommended && stateActions.recommended.id,
         converted:converted && converted.ok,
         convertedKind:convertedNote && convertedNote.kind,
+        convertedId:convertedNote && convertedNote.id,
+        expectedConvertedId:state.id,
+        convertedLinkRetained:convertedLinkRetained,
         convertedContent:convertedNote && convertedNote.content,
         nonDirectStates:nonDirectStates,
         recommendations:[initial.recommended.id, firstActions.recommended.id, secondActions.recommended.id],
         results:[firstResult.ok, secondResult.ok, thirdResult.ok],
         orders:[first.analysis && first.analysis.order, second.analysis && second.analysis.order, third.analysis && third.analysis.order],
-        primary:api.primaryNote(),
+        primary:primaryBeforeProfiles,
         expectedPrimary:third.id,
         eventCount:events.length,
         eventShape:events.every(function(event){ return typeof event.selectedId === 'string' && typeof event.reason === 'string'; }),
@@ -1442,6 +1457,8 @@ window.addEventListener('load', function(){
         staleCreated:api.notes().length !== beforeStale,
         reviewDecision:review && review.decisionId,
         reviewOption:review && review.proposedOptionId,
+        declinedInversionReviewIds:declinedInversionReviewIds,
+        noAcceptedReviewIds:noAcceptedReviewIds,
         expectedDecision:created.root.id,
         expectedOption:option.id
       };
@@ -1475,7 +1492,10 @@ window.addEventListener('load', function(){
         self.assertEqual(result["statePrimary"], "convert-state-to-option", msg=json.dumps(result))
         self.assertTrue(result["converted"], msg=json.dumps(result))
         self.assertEqual(result["convertedKind"], "option", msg=json.dumps(result))
+        self.assertEqual(result["convertedId"], result["expectedConvertedId"], msg=json.dumps(result))
+        self.assertTrue(result["convertedLinkRetained"], msg=json.dumps(result))
         self.assertTrue(result["convertedContent"].startswith("Option:"), msg=json.dumps(result))
+        self.assertIn("Calendar blocks", result["convertedContent"], msg=json.dumps(result))
         self.assertEqual(result["nonDirectStates"], ["add-parallel-factor"] * 4, msg=json.dumps(result))
         self.assertEqual(result["recommendations"], ["explore-consequences", "add-next-consequence", "add-next-consequence"], msg=json.dumps(result))
         self.assertEqual(result["results"], [True, True, True], msg=json.dumps(result))
@@ -1488,6 +1508,10 @@ window.addEventListener('load', function(){
         self.assertFalse(result["staleCreated"], msg=json.dumps(result))
         self.assertEqual(result["reviewDecision"], result["expectedDecision"], msg=json.dumps(result))
         self.assertEqual(result["reviewOption"], result["expectedOption"], msg=json.dumps(result))
+        self.assertIn("consequences", result["declinedInversionReviewIds"], msg=json.dumps(result))
+        self.assertNotIn("inversion", result["declinedInversionReviewIds"], msg=json.dumps(result))
+        self.assertNotIn("consequences", result["noAcceptedReviewIds"], msg=json.dumps(result))
+        self.assertNotIn("inversion", result["noAcceptedReviewIds"], msg=json.dumps(result))
 
     def test_canvas_contextual_toolbar_and_menu_share_actions(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
