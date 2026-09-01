@@ -1048,6 +1048,119 @@ window.addEventListener('load', function(){
         self.assertEqual(result["exportedStatus"], "parked")
         self.assertEqual(result["viewerSemantics"], ["Decision", "Parked"])
 
+    def test_canvas_triage_engine_exhausts_all_243_profiles(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_TRIAGE_ENGINE_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var triage = window.KyanbasuDecisionTriage;
+      if (!triage) throw new Error('Decision triage API missing');
+      var magnitudes = ['low', 'medium', 'high'];
+      var reversibilities = ['easy', 'partial', 'hard'];
+      var uncertainties = ['low', 'medium', 'high'];
+      var pressures = ['low', 'medium', 'high'];
+      var durations = ['short', 'long', 'repeated'];
+      var profiles = 0;
+      var reasonsPresent = true;
+      for (var a=0; a<magnitudes.length; a++){
+        for (var b=0; b<reversibilities.length; b++){
+          for (var c=0; c<uncertainties.length; c++){
+            for (var d=0; d<pressures.length; d++){
+              for (var e=0; e<durations.length; e++){
+                var answers = {
+                  magnitude:magnitudes[a], reversibility:reversibilities[b],
+                  uncertainty:uncertainties[c], emotionalPressure:pressures[d], duration:durations[e]
+                };
+                var expected = [];
+                if (answers.magnitude === 'high' || answers.reversibility === 'hard') {
+                  expected.push('consequences', 'inversion');
+                }
+                expected.sort();
+                var assessed = triage.assess(answers, ['consequences', 'inversion']);
+                var actual = assessed.recommendations.map(function(row){ return row.id; }).sort();
+                if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+                  throw new Error('Unexpected modules for ' + JSON.stringify(answers) + ': ' + JSON.stringify(actual));
+                }
+                if (!assessed.complete) throw new Error('Valid profile was incomplete');
+                for (var r=0; r<assessed.recommendations.length; r++) {
+                  reasonsPresent = reasonsPresent && !!String(assessed.recommendations[r].reason || '').trim();
+                }
+                profiles += 1;
+              }
+            }
+          }
+        }
+      }
+      var mediumOnly = triage.assess({magnitude:'medium', reversibility:'partial', uncertainty:'medium', emotionalPressure:'medium', duration:'long'}, ['consequences', 'inversion']);
+      var lowEasyShort = triage.assess({magnitude:'low', reversibility:'easy', uncertainty:'low', emotionalPressure:'low', duration:'short'}, ['consequences', 'inversion']);
+      var coreOnlyExplanation = String(mediumOnly.profileExplanation || '');
+      var inversionOnly = triage.assess({magnitude:'high', reversibility:'hard', uncertainty:'high', emotionalPressure:'high', duration:'repeated'}, ['inversion']);
+      var unknown = triage.assess({magnitude:'unknown', reversibility:'impossible', uncertainty:'?', emotionalPressure:null, duration:'forever'}, ['consequences', 'inversion']);
+      var input = {magnitude:'high', reversibility:'easy', uncertainty:'medium', emotionalPressure:'low', duration:'long'};
+      var before = JSON.stringify(input);
+      triage.assess(input, ['consequences', 'inversion']);
+      var inputUnchanged = before === JSON.stringify(input);
+      var dimensionsFirst = triage.dimensions();
+      dimensionsFirst[0].label = 'Mutated';
+      dimensionsFirst[0].values.push('mutated');
+      var dimensionsSecond = triage.dimensions();
+      var modulesFirst = triage.availableModules();
+      modulesFirst[0].label = 'Mutated';
+      var modulesSecond = triage.availableModules();
+      var out = {
+        profiles:profiles,
+        reasonsPresent:reasonsPresent,
+        mediumOnlyIds:mediumOnly.recommendations.map(function(row){ return row.id; }),
+        lowEasyShortIds:lowEasyShort.recommendations.map(function(row){ return row.id; }),
+        coreOnlyExplanation:coreOnlyExplanation,
+        inversionOnlyIds:inversionOnly.recommendations.map(function(row){ return row.id; }),
+        unknownAnswers:unknown.answers,
+        unknownComplete:unknown.complete,
+        inputUnchanged:inputUnchanged,
+        dimensionsDefensive:dimensionsSecond[0].label === 'Magnitude' && dimensionsSecond[0].values.indexOf('mutated') < 0,
+        modulesDefensive:modulesSecond[0].label === '1st / 2nd / 3rd-order consequences'
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out';
+      pre.textContent = JSON.stringify(out);
+      document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 800);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["profiles"], 243, msg=json.dumps(result))
+        self.assertTrue(result["reasonsPresent"], msg=json.dumps(result))
+        self.assertEqual(result["mediumOnlyIds"], [], msg=json.dumps(result))
+        self.assertEqual(result["lowEasyShortIds"], [], msg=json.dumps(result))
+        self.assertTrue(result["coreOnlyExplanation"], msg=json.dumps(result))
+        self.assertIn("no available module was triggered", result["coreOnlyExplanation"].lower(), msg=json.dumps(result))
+        self.assertEqual(result["inversionOnlyIds"], ["inversion"], msg=json.dumps(result))
+        self.assertNotIn("consequences", result["inversionOnlyIds"], msg=json.dumps(result))
+        self.assertEqual(
+            result["unknownAnswers"],
+            {"magnitude": "", "reversibility": "", "uncertainty": "", "emotionalPressure": "", "duration": ""},
+            msg=json.dumps(result),
+        )
+        self.assertFalse(result["unknownComplete"], msg=json.dumps(result))
+        self.assertTrue(result["inputUnchanged"], msg=json.dumps(result))
+        self.assertTrue(result["dimensionsDefensive"], msg=json.dumps(result))
+        self.assertTrue(result["modulesDefensive"], msg=json.dumps(result))
+
     def test_canvas_decision_guidance_matrix_is_deterministic(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

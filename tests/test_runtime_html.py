@@ -41,6 +41,7 @@ class TestRuntimeHtml(unittest.TestCase):
             'id="FEATURE_CANVAS_NOTE_ACTIONS_V1_CSS"',
             'id="FEATURE_CANVAS_DECISION_REVIEW_V1_CSS"',
             'id="FEATURE_CANVAS_NOTES_CORE_V1"',
+            'id="FEATURE_CANVAS_DECISION_TRIAGE_V1"',
             'id="FEATURE_CANVAS_DECISION_GUIDANCE_V1"',
             'id="FEATURE_CANVAS_NOTES_V1"',
             'id="FEATURE_CANVAS_NOTE_ACTIONS_V1"',
@@ -61,6 +62,8 @@ class TestRuntimeHtml(unittest.TestCase):
             self.assertIn(marker, out)
         self.assertLess(out.index('id="FEATURE_RUNTIME_DIAGNOSTICS_V1"'), out.index('id="FEATURE_HOVERSTAGE"'))
         self.assertLess(out.index('id="FEATURE_CANVAS_STORAGE_V1"'), out.index('id="FEATURE_CANVAS_NOTES_CORE_V1"'))
+        self.assertLess(out.index('id="FEATURE_CANVAS_NOTES_CORE_V1"'), out.index('id="FEATURE_CANVAS_DECISION_TRIAGE_V1"'))
+        self.assertLess(out.index('id="FEATURE_CANVAS_DECISION_TRIAGE_V1"'), out.index('id="FEATURE_CANVAS_DECISION_GUIDANCE_V1"'))
         self.assertLess(out.index('id="FEATURE_CANVAS_NOTES_CORE_V1"'), out.index('id="FEATURE_CANVAS_DECISION_GUIDANCE_V1"'))
         self.assertLess(out.index('id="FEATURE_CANVAS_DECISION_GUIDANCE_V1"'), out.index('id="FEATURE_CANVAS_NOTES_V1"'))
         self.assertLess(out.index('id="FEATURE_CANVAS_NOTES_V1_CSS"'), out.index('id="FEATURE_CANVAS_NOTE_ACTIONS_V1_CSS"'))
@@ -68,6 +71,7 @@ class TestRuntimeHtml(unittest.TestCase):
         self.assertLess(out.index('id="FEATURE_CANVAS_NOTE_ACTIONS_V1_CSS"'), out.index('id="FEATURE_CANVAS_DECISION_REVIEW_V1_CSS"'))
         self.assertLess(out.index('id="FEATURE_CANVAS_NOTE_ACTIONS_V1"'), out.index('id="FEATURE_CANVAS_DECISION_REVIEW_V1"'))
         self.assertEqual(out.count('id="FEATURE_CANVAS_DECISION_GUIDANCE_V1"'), 1)
+        self.assertEqual(out.count('id="FEATURE_CANVAS_DECISION_TRIAGE_V1"'), 1)
         self.assertEqual(out.count('id="FEATURE_CANVAS_NOTE_ACTIONS_V1_CSS"'), 1)
         self.assertEqual(out.count('id="FEATURE_CANVAS_NOTE_ACTIONS_V1"'), 1)
         self.assertEqual(out.count('id="FEATURE_CANVAS_DECISION_REVIEW_V1_CSS"'), 1)

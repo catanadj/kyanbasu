@@ -94,6 +94,7 @@ def build_runtime_html(
         ("FEATURE_CANVAS_STORAGE_V1", "canvas_storage_v1.js.html"),
         ("__FEATURE_CANVAS_NAVIGATOR_V1__", "canvas_navigator_v1.js.html"),
         ("FEATURE_CANVAS_NOTES_CORE_V1", "canvas_notes_core_v1.js.html"),
+        ("FEATURE_CANVAS_DECISION_TRIAGE_V1", "canvas_decision_triage_v1.js.html"),
         ("FEATURE_CANVAS_DECISION_GUIDANCE_V1", "canvas_decision_guidance_v1.js.html"),
         ("__FEATURE_CANVAS_NOTES_V1__", "canvas_notes_v1.js.html"),
         ('<script id="FEATURE_CANVAS_NOTE_ACTIONS_V1"', "canvas_note_actions_v1.js.html"),
