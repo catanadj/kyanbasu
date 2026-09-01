@@ -958,7 +958,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["directionChevrons"], 1)
         self.assertEqual(result["apiNotes"], 2)
         self.assertEqual(result["apiLinks"], 1)
-        self.assertEqual(result["coreVersion"], 8)
+        self.assertEqual(result["coreVersion"], 9)
         self.assertTrue(result["rejectsSelfChild"])
         self.assertEqual(result["legacyContent"], "Old title\nOld body")
         self.assertEqual(result["legacyKind"], "note")
@@ -1043,7 +1043,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["status"], "parked")
         self.assertEqual(result["cardKind"], "Decision")
         self.assertEqual(result["cardStatus"], "Status: Parked")
-        self.assertEqual(result["exportedVersion"], 8)
+        self.assertEqual(result["exportedVersion"], 9)
         self.assertEqual(result["exportedKind"], "decision")
         self.assertEqual(result["exportedStatus"], "parked")
         self.assertEqual(result["viewerSemantics"], ["Decision", "Parked"])
@@ -1160,6 +1160,113 @@ window.addEventListener('load', function(){
         self.assertTrue(result["inputUnchanged"], msg=json.dumps(result))
         self.assertTrue(result["dimensionsDefensive"], msg=json.dumps(result))
         self.assertTrue(result["modulesDefensive"], msg=json.dumps(result))
+
+    def test_canvas_decision_process_v9_normalizes_and_round_trips(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_DECISION_PROCESS_V9_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var api = window.KyanbasuNotes;
+      var core = window.KyanbasuNotesCore;
+      var answers = {magnitude:'high', reversibility:'hard', uncertainty:'medium', emotionalPressure:'low', duration:'short'};
+      var process = {
+        version:1, triageDraft:answers, moduleDraftIds:[],
+        triageProfile:{
+          answers:answers,
+          recommendedModuleIds:['consequences', 'inversion', 'consequences'],
+          acceptedModuleIds:['consequences', 'future-module', 'future-module'],
+          declinedModuleIds:['inversion', 'inversion'],
+          recommendationReasons:[
+            {moduleId:'consequences', reason:' High magnitude warrants tracing downstream effects. '},
+            {moduleId:'future-module', reason:' Future compatibility reason. '},
+            {moduleId:'', reason:'dropped'}, {moduleId:'inversion', reason:'   '}
+          ],
+          confirmedAt:1788278400000
+        }
+      };
+      var imported = {
+        kind:'kyanbasu.notes', version:8, notes:[
+          {id:'legacy-decision', content:'Decision: Keep the established workflow', kind:'decision', bucket:'Decisions'},
+          {
+            id:'process-decision', content:'Decision: Adopt a deliberate workflow', kind:'decision', bucket:'Decisions', decisionProcess:process,
+            decisionRecord:{chosenOptionId:'process-option', commits:[{
+              id:'commit-process', committedAt:1788278400001, chosenOptionId:'process-option', rationale:'Preserve the process record.',
+              notes:[{id:'process-decision', content:'Decision: Adopt a deliberate workflow', kind:'decision', bucket:'Decisions', decisionProcess:process}], links:[]
+            }]}
+          },
+          {id:'process-option', content:'Option: Use the deliberate workflow', kind:'option', bucket:'Decisions'}
+        ], links:[], buckets:{}
+      };
+      api.importData(imported);
+      var pureCopy = core.normalizeDecisionProcess(process);
+      pureCopy.triageDraft.magnitude = 'low';
+      pureCopy.triageProfile.acceptedModuleIds[1] = 'mutated-module';
+      var exported = api.exportData();
+      var history = api.decisionHistory('process-decision');
+      history.commits[0].notes[0].decisionProcess.triageProfile.acceptedModuleIds[1] = 'mutated-history-module';
+      var historyAfterMutation = api.decisionHistory('process-decision');
+      window.KyanbasuWorkbenches.capture();
+      var workbenches = window.KyanbasuWorkbenches.exportData();
+      var nested = workbenches.workbenches.filter(function(workbench){ return workbench.id === workbenches.activeId; })[0];
+      api.importData(exported);
+      var reexported = api.exportData();
+      var invalid = JSON.parse(JSON.stringify(imported));
+      invalid.notes = [JSON.parse(JSON.stringify(imported.notes[1]))];
+      invalid.notes[0].id = 'invalid-process-decision';
+      invalid.notes[0].decisionProcess.triageDraft = {magnitude:'unknown', reversibility:'impossible', uncertainty:'?', emotionalPressure:null, duration:'forever'};
+      invalid.notes[0].decisionProcess.triageProfile.answers = invalid.notes[0].decisionProcess.triageDraft;
+      api.importData(invalid);
+      var invalidExport = api.exportData();
+      var legacy = exported.notes.filter(function(note){ return note.id === 'legacy-decision'; })[0];
+      var valid = reexported.notes.filter(function(note){ return note.id === 'process-decision'; })[0];
+      var invalidProcess = invalidExport.notes[0] && invalidExport.notes[0].decisionProcess;
+      var snapshotProcess = historyAfterMutation.commits[0].notes[0].decisionProcess;
+      var out = {
+        legacyHasNoProcess:!Object.prototype.hasOwnProperty.call(legacy, 'decisionProcess'),
+        legacyContent:legacy && legacy.content,
+        triageNoteCount:exported.notes.filter(function(note){ return note.analysis && note.analysis.tool === 'triage'; }).length,
+        pureSourceUnchanged:process.triageDraft.magnitude === 'high' && process.triageProfile.acceptedModuleIds[1] === 'future-module',
+        validDraft:valid && valid.decisionProcess && valid.decisionProcess.triageDraft,
+        validAccepted:valid && valid.decisionProcess && valid.decisionProcess.triageProfile && valid.decisionProcess.triageProfile.acceptedModuleIds,
+        validRecommended:valid && valid.decisionProcess && valid.decisionProcess.triageProfile && valid.decisionProcess.triageProfile.recommendedModuleIds,
+        validReasons:valid && valid.decisionProcess && valid.decisionProcess.triageProfile && valid.decisionProcess.triageProfile.recommendationReasons,
+        moduleDraftIds:valid && valid.decisionProcess && valid.decisionProcess.moduleDraftIds,
+        historyAccepted:snapshotProcess && snapshotProcess.triageProfile && snapshotProcess.triageProfile.acceptedModuleIds,
+        invalidDraft:invalidProcess && invalidProcess.triageDraft,
+        invalidProfile:invalidProcess && invalidProcess.triageProfile,
+        exportedVersion:exported.version, nestedVersion:nested && nested.notes && nested.notes.version
+      };
+      var pre = document.createElement('pre'); pre.id = 'e2e-out'; pre.textContent = JSON.stringify(out); document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre'); pre2.id = 'e2e-out'; pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e)); document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["legacyHasNoProcess"], msg=json.dumps(result))
+        self.assertTrue(result["legacyContent"].startswith("Decision:"), msg=json.dumps(result))
+        self.assertEqual(result["triageNoteCount"], 0, msg=json.dumps(result))
+        self.assertTrue(result["pureSourceUnchanged"], msg=json.dumps(result))
+        self.assertEqual(result["validDraft"], {"magnitude":"high", "reversibility":"hard", "uncertainty":"medium", "emotionalPressure":"low", "duration":"short"}, msg=json.dumps(result))
+        self.assertEqual(result["validAccepted"], ["consequences", "future-module"], msg=json.dumps(result))
+        self.assertEqual(result["validRecommended"], ["consequences", "inversion"], msg=json.dumps(result))
+        self.assertEqual(result["validReasons"], [{"moduleId":"consequences", "reason":"High magnitude warrants tracing downstream effects."}, {"moduleId":"future-module", "reason":"Future compatibility reason."}], msg=json.dumps(result))
+        self.assertEqual(result["moduleDraftIds"], [], msg=json.dumps(result))
+        self.assertEqual(result["historyAccepted"], ["consequences", "future-module"], msg=json.dumps(result))
+        self.assertEqual(result["invalidDraft"], {"magnitude":"", "reversibility":"", "uncertainty":"", "emotionalPressure":"", "duration":""}, msg=json.dumps(result))
+        self.assertIsNone(result["invalidProfile"], msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
+        self.assertEqual(result["nestedVersion"], 9, msg=json.dumps(result))
 
     def test_canvas_decision_guidance_matrix_is_deterministic(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
@@ -1621,9 +1728,9 @@ window.addEventListener('load', function(){
         self.assertEqual(result["commitCount"], 1, msg=json.dumps(result))
         self.assertEqual(result["rationale"], "Chosen under current time constraints", msg=json.dumps(result))
         self.assertEqual(result["unresolved"], result["expectedUnresolved"], msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 8, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
         self.assertEqual(result["workbenchVersion"], 1, msg=json.dumps(result))
-        self.assertEqual(result["nestedVersion"], 8, msg=json.dumps(result))
+        self.assertEqual(result["nestedVersion"], 9, msg=json.dumps(result))
         self.assertEqual(result["importedUnresolved"], result["expectedUnresolved"], msg=json.dumps(result))
         self.assertTrue(result["legacyImported"], msg=json.dumps(result))
         self.assertFalse(result["legacyHasUnresolved"], msg=json.dumps(result))
@@ -1923,7 +2030,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["alternativeStatuses"], ["open", "open"], msg=json.dumps(result))
         self.assertEqual(result["chosenBadge"], "Chosen", msg=json.dumps(result))
         self.assertTrue(result["chosenClass"], msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 8, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
         self.assertEqual(result["exportedCommits"], 2, msg=json.dumps(result))
         self.assertEqual(result["workbenchCommits"], 2, msg=json.dumps(result))
         self.assertEqual(result["importedCommits"], 2, msg=json.dumps(result))
@@ -2062,7 +2169,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["duplicateExisting"], msg=json.dumps(result))
         self.assertEqual(result["inversionRootCount"], 1, msg=json.dumps(result))
         self.assertEqual(result["snapshotAnalysis"]["tool"], "inversion", msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 8, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
         self.assertEqual(result["exportedAnalysis"]["tool"], "inversion", msg=json.dumps(result))
         self.assertEqual(result["workbenchAnalysis"]["tool"], "inversion", msg=json.dumps(result))
         self.assertEqual(result["importedAnalysis"]["tool"], "inversion", msg=json.dumps(result))
@@ -2185,7 +2292,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["duplicateExisting"], msg=json.dumps(result))
         self.assertEqual(result["countAfterDuplicate"], 6, msg=json.dumps(result))
         self.assertEqual(result["snapshotAnalysis"]["order"], 3, msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 8, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
         self.assertEqual(result["exportedAnalysis"]["order"], 2, msg=json.dumps(result))
         self.assertEqual(result["workbenchAnalysis"]["order"], 3, msg=json.dumps(result))
         self.assertEqual(result["importedAnalysis"]["order"], 1, msg=json.dumps(result))
@@ -2491,7 +2598,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["pathTitle"], "Challenges")
         self.assertEqual(result["animationName"], "none")
         self.assertEqual(result["toolbarType"], "Challenges")
-        self.assertEqual(result["exportedVersion"], 8)
+        self.assertEqual(result["exportedVersion"], 9)
         self.assertEqual(result["exportedType"], "challenges")
         self.assertEqual(result["relationLabel"], "Challenges")
         self.assertEqual(result["inverseLabel"], "Challenged by")
@@ -2624,7 +2731,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["initial"]["icon"], "?", msg=json.dumps(result))
         self.assertIn("evidence current", result["initial"]["label"], msg=json.dumps(result))
         self.assertEqual(result["selectedKind"], "link", msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 8, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
         self.assertEqual(result["exportedAnnotation"], {"kind": "condition", "text": "Only if validation passes"}, msg=json.dumps(result))
         self.assertEqual(result["importedKind"], "condition", msg=json.dumps(result))
         self.assertIn("validation passes", result["importedLabel"], msg=json.dumps(result))
@@ -3107,7 +3214,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["resultNotes"], 2)
         self.assertEqual(result["resultLinks"], 1)
         self.assertEqual(result["exportedKind"], "kyanbasu.notes")
-        self.assertEqual(result["exportedVersion"], 8)
+        self.assertEqual(result["exportedVersion"], 9)
         self.assertEqual(result["exportedNotes"], 2)
         self.assertEqual(result["exportedLinks"], 1)
         self.assertEqual(result["firstContent"], "Imported root\nLegacy body")
@@ -6699,7 +6806,7 @@ window.addEventListener('load', function(){
         self.assertGreater(result["marked"]["reviewedAt"], 0, msg=json.dumps(result))
         self.assertEqual(result["marked"]["updatedAt"], result["beforeUpdated"], msg=json.dumps(result))
         self.assertNotIn("never-recent", result["neverAfterMark"], msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 8, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
         self.assertEqual(result["exportedMarked"]["reviewedAt"], result["marked"]["reviewedAt"], msg=json.dumps(result))
         self.assertIn("never-reviewed", result["lensIds"], msg=json.dumps(result))
         self.assertIn("stale-open", result["lensIds"], msg=json.dumps(result))

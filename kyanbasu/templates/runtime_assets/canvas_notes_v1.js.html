@@ -2947,7 +2947,7 @@
     var included = Object.create(null);
     branchIds.forEach(function(id){ included[id] = true; });
     var snapshotNotes = notes.filter(function(note){ return included[note.id]; }).map(function(note){
-      return {
+      var row = {
         id:note.id,
         content:note.content || 'New note',
         kind:noteKind(note),
@@ -2958,6 +2958,9 @@
         updatedAt:Number(note.updatedAt) || 0,
         analysis:noteAnalysis(note)
       };
+      var process = NoteCore.normalizeDecisionProcess(note.decisionProcess);
+      if (process) row.decisionProcess = process;
+      return row;
     });
     var snapshotLinks = links.filter(function(link){ return included[link.from] && included[link.to]; }).map(function(link){
       var row = {from:link.from, to:link.to, type:NoteCore.normalizeRelation(link.type)};
@@ -4582,7 +4585,7 @@
     });
     return {
       kind: 'kyanbasu.notes',
-      version: 8,
+      version: 9,
       exportedAt: new Date().toISOString(),
       notes: notes.map(function(n){
         var row = {id:n.id, x:toInt(n.x, 160), y:toInt(n.y, 160), content:n.content || 'New note', bucket:noteBucket(n), kind:noteKind(n), status:noteStatus(n), collapsed:!!n.collapsed, taskRefs:noteTaskRefs(n).slice(), createdAt:Number(n.createdAt) || 0, updatedAt:Number(n.updatedAt) || 0, reviewedAt:Number(n.reviewedAt) || 0};
@@ -4591,6 +4594,8 @@
         if (analysis) row.analysis = analysis;
         var decisionRecord = NoteCore.normalizeDecisionRecord(n.decisionRecord);
         if (decisionRecord) row.decisionRecord = decisionRecord;
+        var decisionProcess = NoteCore.normalizeDecisionProcess(n.decisionProcess);
+        if (decisionProcess) row.decisionProcess = decisionProcess;
         return row;
       }),
       links: links.map(function(l){
