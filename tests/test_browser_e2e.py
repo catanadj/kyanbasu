@@ -1718,6 +1718,45 @@ window.addEventListener('load', function(){
         self.assertTrue(result["inspectorCollapsed"], msg=json.dumps(result))
         self.assertEqual(result["staged"], [], msg=json.dumps(result))
 
+    def test_canvas_marquee_does_not_intercept_triage_controls(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        harness = """
+<script id="E2E_TRIAGE_CLICK_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var api = window.KyanbasuNotes;
+      var created = api.createDecisionMap(180, 300, 'Decisions');
+      var root = created.root;
+      api.setContent(root.id, 'Problem / decision: Choose a workflow\\nDesired outcome: Make decisions with less friction\\nSuccess means: Used consistently\\nDecision needed by: Friday\\nReassess by: Next Friday');
+      api.selectNote(root.id);
+      setTimeout(function(){
+        try{
+          var triage = api.createDecisionTriage(root.id);
+          api.selectNote(triage.id);
+          setTimeout(function(){
+            var button = document.querySelector('.decisionTriagePanel button[role="radio"]');
+            if (!button) throw new Error('Triage radio control not rendered');
+            button.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, cancelable:true, button:0, clientX:button.getBoundingClientRect().left + 2, clientY:button.getBoundingClientRect().top + 2}));
+            var out = {marquee:!!document.querySelector('.marquee'), controlPresent:!!document.querySelector('.decisionTriagePanel button[role="radio"]')};
+            var pre = document.createElement('pre'); pre.id = 'e2e-out'; pre.textContent = JSON.stringify(out); document.body.appendChild(pre);
+          }, 120);
+        }catch(e){ fail(e); }
+      }, 120);
+    }catch(e){ fail(e); }
+  }, 700);
+  function fail(e){ var pre = document.createElement('pre'); pre.id = 'e2e-out'; pre.textContent = 'ERR:' + (e && e.message ? e.message : String(e)); document.body.appendChild(pre); }
+});
+</script>
+"""
+        raw = self._run_html_harness(html.replace("</body>", harness + "\n</body>"))
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertFalse(result["marquee"], msg=json.dumps(result))
+        self.assertTrue(result["controlPresent"], msg=json.dumps(result))
+
     def test_canvas_decision_guidance_matrix_is_deterministic(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

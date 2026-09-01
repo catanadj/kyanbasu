@@ -4027,7 +4027,7 @@ function addToBuilder(task, cx, cy){
 var marquee=null, mStart=null;
 builderStage.addEventListener('mousedown', function(e){
   if (e.button!==0) return;
-  if (e.target.closest('.node')) return;
+  if (e.target.closest('.node, .tcNoteNode')) return;
   if (e.target.closest('.tcNoteLink, .tcNoteLinkHit, .tcNoteLinkAnnotation, .tcNoteLinkAnnotationAdd')) return;
   if (e.target.closest('.projAreaLabel') || e.target.closest('.tagAreaLabel') || e.target.closest('.tagAddBtn')) return;
   clearSelection();
