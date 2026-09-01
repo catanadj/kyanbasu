@@ -1268,6 +1268,168 @@ window.addEventListener('load', function(){
         self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
         self.assertEqual(result["nestedVersion"], 9, msg=json.dumps(result))
 
+    def test_canvas_analysis_notes_never_stage_taskwarrior_commands(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_ANALYSIS_STAGING_GUARD_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var api = window.KyanbasuNotes;
+      window.STAGED_CMDS = [];
+      var root = api.createDecisionMap(180, 300, 'Decisions').root;
+      var triage = api.createDecisionTriage(root.id);
+      api.selectNote(triage.id);
+      var triageStageResult = api.stageSelectedNotesAsTasks();
+      var triageLinkedResult = api.createLinkedTasksFromSelectedNotes();
+      var triageCommands = window.STAGED_CMDS.slice();
+      var triageTaskRefs = api.linkedTasks(triage.id);
+
+      var ordinary = api.createNote(620, 300, 'Ordinary planning note');
+      api.selectNote(ordinary.id);
+      window.STAGED_CMDS = [];
+      var ordinaryStageResult = api.stageSelectedNotesAsTasks();
+      var ordinaryStageCommands = window.STAGED_CMDS.slice();
+      window.STAGED_CMDS = [];
+      var ordinaryLinkedResult = api.createLinkedTasksFromSelectedNotes();
+      var ordinaryLinkedCommands = window.STAGED_CMDS.slice();
+
+      var out = {
+        triageStageResult:triageStageResult,
+        triageLinkedResult:triageLinkedResult,
+        triageCommands:triageCommands,
+        triageTaskRefs:triageTaskRefs,
+        ordinaryStageResult:ordinaryStageResult,
+        ordinaryStageCommands:ordinaryStageCommands,
+        ordinaryLinkedResult:ordinaryLinkedResult,
+        ordinaryLinkedCommands:ordinaryLinkedCommands
+      };
+      var pre = document.createElement('pre'); pre.id = 'e2e-out'; pre.textContent = JSON.stringify(out); document.body.appendChild(pre);
+    }catch(e){
+      var fail = document.createElement('pre'); fail.id = 'e2e-out'; fail.textContent = 'ERR:' + (e && e.message ? e.message : String(e)); document.body.appendChild(fail);
+    }
+  }, 900);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["triageStageResult"], 0, msg=json.dumps(result))
+        self.assertEqual(result["triageLinkedResult"], 0, msg=json.dumps(result))
+        self.assertEqual(result["triageCommands"], [], msg=json.dumps(result))
+        self.assertEqual(result["triageTaskRefs"], [], msg=json.dumps(result))
+        self.assertEqual(result["ordinaryStageResult"], 1, msg=json.dumps(result))
+        self.assertEqual(len(result["ordinaryStageCommands"]), 1, msg=json.dumps(result))
+        self.assertIn("Ordinary planning note", result["ordinaryStageCommands"][0], msg=json.dumps(result))
+        self.assertEqual(result["ordinaryLinkedResult"], 1, msg=json.dumps(result))
+        self.assertEqual(len(result["ordinaryLinkedCommands"]), 1, msg=json.dumps(result))
+        self.assertIn("Ordinary planning note", result["ordinaryLinkedCommands"][0], msg=json.dumps(result))
+
+    def test_canvas_triage_panel_survives_core_render_and_import(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_TRIAGE_RERENDER_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var api = window.KyanbasuNotes;
+      var root = api.createDecisionMap(180, 300, 'Decisions').root;
+      var triage = api.createDecisionTriage(root.id);
+      var exported = api.exportData();
+      function snapshot(){
+        var card = document.querySelector('.tcNoteNode[data-note-id="'+triage.id+'"]');
+        var rootCard = document.querySelector('.tcNoteNode[data-note-id="'+root.id+'"]');
+        return {
+          panelCount:card ? card.querySelectorAll('.decisionTriagePanel').length : 0,
+          structured:!!(card && card.querySelector('.decisionTriageDimensions')),
+          genericHidden:!!(card && card.querySelector('.tcNoteText') && card.querySelector('.tcNoteText').hidden),
+          rootGenericVisible:!!(rootCard && rootCard.querySelector('.tcNoteText') && !rootCard.querySelector('.tcNoteText').hidden),
+          rootHasNoPanel:!!(rootCard && !rootCard.querySelector('.decisionTriagePanel'))
+        };
+      }
+      var initial = snapshot();
+      api.importData(exported);
+      var afterImport = snapshot();
+      api.render();
+      var afterCoreRender = snapshot();
+      var out = {initial:initial, afterImport:afterImport, afterCoreRender:afterCoreRender};
+      var pre = document.createElement('pre'); pre.id = 'e2e-out'; pre.textContent = JSON.stringify(out); document.body.appendChild(pre);
+    }catch(e){
+      var fail = document.createElement('pre'); fail.id = 'e2e-out'; fail.textContent = 'ERR:' + (e && e.message ? e.message : String(e)); document.body.appendChild(fail);
+    }
+  }, 900);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        for key in ("initial", "afterImport", "afterCoreRender"):
+            state = result[key]
+            self.assertEqual(state["panelCount"], 1, msg=json.dumps(result))
+            self.assertTrue(state["structured"], msg=json.dumps(result))
+            self.assertTrue(state["genericHidden"], msg=json.dumps(result))
+            self.assertTrue(state["rootGenericVisible"], msg=json.dumps(result))
+            self.assertTrue(state["rootHasNoPanel"], msg=json.dumps(result))
+
+    def test_canvas_triage_module_toggle_preserves_keyboard_focus(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_TRIAGE_MODULE_FOCUS_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var api = window.KyanbasuNotes;
+      var root = api.createDecisionMap(180, 300, 'Decisions').root;
+      var triage = api.createDecisionTriage(root.id);
+      api.setDecisionTriageAnswer(triage.id, 'magnitude', 'high');
+      api.setDecisionTriageAnswer(triage.id, 'reversibility', 'hard');
+      api.setDecisionTriageAnswer(triage.id, 'uncertainty', 'medium');
+      api.setDecisionTriageAnswer(triage.id, 'emotionalPressure', 'low');
+      api.setDecisionTriageAnswer(triage.id, 'duration', 'short');
+      var card = document.querySelector('.tcNoteNode[data-note-id="'+triage.id+'"]');
+      var checkbox = card.querySelector('.decisionTriageModule input[value="inversion"]');
+      checkbox.focus();
+      var focusedBefore = document.activeElement === checkbox;
+      checkbox.click();
+      var active = document.activeElement;
+      var focusedAfter = !!(active && active.matches('.decisionTriageModule input[type="checkbox"][value="inversion"]'));
+      var focusStayedInPanel = !!(active && active.closest('.decisionTriagePanel[data-triage-note-id="'+triage.id+'"]'));
+      var out = {
+        focusedBefore:focusedBefore,
+        focusedAfter:focusedAfter,
+        focusStayedInPanel:focusStayedInPanel,
+        moduleDraftIds:api.decisionProcess(root.id).moduleDraftIds
+      };
+      var pre = document.createElement('pre'); pre.id = 'e2e-out'; pre.textContent = JSON.stringify(out); document.body.appendChild(pre);
+    }catch(e){
+      var fail = document.createElement('pre'); fail.id = 'e2e-out'; fail.textContent = 'ERR:' + (e && e.message ? e.message : String(e)); document.body.appendChild(fail);
+    }
+  }, 900);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["focusedBefore"], msg=json.dumps(result))
+        self.assertTrue(result["focusedAfter"], msg=json.dumps(result))
+        self.assertTrue(result["focusStayedInPanel"], msg=json.dumps(result))
+        self.assertEqual(result["moduleDraftIds"], ["consequences"], msg=json.dumps(result))
+
     def test_canvas_triage_note_is_accessible_overridable_and_collapsible(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})

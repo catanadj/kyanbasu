@@ -4634,6 +4634,11 @@
     renderNoteFocusBar();
     syncNoteLensButton();
     syncNoteReviewQueue();
+    try{
+      if (window.KyanbasuDecisionTriageUI && typeof window.KyanbasuDecisionTriageUI.render === 'function'){
+        window.KyanbasuDecisionTriageUI.render();
+      }
+    }catch(_){}
   }
   function installCanvasClick(){
     var st = stage(); if (!st || st.__notesClick) return;
@@ -4862,10 +4867,16 @@
   function importJSON(text){
     return importData(text);
   }
-  function stageSelectedNotesAsTasks(){
+  function selectedTaskStageNoteIds(){
     var ids = selectedIds();
     if (!ids.length && selectedNoteId) ids = [selectedNoteId];
-    ids = ids.filter(function(id){ return !!noteById(id); });
+    return ids.filter(function(id){
+      var note = noteById(id);
+      return !!note && !noteAnalysis(note);
+    });
+  }
+  function stageSelectedNotesAsTasks(){
+    var ids = selectedTaskStageNoteIds();
     if (!ids.length) return 0;
     var A = window.STAGED_CMDS = Array.isArray(window.STAGED_CMDS) ? window.STAGED_CMDS : [];
     window.__NOTE_TASK_CMD_BY_ID__ = window.__NOTE_TASK_CMD_BY_ID__ || {};
@@ -4883,9 +4894,7 @@
     return ids.length;
   }
   function createLinkedTasksFromSelectedNotes(){
-    var ids = selectedIds();
-    if (!ids.length && selectedNoteId) ids = [selectedNoteId];
-    ids = ids.filter(function(id){ return !!noteById(id); });
+    var ids = selectedTaskStageNoteIds();
     if (!ids.length) return 0;
     var A = window.STAGED_CMDS = Array.isArray(window.STAGED_CMDS) ? window.STAGED_CMDS : [];
     window.__NOTE_LINKED_TASK_CMD_BY_ID__ = window.__NOTE_LINKED_TASK_CMD_BY_ID__ || {};

@@ -28,6 +28,14 @@
     var button = answerButton(noteId, dimensionId, value);
     if (button) button.focus();
   }
+  function moduleCheckbox(noteId, moduleId){
+    var card = cardFor(noteId);
+    return card && card.querySelector('[data-triage-module="' + escAttr(moduleId) + '"]');
+  }
+  function focusModule(noteId, moduleId){
+    var checkbox = moduleCheckbox(noteId, moduleId);
+    if (checkbox) checkbox.focus();
+  }
   function selectedModules(panel){
     return Array.prototype.map.call(panel.querySelectorAll('.decisionTriageModule input[type="checkbox"]:checked'), function(input){
       return input.value;
@@ -101,6 +109,7 @@
       var checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.value = module.id;
+      checkbox.setAttribute('data-triage-module', module.id);
       checkbox.checked = context.acceptedModuleIds.indexOf(module.id) >= 0;
       checkbox.addEventListener('click', function(event){ event.stopPropagation(); });
       checkbox.addEventListener('change', function(){ api().setDecisionTriageModules(context.noteId, selectedModules(section)); });
@@ -165,10 +174,12 @@
     var active = document.activeElement;
     var dimensionId = active && active.getAttribute ? active.getAttribute('data-triage-dimension') : '';
     var value = active && active.getAttribute ? active.getAttribute('data-triage-value') : '';
+    var moduleId = active && active.getAttribute ? active.getAttribute('data-triage-module') : '';
     var activeCard = active && active.closest ? active.closest('.tcNoteNode[data-note-id]') : null;
     var noteId = activeCard && activeCard.getAttribute('data-note-id');
     triageNotes().forEach(renderCard);
     if (noteId && dimensionId && value) focusAnswer(noteId, dimensionId, value);
+    else if (noteId && moduleId) focusModule(noteId, moduleId);
   }
   function focusTriage(event){
     var detail = event.detail || {};
