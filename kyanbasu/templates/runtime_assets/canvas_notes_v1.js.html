@@ -45,8 +45,8 @@
     '#5b8def', '#2fbf71', '#f2b84b', '#ec7a72', '#9b7df2',
     '#42c5c7', '#f18ab2', '#93c85a', '#f08b3e', '#4d8bff'
   ];
-  var DECISION_TEMPLATE = 'Decision:\nTarget outcome:\nSuccess means:\nDecision needed by:\nReassess by:';
-  var FACTOR_TEMPLATE = 'Factor / state:\nWhy it matters:\nSignal to watch:';
+  var DECISION_TEMPLATE = 'Problem / decision:\nDesired outcome:\nSuccess means:\nDecision needed by:\nReassess by:';
+  var FACTOR_TEMPLATE = 'State:\nWhy can it affect the outcome?\nCan I directly choose it? No / Partly\nWhat would indicate that it is changing?';
   var OPTION_TEMPLATE = 'Option:\nWhy it may work:';
   var OUTCOME_TEMPLATE = 'Possible outcome:\nBest estimate:\nReasonable range:\nPayoff / cost:\nKey assumptions:';
   var FAILURE_MODE_TEMPLATE = 'Failure mode:\nHow could this happen?\nEarly warning:\nWithin my control:';
@@ -235,6 +235,22 @@
     var match = content.match(new RegExp('(?:^|\\n)[ \\t]*' + label + '[ \\t]*:[ \\t]*([^\\n]+)', 'i'));
     return match ? String(match[1] || '').trim() : '';
   }
+  function decisionProblem(root){
+    return templateValue(root && root.content, 'Problem / decision') || templateValue(root && root.content, 'Decision');
+  }
+  function decisionOutcome(root){
+    return templateValue(root && root.content, 'Desired outcome') || templateValue(root && root.content, 'Target outcome');
+  }
+  function decisionFrameLabel(root, modern, legacy){
+    if (templateValue(root && root.content, modern) || !templateValue(root && root.content, legacy)) return modern;
+    return legacy;
+  }
+  function decisionFrameComplete(root){
+    return !!(decisionProblem(root) && decisionOutcome(root) && templateValue(root && root.content, 'Success means') && templateValue(root && root.content, 'Decision needed by') && templateValue(root && root.content, 'Reassess by'));
+  }
+  function cloneValue(value){
+    return value == null ? value : JSON.parse(JSON.stringify(value));
+  }
   function oneLine(content, fallback){
     var text = String(content || '').replace(/\s+/g, ' ').trim();
     return text || fallback || 'New note';
@@ -333,6 +349,31 @@
     var order = analysis && Number(analysis.order);
     return analysis && analysis.tool === 'consequences' && analysis.role === 'consequence' && order >= 1 && order <= 3 ? analysis : null;
   }
+  function workflowModuleFor(id){
+    var cursor = id;
+    var seen = Object.create(null);
+    while (cursor && !seen[cursor]){
+      seen[cursor] = true;
+      var note = noteById(cursor);
+      if (!note) return '';
+      var analysis = noteAnalysis(note);
+      if (analysis && (analysis.tool === 'triage' || analysis.tool === 'consequences' || analysis.tool === 'inversion')) return analysis.tool;
+      var parent = parentLinkFor(cursor);
+      cursor = parent && parent.from;
+    }
+    return '';
+  }
+  function moduleMutationAllowed(id, moduleId){
+    var root = decisionRootFor(id);
+    if (!root) return true;
+    // A decision without the normative triage note is a legacy branch. Keep
+    // those branches usable while requiring an explicit accepted module once
+    // triage has been started.
+    if (!triageNoteFor(root.id)) return true;
+    var process = NoteCore.normalizeDecisionProcess(root.decisionProcess);
+    var profile = process && process.triageProfile;
+    return !!(profile && profile.acceptedModuleIds.indexOf(moduleId) >= 0);
+  }
   function consequenceNodesForOwner(ownerId){
     return notes.filter(function(note){
       var analysis = consequenceAnalysis(note);
@@ -383,8 +424,8 @@
     var inBranch = Object.create(null);
     ids.forEach(function(id){ inBranch[id] = true; });
     var options = decisionOptions(root.id);
-    var factors = ids.map(noteById).filter(function(note){ return note && noteKind(note) === 'factor'; });
-    var evidence = ids.map(noteById).filter(function(note){ return note && noteKind(note) === 'evidence'; });
+    var states = childLinksFrom(root.id).map(function(link){ return noteById(link.to); }).filter(function(note){ return note && noteKind(note) === 'factor'; });
+    var process = NoteCore.normalizeDecisionProcess(root.decisionProcess);
     var outcomesComplete = !!options.length && options.every(function(option){
       return childLinksFrom(option.id).some(function(link){ var note = noteById(link.to); return note && noteKind(note) === 'outcome'; });
     });
@@ -393,12 +434,13 @@
       return link && inBranch[link.from] && inBranch[link.to] && annotation && annotation.kind === 'condition';
     });
     return [
-      {id:'target', label:'Target outcome recorded', complete:!!templateValue(root.content, 'Target outcome')},
+      {id:'problem', label:'Problem / decision recorded', complete:!!decisionProblem(root)},
+      {id:'target', label:'Desired outcome recorded', complete:!!decisionOutcome(root)},
       {id:'success', label:'Success criteria recorded', complete:!!templateValue(root.content, 'Success means')},
+      {id:'triage', label:'Decision rigor assessed and confirmed', complete:!!(process && process.triageProfile)},
+      {id:'states', label:'At least one important state or personal constraint considered', complete:states.length > 0},
       {id:'options', label:'At least two genuine options', complete:options.length >= 2},
-      {id:'factors', label:'Important factors and personal constraints considered', complete:factors.length > 0},
       {id:'outcomes', label:'Every option has a possible outcome', complete:outcomesComplete},
-      {id:'outside', label:'Outside-view evidence recorded', complete:evidence.length > 0},
       {id:'trigger', label:'Reassessment date or conditional trigger recorded', complete:!!templateValue(root.content, 'Reassess by') || hasCondition}
     ];
   }
@@ -413,7 +455,7 @@
     var last = record.commits.length ? record.commits[record.commits.length - 1] : null;
     return {
       rootId:root.id,
-      rootLabel:oneLine(root.content, 'Decision'),
+      rootLabel:decisionProblem(root) || oneLine(root.content, 'Decision'),
       selectedId:selected.id,
       selectedKind:noteKind(selected),
       canCommit:noteKind(selected) === 'option' && options.some(function(option){ return option.id === selected.id; }),
@@ -467,24 +509,182 @@
     };
   }
   function optionAnalysisComplete(option){
+    var root = decisionRootFor(option.id);
+    var process = root && NoteCore.normalizeDecisionProcess(root.decisionProcess);
+    var profile = process && process.triageProfile;
+    var accepted = profile ? profile.acceptedModuleIds : [];
     var consequence = consequenceContextFor(option.id);
     var inversion = inversionContextFor(option.id);
-    var root = directInversionForOwner(option.id);
-    return !!(consequence && consequence.complete && inversion && root && inversionCompletionState(root).complete);
+    var inversionRoot = directInversionForOwner(option.id);
+    var consequencesComplete = accepted.indexOf('consequences') < 0 || !!(consequence && consequence.complete);
+    var inversionComplete = accepted.indexOf('inversion') < 0 || !!(inversion && inversionRoot && inversionCompletionState(inversionRoot).complete);
+    return consequencesComplete && inversionComplete;
+  }
+  function triageNoteFor(rootId){
+    return childLinksFrom(rootId).map(function(link){ return noteById(link.to); }).filter(function(note){
+      var analysis = noteAnalysis(note);
+      return note && noteKind(note) === 'question' && analysis && analysis.tool === 'triage' && analysis.role === 'assessment' && analysis.ownerId === rootId;
+    })[0] || null;
+  }
+  function normalizedDecisionProcess(root){
+    if (!root) return null;
+    var process = NoteCore.normalizeDecisionProcess(root.decisionProcess);
+    if (!process) process = NoteCore.normalizeDecisionProcess({});
+    root.decisionProcess = process;
+    return process;
+  }
+  function createDecisionTriage(decisionId){
+    var root = noteById(decisionId);
+    if (!root || noteKind(root) !== 'decision') return null;
+    var existing = triageNoteFor(root.id);
+    if (existing){
+      selectNote(existing.id);
+      document.dispatchEvent(new CustomEvent('kyanbasu:decision-triage-focus', {detail:{decisionId:root.id, noteId:existing.id}}));
+      return existing;
+    }
+    normalizedDecisionProcess(root);
+    var runId = 'triage-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+    var triage = createChildNote(root.id, 'Decision triage', '', null, 'question', {
+      tool:'triage', role:'assessment', ownerId:root.id, runId:runId, createdAt:Date.now()
+    });
+    if (!triage) return null;
+    selectNote(triage.id);
+    saveSoon();
+    publishNoteState('triage');
+    document.dispatchEvent(new CustomEvent('kyanbasu:decision-triage-focus', {detail:{decisionId:root.id, noteId:triage.id}}));
+    return triage;
+  }
+  function decisionTriageAssessment(process){
+    var engine = window.KyanbasuDecisionTriage;
+    if (!engine || typeof engine.assess !== 'function') return null;
+    var modules = engine.availableModules();
+    var availableIds = modules.map(function(module){ return module.id; });
+    var raw = engine.assess(process.triageDraft, availableIds);
+    var recommendedModuleIds = raw.recommendations.map(function(recommendation){ return recommendation.id; });
+    var recommendationReasons = [];
+    raw.recommendations.forEach(function(recommendation){
+      var reasons = Array.isArray(recommendation.reasons) ? recommendation.reasons : [recommendation.reason];
+      reasons.forEach(function(reason){
+        reason = String(reason || '').trim();
+        if (reason) recommendationReasons.push({moduleId:recommendation.id, reason:reason});
+      });
+    });
+    return {
+      answers:raw.answers,
+      complete:raw.complete,
+      recommendations:raw.recommendations,
+      recommendedModuleIds:recommendedModuleIds,
+      recommendationReasons:recommendationReasons,
+      profileExplanation:raw.profileExplanation,
+      availableModules:modules
+    };
+  }
+  function sameValues(left, right){
+    return JSON.stringify(left) === JSON.stringify(right);
+  }
+  function decisionTriageContextFor(id){
+    var root = decisionRootFor(id);
+    if (!root) return null;
+    var triage = triageNoteFor(root.id);
+    if (!triage) return null;
+    var process = normalizedDecisionProcess(root);
+    var assessment = decisionTriageAssessment(process);
+    if (!assessment) return null;
+    var availableIds = assessment.availableModules.map(function(module){ return module.id; });
+    var accepted = process.moduleDraftIds === null
+      ? assessment.recommendedModuleIds.slice()
+      : process.moduleDraftIds.filter(function(moduleId){ return availableIds.indexOf(moduleId) >= 0; });
+    var profile = process.triageProfile;
+    var pending = !!profile && (!sameValues(profile.answers, assessment.answers) || !sameValues(profile.acceptedModuleIds, accepted));
+    return {
+      rootId:root.id,
+      noteId:triage.id,
+      selected:selectedNoteId === triage.id,
+      process:cloneValue(process),
+      assessment:cloneValue(assessment),
+      acceptedModuleIds:accepted.slice(),
+      pending:pending
+    };
+  }
+  function setDecisionTriageAnswer(id, dimensionId, value){
+    var root = decisionRootFor(id);
+    var engine = window.KyanbasuDecisionTriage;
+    if (!root || !triageNoteFor(root.id) || !engine) return false;
+    var dimension = engine.dimensions().filter(function(candidate){ return candidate.id === dimensionId; })[0];
+    if (!dimension || dimension.values.indexOf(value) < 0) return false;
+    var process = normalizedDecisionProcess(root);
+    process.triageDraft[dimension.id] = value;
+    process.moduleDraftIds = null;
+    touchNote(root);
+    saveSoon();
+    publishNoteState('triage-answer');
+    return true;
+  }
+  function setDecisionTriageModules(id, moduleIds){
+    var root = decisionRootFor(id);
+    var engine = window.KyanbasuDecisionTriage;
+    if (!root || !triageNoteFor(root.id) || !engine || !Array.isArray(moduleIds)) return false;
+    var known = engine.availableModules().map(function(module){ return module.id; });
+    var retained = [];
+    moduleIds.forEach(function(moduleId){
+      if (known.indexOf(moduleId) >= 0 && retained.indexOf(moduleId) < 0) retained.push(moduleId);
+    });
+    var process = normalizedDecisionProcess(root);
+    process.moduleDraftIds = retained;
+    touchNote(root);
+    saveSoon();
+    publishNoteState('triage-modules');
+    return true;
+  }
+  function confirmDecisionTriage(id){
+    var context = decisionTriageContextFor(id);
+    if (!context || !context.assessment.complete) return null;
+    var root = noteById(context.rootId);
+    var process = normalizedDecisionProcess(root);
+    var assessment = context.assessment;
+    var accepted = context.acceptedModuleIds.slice();
+    process.triageProfile = {
+      answers:assessment.answers,
+      recommendedModuleIds:assessment.recommendedModuleIds,
+      acceptedModuleIds:accepted,
+      declinedModuleIds:assessment.recommendedModuleIds.filter(function(moduleId){
+        return accepted.indexOf(moduleId) < 0;
+      }),
+      recommendationReasons:assessment.recommendationReasons,
+      confirmedAt:Date.now()
+    };
+    touchNote(root);
+    selectNote(root.id);
+    renderAll();
+    saveNow();
+    publishNoteState('triage-confirmed');
+    return cloneValue(process.triageProfile);
+  }
+  function directStateIsControllable(note){
+    var label = 'Can I directly choose it?'.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    var match = String(note && note.content || '').match(new RegExp('(?:^|\\n)[ \\t]*' + label + '(?:[ \\t]*:[ \\t]*|[ \\t]+)([^\\n]+)', 'i'));
+    var value = match ? String(match[1] || '').trim().toLowerCase() : '';
+    return value === 'yes' || value === 'directly';
   }
   function decisionRootActionContext(root){
     var options = decisionOptions(root.id);
-    var framingLabels = ['Decision', 'Target outcome', 'Success means', 'Decision needed by', 'Reassess by'];
-    var valid = ['add-option','add-factor'];
-    if (options.length) valid.push('review-decision');
+    var process = NoteCore.normalizeDecisionProcess(root.decisionProcess);
+    var profile = process && process.triageProfile;
+    var triage = triageNoteFor(root.id);
+    var valid = ['assess-decision-rigor','add-option','add-factor','review-decision'];
+    if (triage && !profile) valid.push('complete-decision-triage');
     valid = valid.concat(['focus-branch','edit-role','edit-status','edit-bucket','manage-links','delete-note']);
     return {
       noteId:root.id,
       type:'decision',
       decisionId:root.id,
-      frameComplete:framingLabels.every(function(label){ return !!templateValue(root.content, label); }),
+      frameComplete:decisionFrameComplete(root),
+      triageExists:!!triage,
+      triageConfirmed:!!profile,
+      triageNoteId:triage ? triage.id : '',
+      stateCount:directDecisionFactors(root.id).length,
       optionCount:options.length,
-      factorCount:directDecisionFactors(root.id).length,
+      acceptedModuleIds:profile ? profile.acceptedModuleIds.slice() : [],
       allOptionsAnalyzed:options.length > 0 && options.every(optionAnalysisComplete),
       validActionIds:valid
     };
@@ -495,17 +695,21 @@
     var consequence = consequenceContextFor(option.id);
     var inversionRoot = directInversionForOwner(option.id);
     var inversion = inversionRoot ? inversionCompletionState(inversionRoot) : null;
+    var process = NoteCore.normalizeDecisionProcess(root.decisionProcess);
+    var profile = process && process.triageProfile;
+    var accepted = profile ? profile.acceptedModuleIds.slice() : [];
     var valid = [];
-    if (!consequence || !consequence.hasRun) valid.push('explore-consequences');
-    if (consequence && consequence.earlyStops > 0) valid.push('continue-consequences');
-    if (!inversionRoot) valid.push('run-inversion');
-    if (inversionRoot && !inversion.complete) valid.push('continue-inversion');
+    if (accepted.indexOf('consequences') >= 0 && (!consequence || !consequence.hasRun)) valid.push('explore-consequences');
+    if (accepted.indexOf('consequences') >= 0 && consequence && consequence.earlyStops > 0) valid.push('continue-consequences');
+    if (accepted.indexOf('inversion') >= 0 && !inversionRoot) valid.push('run-inversion');
+    if (accepted.indexOf('inversion') >= 0 && inversionRoot && !inversion.complete) valid.push('continue-inversion');
     valid = valid.concat(['review-option','focus-branch','go-decision','edit-role','edit-status','edit-bucket','manage-links','delete-note']);
     return {
       noteId:option.id,
       type:'option',
       ownerId:option.id,
       decisionId:root.id,
+      acceptedModuleIds:accepted,
       hasConsequences:!!(consequence && consequence.hasRun),
       consequenceComplete:!!(consequence && consequence.complete),
       inversionExists:!!inversionRoot,
@@ -516,9 +720,11 @@
   function consequenceActionContext(note, analysis){
     var root = decisionRootFor(note.id);
     var hasNext = consequenceHasNext(note, analysis);
+    var allowed = moduleMutationAllowed(analysis.ownerId, 'consequences');
     var valid = [];
-    if (Number(analysis.order) < 3 && !hasNext) valid.push('add-next-consequence');
-    valid = valid.concat(['add-parallel-consequence','go-owner-option','go-decision','focus-branch','edit-role','edit-status','edit-bucket','manage-links','delete-note']);
+    if (allowed && Number(analysis.order) < 3 && !hasNext) valid.push('add-next-consequence');
+    if (allowed) valid.push('add-parallel-consequence');
+    valid = valid.concat(['go-owner-option','go-decision','focus-branch','edit-role','edit-status','edit-bucket','manage-links','delete-note']);
     return {
       noteId:note.id,
       type:'consequence',
@@ -526,6 +732,7 @@
       decisionId:root ? root.id : '',
       order:Number(analysis.order),
       hasNextOrder:hasNext,
+      primaryAllowed:allowed,
       validActionIds:valid
     };
   }
@@ -533,7 +740,8 @@
     var analysis = noteAnalysis(root);
     var decision = decisionRootFor(root.id);
     var state = inversionCompletionState(root);
-    var valid = ['add-failure'];
+    var allowed = moduleMutationAllowed(analysis && analysis.ownerId || root.id, 'inversion');
+    var valid = allowed ? ['add-failure'] : [];
     if (state.complete) valid.push('review-owner-option');
     valid = valid.concat(['go-owner-option','go-decision','focus-branch','edit-role','edit-status','edit-bucket','manage-links','delete-note']);
     return {
@@ -544,6 +752,7 @@
       oppositeComplete:state.oppositeComplete,
       failureCount:state.failures.length,
       inversionComplete:state.complete,
+      primaryAllowed:allowed,
       validActionIds:valid
     };
   }
@@ -552,9 +761,11 @@
     var rootAnalysis = noteAnalysis(inversionRoot);
     var decision = decisionRootFor(note.id);
     var safeguards = safeguardNotesForFailure(note.id);
+    var allowed = moduleMutationAllowed(note.id, 'inversion');
     var valid = [];
-    if (!safeguards.length) valid.push('add-safeguard');
-    valid = valid.concat(['add-parallel-failure','go-owner-option','go-decision','focus-branch','edit-role','edit-status','edit-bucket','manage-links','delete-note']);
+    if (allowed && !safeguards.length) valid.push('add-safeguard');
+    if (allowed) valid.push('add-parallel-failure');
+    valid = valid.concat(['go-owner-option','go-decision','focus-branch','edit-role','edit-status','edit-bucket','manage-links','delete-note']);
     return {
       noteId:note.id,
       type:'failure',
@@ -563,6 +774,7 @@
       decisionId:decision ? decision.id : '',
       warningComplete:!!templateValue(note.content, 'Early warning'),
       hasSafeguard:safeguards.length > 0,
+      primaryAllowed:allowed,
       validActionIds:valid
     };
   }
@@ -577,7 +789,8 @@
       inversionRootId:inversionRoot ? inversionRoot.id : '',
       decisionId:decision ? decision.id : '',
       safeguardComplete:safeguardComplete(note),
-      validActionIds:['add-failure','go-owner-option','go-decision','focus-branch','edit-role','edit-status','edit-bucket','manage-links','delete-note']
+      primaryAllowed:moduleMutationAllowed(note.id, 'inversion'),
+      validActionIds:(moduleMutationAllowed(note.id, 'inversion') ? ['add-failure'] : []).concat(['go-owner-option','go-decision','focus-branch','edit-role','edit-status','edit-bucket','manage-links','delete-note'])
     };
   }
   function decisionActionContextFor(id){
@@ -598,7 +811,8 @@
         noteId:note.id,
         type:'factor',
         decisionId:decision.id,
-        validActionIds:['add-parallel-factor','go-decision','edit-role','edit-status','edit-bucket','manage-links','delete-note']
+        directlyControllable:directStateIsControllable(note),
+        validActionIds:(directStateIsControllable(note) ? ['convert-state-to-option'] : []).concat(['add-parallel-factor','go-decision','edit-role','edit-status','edit-bucket','manage-links','delete-note'])
       };
     }
     return null;
@@ -618,19 +832,25 @@
     var proposed = noteKind(selected) === 'option' ? selected : null;
     if (!proposed && record.chosenOptionId) proposed = noteById(record.chosenOptionId);
     if (!proposed || options.indexOf(proposed) < 0) proposed = options[0];
+    var triage = triageNoteFor(root.id);
+    var outcomeTarget = options.filter(function(option){
+      return !childLinksFrom(option.id).some(function(link){ var note = noteById(link.to); return note && noteKind(note) === 'outcome'; });
+    })[0] || proposed;
     var checks = decisionChecklist(root).map(function(check){
-      var targetId = check.id === 'outcomes' ? proposed.id : root.id;
+      var targetId = check.id === 'outcomes' ? outcomeTarget.id : (check.id === 'triage' && triage ? triage.id : root.id);
       return {id:check.id, label:check.label, complete:!!check.complete, targetId:targetId};
     });
     var consequence = consequenceContextFor(proposed.id);
     var inversionRoot = directInversionForOwner(proposed.id);
     var inversion = inversionRoot ? inversionCompletionState(inversionRoot) : null;
-    checks.push({id:'consequences', label:'Three orders of consequences completed', complete:!!(consequence && consequence.complete), targetId:(consequence && consequence.firstId) || proposed.id});
-    checks.push({id:'inversion', label:'Inversion analysis completed', complete:!!(inversion && inversion.complete), targetId:inversionRoot ? inversionRoot.id : proposed.id});
+    var process = NoteCore.normalizeDecisionProcess(root.decisionProcess);
+    var accepted = process && process.triageProfile ? process.triageProfile.acceptedModuleIds : [];
+    if (accepted.indexOf('consequences') >= 0) checks.push({id:'consequences', label:'Three orders of consequences completed', complete:!!(consequence && consequence.complete), targetId:(consequence && consequence.firstId) || proposed.id});
+    if (accepted.indexOf('inversion') >= 0) checks.push({id:'inversion', label:'Inversion analysis completed', complete:!!(inversion && inversion.complete), targetId:inversionRoot ? inversionRoot.id : proposed.id});
     return {
       decisionId:root.id,
-      decisionLabel:templateValue(root.content, 'Decision') || 'Decision',
-      targetOutcome:templateValue(root.content, 'Target outcome'),
+      decisionLabel:decisionProblem(root) || 'Decision',
+      targetOutcome:decisionOutcome(root),
       successMeans:templateValue(root.content, 'Success means'),
       proposedOptionId:proposed.id,
       options:options.map(function(option){ return {id:option.id, label:oneLine(option.content, 'Option')}; }),
@@ -694,6 +914,24 @@
     var result;
     if (actionId === 'add-option') return createDecisionChild(context.decisionId, 'option');
     if (actionId === 'add-factor') return createDecisionChild(context.decisionId, 'factor');
+    if (actionId === 'convert-state-to-option'){
+      if (!current || !directStateIsControllable(current)) return null;
+      current.kind = 'option';
+      current.content = String(current.content || '').replace(/^\s*State\s*:/i, 'Option:');
+      touchNote(current);
+      renderAll();
+      selectNote(current.id);
+      saveSoon();
+      return current;
+    }
+    if (actionId === 'assess-decision-rigor') return createDecisionTriage(context.decisionId);
+    if (actionId === 'complete-decision-triage'){
+      target = context.triageNoteId ? noteById(context.triageNoteId) : createDecisionTriage(context.decisionId);
+      if (!target) return null;
+      selectNote(target.id);
+      document.dispatchEvent(new CustomEvent('kyanbasu:decision-triage-focus', {detail:{decisionId:context.decisionId, noteId:target.id}}));
+      return target;
+    }
     if (actionId === 'add-parallel-factor') return createSiblingNote(context.noteId, '', '');
     if (actionId === 'explore-consequences'){
       result = runConsequences(context.ownerId || context.noteId);
@@ -728,7 +966,8 @@
     if (actionId === 'review-owner-option' || actionId === 'go-owner-option') return selectActionTarget(context.ownerId);
     if (actionId === 'go-decision') return selectActionTarget(context.decisionId);
     if (actionId === 'complete-decision-frame'){
-      focusTemplateField(context.noteId, firstMissingTemplateLabel(current, ['Decision','Target outcome','Success means','Decision needed by','Reassess by']));
+      var labels = [decisionFrameLabel(current, 'Problem / decision', 'Decision'), decisionFrameLabel(current, 'Desired outcome', 'Target outcome'), 'Success means','Decision needed by','Reassess by'];
+      focusTemplateField(context.noteId, firstMissingTemplateLabel(current, labels));
       return current;
     }
     if (actionId === 'complete-opposite'){
@@ -762,8 +1001,9 @@
     else return null;
     return current;
   }
-  function executeDecisionAction(actionId, noteId){
+  function executeDecisionAction(actionId, noteId, options){
     actionId = String(actionId || '');
+    options = options || {};
     var context = decisionActionContextFor(noteId);
     var guidance = context && window.KyanbasuDecisionGuidance && window.KyanbasuDecisionGuidance.guidanceFor(context);
     var valid = [];
@@ -771,6 +1011,17 @@
       group.actions.forEach(function(action){ if (valid.indexOf(action.id) < 0) valid.push(action.id); });
     });
     if (!context || valid.indexOf(actionId) < 0) return {ok:false, noteId:'', reason:'That action is no longer available.'};
+    var warning = window.KyanbasuDecisionGuidance && typeof window.KyanbasuDecisionGuidance.warningFor === 'function' ? window.KyanbasuDecisionGuidance.warningFor(actionId, context) : null;
+    if (warning && options.allowSkip !== true){
+      return {
+        ok:false,
+        requiresConfirmation:true,
+        noteId:context.noteId,
+        actionId:actionId,
+        warning:warning,
+        reason:warning.message
+      };
+    }
     var result = executeValidatedDecisionAction(actionId, context);
     if (!result) return {ok:false, noteId:'', reason:'The action could not be completed.'};
     publishNoteState('action');
@@ -2835,19 +3086,13 @@
     y = Math.max(0, toInt(y, 180));
     bucket = bucketText(bucket || 'Decisions');
     var root = createNote(x, y, DECISION_TEMPLATE, '', bucket, {kind:'decision', preservePosition:true});
-    var factor = createNote(x + 300, Math.max(0, y - 132), FACTOR_TEMPLATE, '', bucket, {kind:'factor', skipAutoLayout:true});
-    var optionA = createNote(x + 300, y, OPTION_TEMPLATE, '', bucket, {kind:'option', skipAutoLayout:true});
-    var optionB = createNote(x + 300, y + 132, OPTION_TEMPLATE, '', bucket, {kind:'option', skipAutoLayout:true});
-    addNoteLink(root.id, factor.id, 'child');
-    addNoteLink(root.id, optionA.id, 'child');
-    addNoteLink(root.id, optionB.id, 'child');
     root.collapsed = false;
     renderAll();
     selectNote(root.id);
     focusNoteText(root.id);
     refreshViewerOutline();
     saveSoon();
-    return {root:root, factor:factor, options:[optionA, optionB]};
+    return {root:root};
   }
   function createDecisionChild(decisionId, kind){
     var root = noteById(decisionId);
@@ -2858,13 +3103,14 @@
   function inversionTemplate(owner){
     var ownerKind = noteKind(owner);
     var decision = ownerKind === 'decision' ? owner : decisionRootFor(owner.id);
-    var target = decision ? templateValue(decision.content, 'Target outcome') : '';
+    var target = decision ? decisionOutcome(decision) : '';
     var subjectLabel = ownerKind === 'option' ? 'Analysed option' : 'Analysed decision';
     return 'INVERSION\nDesired outcome: ' + target + '\n' + subjectLabel + ': ' + oneLine(owner.content, NoteCore.kindLabel(ownerKind)) + '\nOpposite outcome:\nHow could I deliberately cause the opposite outcome?';
   }
   function runInversion(ownerId){
     var owner = noteById(ownerId);
     if (!owner || (noteKind(owner) !== 'decision' && noteKind(owner) !== 'option')) return null;
+    if (!moduleMutationAllowed(owner.id, 'inversion')) return null;
     var existing = directInversionForOwner(owner.id);
     if (existing){
       focusNoteBranch(existing.id);
@@ -2893,16 +3139,19 @@
     var root = noteById(rootId);
     var analysis = noteAnalysis(root);
     if (!root || !analysis || analysis.tool !== 'inversion' || analysis.role !== 'root') return null;
+    if (!moduleMutationAllowed(root.id, 'inversion')) return null;
     return createChildNote(root.id, FAILURE_MODE_TEMPLATE, '', null, 'factor');
   }
   function createInversionSafeguard(factorId){
     var factor = noteById(factorId);
     if (!factor || noteKind(factor) !== 'factor' || !isInversionFailure(factor.id)) return null;
+    if (!moduleMutationAllowed(factor.id, 'inversion')) return null;
     return createChildNote(factor.id, SAFEGUARD_TEMPLATE, '', null, 'action');
   }
   function runConsequences(ownerId){
     var owner = noteById(ownerId);
     if (!owner || noteKind(owner) !== 'option') return null;
+    if (!moduleMutationAllowed(owner.id, 'consequences')) return null;
     var existing = consequenceNodesForOwner(owner.id);
     if (existing.length){
       focusNoteBranch(owner.id);
@@ -2929,7 +3178,7 @@
   }
   function createParallelConsequence(id){
     var note = noteById(id);
-    return consequenceAnalysis(note) ? createSiblingNote(note.id, '', '') : null;
+    return consequenceAnalysis(note) && moduleMutationAllowed(note.id, 'consequences') ? createSiblingNote(note.id, '', '') : null;
   }
   function createFirstConsequence(ownerId){
     var owner = noteById(ownerId);
@@ -2940,14 +3189,14 @@
   function createNextConsequence(id){
     var note = noteById(id);
     var analysis = consequenceAnalysis(note);
-    return analysis && Number(analysis.order) < 3 ? createChildNote(note.id, '', '') : null;
+    return analysis && Number(analysis.order) < 3 && moduleMutationAllowed(note.id, 'consequences') ? createChildNote(note.id, '', '') : null;
   }
   function decisionCommitSnapshot(root, chosenOptionId, rationale, unresolvedChecks){
     var branchIds = descendantNoteIds(root.id);
     var included = Object.create(null);
     branchIds.forEach(function(id){ included[id] = true; });
     var snapshotNotes = notes.filter(function(note){ return included[note.id]; }).map(function(note){
-      return {
+      var row = {
         id:note.id,
         content:note.content || 'New note',
         kind:noteKind(note),
@@ -2958,6 +3207,9 @@
         updatedAt:Number(note.updatedAt) || 0,
         analysis:noteAnalysis(note)
       };
+      var process = NoteCore.normalizeDecisionProcess(note.decisionProcess);
+      if (process) row.decisionProcess = process;
+      return row;
     });
     var snapshotLinks = links.filter(function(link){ return included[link.from] && included[link.to]; }).map(function(link){
       var row = {from:link.from, to:link.to, type:NoteCore.normalizeRelation(link.type)};
@@ -4219,6 +4471,9 @@
     var requestedAnalysis = arguments.length > 5 ? NoteCore.normalizeAnalysis(arguments[5]) : null;
     var parent = noteById(parentId);
     if (!parent) return null;
+    var parentModule = workflowModuleFor(parent.id);
+    var childModule = requestedAnalysis && (requestedAnalysis.tool === 'consequences' || requestedAnalysis.tool === 'inversion') ? requestedAnalysis.tool : parentModule;
+    if (parentModule === 'triage' || (childModule && childModule !== 'triage' && !moduleMutationAllowed(parent.id, childModule))) return null;
     var inversionRoot = inversionRootFor(parent.id);
     var parentIsInversionRoot = inversionRoot && inversionRoot.id === parent.id;
     var parentIsFailure = inversionRoot && isInversionFailure(parent.id);
@@ -4263,6 +4518,8 @@
   function createSiblingNote(id, title, body){
     var n = noteById(id);
     if (!n) return null;
+    var siblingModule = workflowModuleFor(n.id);
+    if (siblingModule === 'triage' || (siblingModule && siblingModule !== 'triage' && !moduleMutationAllowed(n.id, siblingModule))) return null;
     var currentKind = noteKind(n);
     var inversionRoot = inversionRootFor(n.id);
     var inversionFailure = inversionRoot && isInversionFailure(n.id);
@@ -4437,6 +4694,11 @@
     renderNoteFocusBar();
     syncNoteLensButton();
     syncNoteReviewQueue();
+    try{
+      if (window.KyanbasuDecisionTriageUI && typeof window.KyanbasuDecisionTriageUI.render === 'function'){
+        window.KyanbasuDecisionTriageUI.render();
+      }
+    }catch(_){}
   }
   function installCanvasClick(){
     var st = stage(); if (!st || st.__notesClick) return;
@@ -4582,7 +4844,7 @@
     });
     return {
       kind: 'kyanbasu.notes',
-      version: 8,
+      version: 9,
       exportedAt: new Date().toISOString(),
       notes: notes.map(function(n){
         var row = {id:n.id, x:toInt(n.x, 160), y:toInt(n.y, 160), content:n.content || 'New note', bucket:noteBucket(n), kind:noteKind(n), status:noteStatus(n), collapsed:!!n.collapsed, taskRefs:noteTaskRefs(n).slice(), createdAt:Number(n.createdAt) || 0, updatedAt:Number(n.updatedAt) || 0, reviewedAt:Number(n.reviewedAt) || 0};
@@ -4591,6 +4853,8 @@
         if (analysis) row.analysis = analysis;
         var decisionRecord = NoteCore.normalizeDecisionRecord(n.decisionRecord);
         if (decisionRecord) row.decisionRecord = decisionRecord;
+        var decisionProcess = NoteCore.normalizeDecisionProcess(n.decisionProcess);
+        if (decisionProcess) row.decisionProcess = decisionProcess;
         return row;
       }),
       links: links.map(function(l){
@@ -4663,10 +4927,16 @@
   function importJSON(text){
     return importData(text);
   }
-  function stageSelectedNotesAsTasks(){
+  function selectedTaskStageNoteIds(){
     var ids = selectedIds();
     if (!ids.length && selectedNoteId) ids = [selectedNoteId];
-    ids = ids.filter(function(id){ return !!noteById(id); });
+    return ids.filter(function(id){
+      var note = noteById(id);
+      return !!note && !noteAnalysis(note) && !workflowModuleFor(id);
+    });
+  }
+  function stageSelectedNotesAsTasks(){
+    var ids = selectedTaskStageNoteIds();
     if (!ids.length) return 0;
     var A = window.STAGED_CMDS = Array.isArray(window.STAGED_CMDS) ? window.STAGED_CMDS : [];
     window.__NOTE_TASK_CMD_BY_ID__ = window.__NOTE_TASK_CMD_BY_ID__ || {};
@@ -4684,9 +4954,7 @@
     return ids.length;
   }
   function createLinkedTasksFromSelectedNotes(){
-    var ids = selectedIds();
-    if (!ids.length && selectedNoteId) ids = [selectedNoteId];
-    ids = ids.filter(function(id){ return !!noteById(id); });
+    var ids = selectedTaskStageNoteIds();
     if (!ids.length) return 0;
     var A = window.STAGED_CMDS = Array.isArray(window.STAGED_CMDS) ? window.STAGED_CMDS : [];
     window.__NOTE_LINKED_TASK_CMD_BY_ID__ = window.__NOTE_LINKED_TASK_CMD_BY_ID__ || {};
@@ -4746,6 +5014,11 @@
     createNote: createNote,
     createDecisionMap: createDecisionMap,
     createDecisionChild: createDecisionChild,
+    createDecisionTriage: createDecisionTriage,
+    decisionTriageContext: function(id){ return cloneValue(decisionTriageContextFor(id)); },
+    setDecisionTriageAnswer: setDecisionTriageAnswer,
+    setDecisionTriageModules: setDecisionTriageModules,
+    confirmDecisionTriage: confirmDecisionTriage,
     runInversion: runInversion,
     createInversionFailure: createInversionFailure,
     createInversionSafeguard: createInversionSafeguard,
@@ -4790,13 +5063,14 @@
     markReviewed: markNoteReviewed,
     commitDecision: commitDecision,
     decisionHistory: decisionHistory,
-    decisionContext: decisionContextFor,
-    inversionContext: inversionContextFor,
-    consequenceContext: consequenceContextFor,
-    decisionActionContext: decisionActionContextFor,
-    decisionActions: decisionActionsFor,
+    decisionProcess: function(id){ var root = decisionRootFor(id); return cloneValue(root && NoteCore.normalizeDecisionProcess(root.decisionProcess)); },
+    decisionContext: function(id){ return cloneValue(decisionContextFor(id)); },
+    inversionContext: function(id){ return cloneValue(inversionContextFor(id)); },
+    consequenceContext: function(id){ return cloneValue(consequenceContextFor(id)); },
+    decisionActionContext: function(id){ return cloneValue(decisionActionContextFor(id)); },
+    decisionActions: function(id){ return cloneValue(decisionActionsFor(id)); },
     executeDecisionAction: executeDecisionAction,
-    reviewContext: reviewContextFor,
+    reviewContext: function(id){ return cloneValue(reviewContextFor(id)); },
     startReview: startNoteReview,
     stopReview: stopNoteReview,
     nextReview: function(){ return moveNoteReview(1); },

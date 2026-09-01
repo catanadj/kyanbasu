@@ -1,0 +1,111 @@
+<script id="FEATURE_CANVAS_DECISION_TRIAGE_V1">
+(function(){
+  'use strict';
+
+  if (window.KyanbasuDecisionTriage) return;
+
+  var DIMENSIONS = [
+    {id:'magnitude', label:'Magnitude', values:['low','medium','high']},
+    {id:'reversibility', label:'Reversibility', values:['easy','partial','hard']},
+    {id:'uncertainty', label:'Uncertainty', values:['low','medium','high']},
+    {id:'emotionalPressure', label:'Emotional pressure', values:['low','medium','high']},
+    {id:'duration', label:'Duration / repetition', values:['short','long','repeated']}
+  ];
+  var MODULES = [
+    {id:'consequences', label:'1st / 2nd / 3rd-order consequences'},
+    {id:'inversion', label:'Inversion'}
+  ];
+
+  function cloneDimensions(){
+    return DIMENSIONS.map(function(dimension){
+      return {id:dimension.id, label:dimension.label, values:dimension.values.slice()};
+    });
+  }
+
+  function cloneModules(){
+    return MODULES.map(function(module){
+      return {id:module.id, label:module.label};
+    });
+  }
+
+  function normalizedValue(value, dimension){
+    var normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+    return dimension.values.indexOf(normalized) >= 0 ? normalized : '';
+  }
+
+  function normalizeAnswers(rawAnswers){
+    rawAnswers = rawAnswers && typeof rawAnswers === 'object' ? rawAnswers : {};
+    var answers = {};
+    for (var i=0; i<DIMENSIONS.length; i++){
+      var dimension = DIMENSIONS[i];
+      answers[dimension.id] = normalizedValue(rawAnswers[dimension.id], dimension);
+    }
+    return answers;
+  }
+
+  function knownAvailableModules(requested){
+    var ids = Array.isArray(requested) ? requested : MODULES.map(function(module){ return module.id; });
+    return ids.filter(function(id){
+      return MODULES.some(function(module){ return module.id === id; });
+    });
+  }
+
+  function assess(rawAnswers, requestedModules){
+    var answers = normalizeAnswers(rawAnswers);
+    var available = knownAvailableModules(requestedModules);
+    var recommended = {};
+
+    function recommend(id, reason){
+      if (available.indexOf(id) < 0) return;
+      if (!recommended[id]) recommended[id] = {id:id, reasons:[]};
+      if (recommended[id].reasons.indexOf(reason) < 0) recommended[id].reasons.push(reason);
+    }
+
+    if (answers.magnitude === 'high') {
+      recommend('consequences', 'High magnitude warrants tracing downstream effects.');
+      recommend('inversion', 'High magnitude warrants identifying preventable failure modes.');
+    }
+    if (answers.reversibility === 'hard') {
+      recommend('consequences', 'Hard reversibility warrants tracing downstream effects before commitment.');
+      recommend('inversion', 'Hard reversibility warrants identifying preventable failure modes.');
+    }
+
+    var recommendations = MODULES.map(function(module){
+      var row = recommended[module.id];
+      if (!row) return null;
+      return {
+        id:module.id,
+        label:module.label,
+        reason:row.reasons.join(' '),
+        reasons:row.reasons.slice()
+      };
+    }).filter(Boolean);
+    var triggers = [];
+    if (answers.magnitude === 'high') triggers.push('Magnitude');
+    if (answers.reversibility === 'hard') triggers.push('Reversibility');
+    var profileExplanation = triggers.length
+      ? triggers.join(' and ') + ' triggered ' + recommendations.length + ' available module' + (recommendations.length === 1 ? '' : 's') + '.'
+      : 'No available module was triggered.';
+
+    return {
+      answers:answers,
+      complete:DIMENSIONS.every(function(dimension){ return !!answers[dimension.id]; }),
+      recommendations:recommendations,
+      recommendedModuleIds:recommendations.map(function(recommendation){ return recommendation.id; }),
+      recommendationReasons:recommendations.reduce(function(rows, recommendation){
+        return rows.concat(recommendation.reasons.map(function(reason){
+          return {moduleId:recommendation.id, reason:reason};
+        }));
+      }, []),
+      profileExplanation:profileExplanation
+    };
+  }
+
+  window.KyanbasuDecisionTriage = {
+    assess:assess,
+    normalizeAnswers:normalizeAnswers,
+    dimensions:cloneDimensions,
+    availableModules:cloneModules
+  };
+})();
+</script>

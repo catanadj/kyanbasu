@@ -34,6 +34,13 @@
     {value:'question', label:'Question'},
     {value:'condition', label:'Condition'}
   ];
+  var TRIAGE_ANSWER_VALUES = {
+    magnitude:['low', 'medium', 'high'],
+    reversibility:['easy', 'partial', 'hard'],
+    uncertainty:['low', 'medium', 'high'],
+    emotionalPressure:['low', 'medium', 'high'],
+    duration:['short', 'long', 'repeated']
+  };
 
   function optionValue(value, options, fallback){
     value = String(value || '').trim().toLowerCase();
@@ -115,6 +122,62 @@
     return isFinite(parsed) && parsed > 0 ? Math.round(parsed) : fallback;
   }
 
+  function normalizeTriageAnswers(answers){
+    answers = answers && typeof answers === 'object' ? answers : {};
+    var normalized = {};
+    Object.keys(TRIAGE_ANSWER_VALUES).forEach(function(key){
+      var value = typeof answers[key] === 'string' ? answers[key].trim().toLowerCase() : '';
+      normalized[key] = TRIAGE_ANSWER_VALUES[key].indexOf(value) >= 0 ? value : '';
+    });
+    return normalized;
+  }
+
+  function normalizeModuleIds(ids){
+    var normalized = [];
+    (Array.isArray(ids) ? ids : []).forEach(function(id){
+      var value = typeof id === 'string' ? id.trim() : '';
+      if (value && normalized.indexOf(value) < 0) normalized.push(value);
+    });
+    return normalized;
+  }
+
+  function normalizeRecommendationReasons(reasons){
+    var normalized = [];
+    (Array.isArray(reasons) ? reasons : []).forEach(function(entry){
+      if (!entry || typeof entry !== 'object') return;
+      var moduleId = typeof entry.moduleId === 'string' ? entry.moduleId.trim() : '';
+      var reason = typeof entry.reason === 'string' ? entry.reason.trim() : '';
+      if (moduleId && reason) normalized.push({moduleId:moduleId, reason:reason});
+    });
+    return normalized;
+  }
+
+  function normalizeDecisionTriageProfile(profile){
+    if (!profile || typeof profile !== 'object') return null;
+    var answers = normalizeTriageAnswers(profile.answers);
+    var complete = Object.keys(TRIAGE_ANSWER_VALUES).every(function(key){ return !!answers[key]; });
+    var confirmedAt = timestamp(profile.confirmedAt, 0);
+    if (!complete || !confirmedAt) return null;
+    return {
+      answers:answers,
+      recommendedModuleIds:normalizeModuleIds(profile.recommendedModuleIds),
+      acceptedModuleIds:normalizeModuleIds(profile.acceptedModuleIds),
+      declinedModuleIds:normalizeModuleIds(profile.declinedModuleIds),
+      recommendationReasons:normalizeRecommendationReasons(profile.recommendationReasons),
+      confirmedAt:confirmedAt
+    };
+  }
+
+  function normalizeDecisionProcess(process){
+    if (!process || typeof process !== 'object' || Array.isArray(process)) return null;
+    return {
+      version:1,
+      triageDraft:normalizeTriageAnswers(process.triageDraft),
+      moduleDraftIds:Array.isArray(process.moduleDraftIds) ? normalizeModuleIds(process.moduleDraftIds) : null,
+      triageProfile:normalizeDecisionTriageProfile(process.triageProfile)
+    };
+  }
+
   function durationMs(value){
     var match = String(value || '').trim().toLowerCase().match(/^(\d+)(h|d|w)$/);
     if (!match) return 0;
@@ -180,6 +243,8 @@
     };
     var analysis = normalizeAnalysis(note.analysis);
     if (analysis) row.analysis = analysis;
+    var decisionProcess = normalizeDecisionProcess(note.decisionProcess);
+    if (decisionProcess) row.decisionProcess = JSON.parse(JSON.stringify(decisionProcess));
     return row;
   }
 
@@ -254,6 +319,9 @@
     var decisionRecord = normalizeDecisionRecord(note.decisionRecord);
     if (decisionRecord) note.decisionRecord = decisionRecord;
     else delete note.decisionRecord;
+    var decisionProcess = normalizeDecisionProcess(note.decisionProcess);
+    if (decisionProcess) note.decisionProcess = decisionProcess;
+    else delete note.decisionProcess;
     return note;
   }
 
@@ -535,11 +603,14 @@
   }
 
   window.KyanbasuNotesCore = {
-    version: 8,
+    version: 9,
     bucketText: bucketText,
     noteText: noteText,
     normalizeTaskRef: normalizeTaskRef,
     normalizeAnalysis: normalizeAnalysis,
+    normalizeTriageAnswers: normalizeTriageAnswers,
+    normalizeDecisionTriageProfile: normalizeDecisionTriageProfile,
+    normalizeDecisionProcess: normalizeDecisionProcess,
     normalizeUnresolvedCheck: normalizeUnresolvedCheck,
     normalizeDecisionRecord: normalizeDecisionRecord,
     normalizeNote: normalizeNote,

@@ -160,6 +160,11 @@
     if (!api || !actionId || !noteId || typeof api.executeDecisionAction !== 'function') return;
     var result = api.executeDecisionAction(actionId, noteId);
     closeMenu(false);
+    if (result && result.requiresConfirmation){
+      document.dispatchEvent(new CustomEvent('kyanbasu:decision-skip', {detail:result}));
+      queueRefresh();
+      return;
+    }
     if (!result || !result.ok){
       try{ if (typeof window.showToast === 'function') window.showToast(result && result.reason || 'That action is no longer available.'); }catch(_){}
     }

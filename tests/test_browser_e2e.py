@@ -958,7 +958,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["directionChevrons"], 1)
         self.assertEqual(result["apiNotes"], 2)
         self.assertEqual(result["apiLinks"], 1)
-        self.assertEqual(result["coreVersion"], 8)
+        self.assertEqual(result["coreVersion"], 9)
         self.assertTrue(result["rejectsSelfChild"])
         self.assertEqual(result["legacyContent"], "Old title\nOld body")
         self.assertEqual(result["legacyKind"], "note")
@@ -1043,10 +1043,680 @@ window.addEventListener('load', function(){
         self.assertEqual(result["status"], "parked")
         self.assertEqual(result["cardKind"], "Decision")
         self.assertEqual(result["cardStatus"], "Status: Parked")
-        self.assertEqual(result["exportedVersion"], 8)
+        self.assertEqual(result["exportedVersion"], 9)
         self.assertEqual(result["exportedKind"], "decision")
         self.assertEqual(result["exportedStatus"], "parked")
         self.assertEqual(result["viewerSemantics"], ["Decision", "Parked"])
+
+    def test_canvas_triage_engine_exhausts_all_243_profiles(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_TRIAGE_ENGINE_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var triage = window.KyanbasuDecisionTriage;
+      if (!triage) throw new Error('Decision triage API missing');
+      var magnitudes = ['low', 'medium', 'high'];
+      var reversibilities = ['easy', 'partial', 'hard'];
+      var uncertainties = ['low', 'medium', 'high'];
+      var pressures = ['low', 'medium', 'high'];
+      var durations = ['short', 'long', 'repeated'];
+      var profiles = 0;
+      var reasonsPresent = true;
+      for (var a=0; a<magnitudes.length; a++){
+        for (var b=0; b<reversibilities.length; b++){
+          for (var c=0; c<uncertainties.length; c++){
+            for (var d=0; d<pressures.length; d++){
+              for (var e=0; e<durations.length; e++){
+                var answers = {
+                  magnitude:magnitudes[a], reversibility:reversibilities[b],
+                  uncertainty:uncertainties[c], emotionalPressure:pressures[d], duration:durations[e]
+                };
+                var expected = [];
+                if (answers.magnitude === 'high' || answers.reversibility === 'hard') {
+                  expected.push('consequences', 'inversion');
+                }
+                expected.sort();
+                var assessed = triage.assess(answers, ['consequences', 'inversion']);
+                var actual = assessed.recommendations.map(function(row){ return row.id; }).sort();
+                if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+                  throw new Error('Unexpected modules for ' + JSON.stringify(answers) + ': ' + JSON.stringify(actual));
+                }
+                if (!assessed.complete) throw new Error('Valid profile was incomplete');
+                for (var r=0; r<assessed.recommendations.length; r++) {
+                  reasonsPresent = reasonsPresent && !!String(assessed.recommendations[r].reason || '').trim();
+                }
+                profiles += 1;
+              }
+            }
+          }
+        }
+      }
+      var mediumOnly = triage.assess({magnitude:'medium', reversibility:'partial', uncertainty:'medium', emotionalPressure:'medium', duration:'long'}, ['consequences', 'inversion']);
+      var lowEasyShort = triage.assess({magnitude:'low', reversibility:'easy', uncertainty:'low', emotionalPressure:'low', duration:'short'}, ['consequences', 'inversion']);
+      var coreOnlyExplanation = String(mediumOnly.profileExplanation || '');
+      var inversionOnly = triage.assess({magnitude:'high', reversibility:'hard', uncertainty:'high', emotionalPressure:'high', duration:'repeated'}, ['inversion']);
+      var unknown = triage.assess({magnitude:'unknown', reversibility:'impossible', uncertainty:'?', emotionalPressure:null, duration:'forever'}, ['consequences', 'inversion']);
+      var input = {magnitude:'high', reversibility:'easy', uncertainty:'medium', emotionalPressure:'low', duration:'long'};
+      var before = JSON.stringify(input);
+      triage.assess(input, ['consequences', 'inversion']);
+      var inputUnchanged = before === JSON.stringify(input);
+      var dimensionsFirst = triage.dimensions();
+      dimensionsFirst[0].label = 'Mutated';
+      dimensionsFirst[0].values.push('mutated');
+      var dimensionsSecond = triage.dimensions();
+      var modulesFirst = triage.availableModules();
+      modulesFirst[0].label = 'Mutated';
+      var modulesSecond = triage.availableModules();
+      var out = {
+        profiles:profiles,
+        reasonsPresent:reasonsPresent,
+        mediumOnlyIds:mediumOnly.recommendations.map(function(row){ return row.id; }),
+        lowEasyShortIds:lowEasyShort.recommendations.map(function(row){ return row.id; }),
+        coreOnlyExplanation:coreOnlyExplanation,
+        inversionOnlyIds:inversionOnly.recommendations.map(function(row){ return row.id; }),
+        unknownAnswers:unknown.answers,
+        unknownComplete:unknown.complete,
+        inputUnchanged:inputUnchanged,
+        dimensionsDefensive:dimensionsSecond[0].label === 'Magnitude' && dimensionsSecond[0].values.indexOf('mutated') < 0,
+        modulesDefensive:modulesSecond[0].label === '1st / 2nd / 3rd-order consequences'
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out';
+      pre.textContent = JSON.stringify(out);
+      document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 800);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["profiles"], 243, msg=json.dumps(result))
+        self.assertTrue(result["reasonsPresent"], msg=json.dumps(result))
+        self.assertEqual(result["mediumOnlyIds"], [], msg=json.dumps(result))
+        self.assertEqual(result["lowEasyShortIds"], [], msg=json.dumps(result))
+        self.assertTrue(result["coreOnlyExplanation"], msg=json.dumps(result))
+        self.assertIn("no available module was triggered", result["coreOnlyExplanation"].lower(), msg=json.dumps(result))
+        self.assertEqual(result["inversionOnlyIds"], ["inversion"], msg=json.dumps(result))
+        self.assertNotIn("consequences", result["inversionOnlyIds"], msg=json.dumps(result))
+        self.assertEqual(
+            result["unknownAnswers"],
+            {"magnitude": "", "reversibility": "", "uncertainty": "", "emotionalPressure": "", "duration": ""},
+            msg=json.dumps(result),
+        )
+        self.assertFalse(result["unknownComplete"], msg=json.dumps(result))
+        self.assertTrue(result["inputUnchanged"], msg=json.dumps(result))
+        self.assertTrue(result["dimensionsDefensive"], msg=json.dumps(result))
+        self.assertTrue(result["modulesDefensive"], msg=json.dumps(result))
+
+    def test_canvas_decision_process_v9_normalizes_and_round_trips(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_DECISION_PROCESS_V9_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var api = window.KyanbasuNotes;
+      var core = window.KyanbasuNotesCore;
+      var answers = {magnitude:'high', reversibility:'hard', uncertainty:'medium', emotionalPressure:'low', duration:'short'};
+      var process = {
+        version:1, triageDraft:answers, moduleDraftIds:[],
+        triageProfile:{
+          answers:answers,
+          recommendedModuleIds:['consequences', 'inversion', 'consequences'],
+          acceptedModuleIds:['consequences', 'future-module', 'future-module'],
+          declinedModuleIds:['inversion', 'inversion'],
+          recommendationReasons:[
+            {moduleId:'consequences', reason:' High magnitude warrants tracing downstream effects. '},
+            {moduleId:'future-module', reason:' Future compatibility reason. '},
+            {moduleId:'', reason:'dropped'}, {moduleId:'inversion', reason:'   '}
+          ],
+          confirmedAt:1788278400000
+        }
+      };
+      var imported = {
+        kind:'kyanbasu.notes', version:8, notes:[
+          {id:'legacy-decision', content:'Decision: Keep the established workflow', kind:'decision', bucket:'Decisions'},
+          {
+            id:'process-decision', content:'Decision: Adopt a deliberate workflow', kind:'decision', bucket:'Decisions', decisionProcess:process,
+            decisionRecord:{chosenOptionId:'process-option', commits:[{
+              id:'commit-process', committedAt:1788278400001, chosenOptionId:'process-option', rationale:'Preserve the process record.',
+              notes:[{id:'process-decision', content:'Decision: Adopt a deliberate workflow', kind:'decision', bucket:'Decisions', decisionProcess:process}], links:[]
+            }]}
+          },
+          {id:'process-option', content:'Option: Use the deliberate workflow', kind:'option', bucket:'Decisions'}
+        ], links:[], buckets:{}
+      };
+      api.importData(imported);
+      var pureCopy = core.normalizeDecisionProcess(process);
+      pureCopy.triageDraft.magnitude = 'low';
+      pureCopy.triageProfile.acceptedModuleIds[1] = 'mutated-module';
+      var exported = api.exportData();
+      var history = api.decisionHistory('process-decision');
+      history.commits[0].notes[0].decisionProcess.triageProfile.acceptedModuleIds[1] = 'mutated-history-module';
+      var historyAfterMutation = api.decisionHistory('process-decision');
+      window.KyanbasuWorkbenches.capture();
+      var workbenches = window.KyanbasuWorkbenches.exportData();
+      var nested = workbenches.workbenches.filter(function(workbench){ return workbench.id === workbenches.activeId; })[0];
+      api.importData(exported);
+      var reexported = api.exportData();
+      var invalid = JSON.parse(JSON.stringify(imported));
+      invalid.notes = [JSON.parse(JSON.stringify(imported.notes[1]))];
+      invalid.notes[0].id = 'invalid-process-decision';
+      invalid.notes[0].decisionProcess.triageDraft = {magnitude:'unknown', reversibility:'impossible', uncertainty:'?', emotionalPressure:null, duration:'forever'};
+      invalid.notes[0].decisionProcess.triageProfile.answers = invalid.notes[0].decisionProcess.triageDraft;
+      api.importData(invalid);
+      var invalidExport = api.exportData();
+      var legacy = exported.notes.filter(function(note){ return note.id === 'legacy-decision'; })[0];
+      var valid = reexported.notes.filter(function(note){ return note.id === 'process-decision'; })[0];
+      var invalidProcess = invalidExport.notes[0] && invalidExport.notes[0].decisionProcess;
+      var snapshotProcess = historyAfterMutation.commits[0].notes[0].decisionProcess;
+      var out = {
+        legacyHasNoProcess:!Object.prototype.hasOwnProperty.call(legacy, 'decisionProcess'),
+        legacyContent:legacy && legacy.content,
+        triageNoteCount:exported.notes.filter(function(note){ return note.analysis && note.analysis.tool === 'triage'; }).length,
+        pureSourceUnchanged:process.triageDraft.magnitude === 'high' && process.triageProfile.acceptedModuleIds[1] === 'future-module',
+        validDraft:valid && valid.decisionProcess && valid.decisionProcess.triageDraft,
+        validAccepted:valid && valid.decisionProcess && valid.decisionProcess.triageProfile && valid.decisionProcess.triageProfile.acceptedModuleIds,
+        validRecommended:valid && valid.decisionProcess && valid.decisionProcess.triageProfile && valid.decisionProcess.triageProfile.recommendedModuleIds,
+        validReasons:valid && valid.decisionProcess && valid.decisionProcess.triageProfile && valid.decisionProcess.triageProfile.recommendationReasons,
+        moduleDraftIds:valid && valid.decisionProcess && valid.decisionProcess.moduleDraftIds,
+        historyAccepted:snapshotProcess && snapshotProcess.triageProfile && snapshotProcess.triageProfile.acceptedModuleIds,
+        invalidDraft:invalidProcess && invalidProcess.triageDraft,
+        invalidProfile:invalidProcess && invalidProcess.triageProfile,
+        exportedVersion:exported.version, nestedVersion:nested && nested.notes && nested.notes.version
+      };
+      var pre = document.createElement('pre'); pre.id = 'e2e-out'; pre.textContent = JSON.stringify(out); document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre'); pre2.id = 'e2e-out'; pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e)); document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["legacyHasNoProcess"], msg=json.dumps(result))
+        self.assertTrue(result["legacyContent"].startswith("Decision:"), msg=json.dumps(result))
+        self.assertEqual(result["triageNoteCount"], 0, msg=json.dumps(result))
+        self.assertTrue(result["pureSourceUnchanged"], msg=json.dumps(result))
+        self.assertEqual(result["validDraft"], {"magnitude":"high", "reversibility":"hard", "uncertainty":"medium", "emotionalPressure":"low", "duration":"short"}, msg=json.dumps(result))
+        self.assertEqual(result["validAccepted"], ["consequences", "future-module"], msg=json.dumps(result))
+        self.assertEqual(result["validRecommended"], ["consequences", "inversion"], msg=json.dumps(result))
+        self.assertEqual(result["validReasons"], [{"moduleId":"consequences", "reason":"High magnitude warrants tracing downstream effects."}, {"moduleId":"future-module", "reason":"Future compatibility reason."}], msg=json.dumps(result))
+        self.assertEqual(result["moduleDraftIds"], [], msg=json.dumps(result))
+        self.assertEqual(result["historyAccepted"], ["consequences", "future-module"], msg=json.dumps(result))
+        self.assertEqual(result["invalidDraft"], {"magnitude":"", "reversibility":"", "uncertainty":"", "emotionalPressure":"", "duration":""}, msg=json.dumps(result))
+        self.assertIsNone(result["invalidProfile"], msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
+        self.assertEqual(result["nestedVersion"], 9, msg=json.dumps(result))
+
+    def test_canvas_analysis_notes_never_stage_taskwarrior_commands(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_ANALYSIS_STAGING_GUARD_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var api = window.KyanbasuNotes;
+      window.STAGED_CMDS = [];
+      var root = api.createDecisionMap(180, 300, 'Decisions').root;
+      var triage = api.createDecisionTriage(root.id);
+      api.selectNote(triage.id);
+      var triageStageResult = api.stageSelectedNotesAsTasks();
+      var triageLinkedResult = api.createLinkedTasksFromSelectedNotes();
+      var triageCommands = window.STAGED_CMDS.slice();
+      var triageTaskRefs = api.linkedTasks(triage.id);
+
+      var ordinary = api.createNote(620, 300, 'Ordinary planning note');
+      api.selectNote(ordinary.id);
+      window.STAGED_CMDS = [];
+      var ordinaryStageResult = api.stageSelectedNotesAsTasks();
+      var ordinaryStageCommands = window.STAGED_CMDS.slice();
+      window.STAGED_CMDS = [];
+      var ordinaryLinkedResult = api.createLinkedTasksFromSelectedNotes();
+      var ordinaryLinkedCommands = window.STAGED_CMDS.slice();
+
+      var out = {
+        triageStageResult:triageStageResult,
+        triageLinkedResult:triageLinkedResult,
+        triageCommands:triageCommands,
+        triageTaskRefs:triageTaskRefs,
+        ordinaryStageResult:ordinaryStageResult,
+        ordinaryStageCommands:ordinaryStageCommands,
+        ordinaryLinkedResult:ordinaryLinkedResult,
+        ordinaryLinkedCommands:ordinaryLinkedCommands
+      };
+      var pre = document.createElement('pre'); pre.id = 'e2e-out'; pre.textContent = JSON.stringify(out); document.body.appendChild(pre);
+    }catch(e){
+      var fail = document.createElement('pre'); fail.id = 'e2e-out'; fail.textContent = 'ERR:' + (e && e.message ? e.message : String(e)); document.body.appendChild(fail);
+    }
+  }, 900);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["triageStageResult"], 0, msg=json.dumps(result))
+        self.assertEqual(result["triageLinkedResult"], 0, msg=json.dumps(result))
+        self.assertEqual(result["triageCommands"], [], msg=json.dumps(result))
+        self.assertEqual(result["triageTaskRefs"], [], msg=json.dumps(result))
+        self.assertEqual(result["ordinaryStageResult"], 1, msg=json.dumps(result))
+        self.assertEqual(len(result["ordinaryStageCommands"]), 1, msg=json.dumps(result))
+        self.assertIn("Ordinary planning note", result["ordinaryStageCommands"][0], msg=json.dumps(result))
+        self.assertEqual(result["ordinaryLinkedResult"], 1, msg=json.dumps(result))
+        self.assertEqual(len(result["ordinaryLinkedCommands"]), 1, msg=json.dumps(result))
+        self.assertIn("Ordinary planning note", result["ordinaryLinkedCommands"][0], msg=json.dumps(result))
+
+    def test_canvas_analysis_descendants_are_never_staged_and_declined_modules_are_read_only(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        harness = """
+<script id="E2E_CANVAS_ANALYSIS_DESCENDANT_GUARD_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var api = window.KyanbasuNotes;
+      var root = api.createDecisionMap(180, 300, 'Decisions').root;
+      var triage = api.createDecisionTriage(root.id);
+      var answers = {magnitude:'high', reversibility:'hard', uncertainty:'medium', emotionalPressure:'low', duration:'short'};
+      Object.keys(answers).forEach(function(id){ api.setDecisionTriageAnswer(triage.id, id, answers[id]); });
+      api.setDecisionTriageModules(triage.id, ['consequences','inversion']);
+      api.confirmDecisionTriage(triage.id);
+      var option = api.createDecisionChild(root.id, 'option');
+      var consequence = api.runConsequences(option.id).first;
+      var consequenceChild = api.createNextConsequence(consequence.id);
+      var inversion = api.runInversion(option.id).root;
+      var failure = api.createInversionFailure(inversion.id);
+      var safeguard = api.createInversionSafeguard(failure.id);
+      [triage, consequence, consequenceChild, inversion, failure, safeguard].forEach(function(note, index){ api.selectNote(note.id, index > 0); });
+      window.STAGED_CMDS = [];
+      var staged = api.stageSelectedNotesAsTasks();
+      window.STAGED_CMDS = [];
+      var linked = api.createLinkedTasksFromSelectedNotes();
+      var data = api.exportData();
+      data.notes.filter(function(note){ return note.id === root.id; })[0].decisionProcess.triageProfile.acceptedModuleIds = ['consequences'];
+      api.importData(data);
+      var before = api.notes().length;
+      var declinedRun = api.runInversion(option.id);
+      var declinedFailure = api.createInversionFailure(inversion.id);
+      var declinedSafeguard = api.createInversionSafeguard(failure.id);
+      var pureInput = {magnitude:' HIGH ', reversibility:'unknown', uncertainty:'medium', emotionalPressure:null, duration:'short'};
+      var normalized = window.KyanbasuDecisionTriage.normalizeAnswers(pureInput);
+      var assessed = window.KyanbasuDecisionTriage.assess(pureInput, ['consequences','inversion']);
+      var out = {
+        staged:staged, linked:linked, commands:(window.STAGED_CMDS || []).slice(),
+        descendantsHaveRefs:[triage, consequence, consequenceChild, inversion, failure, safeguard].some(function(note){ return api.linkedTasks(note.id).length; }),
+        declinedRun:!!declinedRun, declinedFailure:!!declinedFailure, declinedSafeguard:!!declinedSafeguard,
+        unchanged:before === api.notes().length, normalized:normalized,
+        recommended:assessed.recommendedModuleIds, reasons:assessed.recommendationReasons
+      };
+      var pre = document.createElement('pre'); pre.id = 'e2e-out'; pre.textContent = JSON.stringify(out); document.body.appendChild(pre);
+    }catch(e){ var fail = document.createElement('pre'); fail.id = 'e2e-out'; fail.textContent = 'ERR:' + (e && e.message || String(e)); document.body.appendChild(fail); }
+  }, 800);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["staged"], 0, msg=json.dumps(result))
+        self.assertEqual(result["linked"], 0, msg=json.dumps(result))
+        self.assertEqual(result["commands"], [], msg=json.dumps(result))
+        self.assertFalse(result["descendantsHaveRefs"], msg=json.dumps(result))
+        self.assertFalse(result["declinedRun"], msg=json.dumps(result))
+        self.assertFalse(result["declinedFailure"], msg=json.dumps(result))
+        self.assertFalse(result["declinedSafeguard"], msg=json.dumps(result))
+        self.assertTrue(result["unchanged"], msg=json.dumps(result))
+        self.assertEqual(result["normalized"], {"magnitude":"high", "reversibility":"", "uncertainty":"medium", "emotionalPressure":"", "duration":"short"}, msg=json.dumps(result))
+        self.assertEqual(result["recommended"], ["consequences", "inversion"], msg=json.dumps(result))
+        self.assertEqual(len(result["reasons"]), 2, msg=json.dumps(result))
+
+    def test_canvas_triage_panel_survives_core_render_and_import(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_TRIAGE_RERENDER_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var api = window.KyanbasuNotes;
+      var root = api.createDecisionMap(180, 300, 'Decisions').root;
+      var triage = api.createDecisionTriage(root.id);
+      var exported = api.exportData();
+      function snapshot(){
+        var card = document.querySelector('.tcNoteNode[data-note-id="'+triage.id+'"]');
+        var rootCard = document.querySelector('.tcNoteNode[data-note-id="'+root.id+'"]');
+        return {
+          panelCount:card ? card.querySelectorAll('.decisionTriagePanel').length : 0,
+          structured:!!(card && card.querySelector('.decisionTriageDimensions')),
+          genericHidden:!!(card && card.querySelector('.tcNoteText') && card.querySelector('.tcNoteText').hidden),
+          rootGenericVisible:!!(rootCard && rootCard.querySelector('.tcNoteText') && !rootCard.querySelector('.tcNoteText').hidden),
+          rootHasNoPanel:!!(rootCard && !rootCard.querySelector('.decisionTriagePanel'))
+        };
+      }
+      var initial = snapshot();
+      api.importData(exported);
+      var afterImport = snapshot();
+      api.render();
+      var afterCoreRender = snapshot();
+      var out = {initial:initial, afterImport:afterImport, afterCoreRender:afterCoreRender};
+      var pre = document.createElement('pre'); pre.id = 'e2e-out'; pre.textContent = JSON.stringify(out); document.body.appendChild(pre);
+    }catch(e){
+      var fail = document.createElement('pre'); fail.id = 'e2e-out'; fail.textContent = 'ERR:' + (e && e.message ? e.message : String(e)); document.body.appendChild(fail);
+    }
+  }, 900);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        for key in ("initial", "afterImport", "afterCoreRender"):
+            state = result[key]
+            self.assertEqual(state["panelCount"], 1, msg=json.dumps(result))
+            self.assertTrue(state["structured"], msg=json.dumps(result))
+            self.assertTrue(state["genericHidden"], msg=json.dumps(result))
+            self.assertTrue(state["rootGenericVisible"], msg=json.dumps(result))
+            self.assertTrue(state["rootHasNoPanel"], msg=json.dumps(result))
+
+    def test_canvas_triage_module_toggle_preserves_keyboard_focus(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_TRIAGE_MODULE_FOCUS_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var api = window.KyanbasuNotes;
+      var root = api.createDecisionMap(180, 300, 'Decisions').root;
+      var triage = api.createDecisionTriage(root.id);
+      api.setDecisionTriageAnswer(triage.id, 'magnitude', 'high');
+      api.setDecisionTriageAnswer(triage.id, 'reversibility', 'hard');
+      api.setDecisionTriageAnswer(triage.id, 'uncertainty', 'medium');
+      api.setDecisionTriageAnswer(triage.id, 'emotionalPressure', 'low');
+      api.setDecisionTriageAnswer(triage.id, 'duration', 'short');
+      var card = document.querySelector('.tcNoteNode[data-note-id="'+triage.id+'"]');
+      var checkbox = card.querySelector('.decisionTriageModule input[value="inversion"]');
+      checkbox.focus();
+      var focusedBefore = document.activeElement === checkbox;
+      checkbox.click();
+      var active = document.activeElement;
+      var focusedAfter = !!(active && active.matches('.decisionTriageModule input[type="checkbox"][value="inversion"]'));
+      var focusStayedInPanel = !!(active && active.closest('.decisionTriagePanel[data-triage-note-id="'+triage.id+'"]'));
+      var out = {
+        focusedBefore:focusedBefore,
+        focusedAfter:focusedAfter,
+        focusStayedInPanel:focusStayedInPanel,
+        moduleDraftIds:api.decisionProcess(root.id).moduleDraftIds
+      };
+      var pre = document.createElement('pre'); pre.id = 'e2e-out'; pre.textContent = JSON.stringify(out); document.body.appendChild(pre);
+    }catch(e){
+      var fail = document.createElement('pre'); fail.id = 'e2e-out'; fail.textContent = 'ERR:' + (e && e.message ? e.message : String(e)); document.body.appendChild(fail);
+    }
+  }, 900);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["focusedBefore"], msg=json.dumps(result))
+        self.assertTrue(result["focusedAfter"], msg=json.dumps(result))
+        self.assertTrue(result["focusStayedInPanel"], msg=json.dumps(result))
+        self.assertEqual(result["moduleDraftIds"], ["consequences"], msg=json.dumps(result))
+
+    def test_canvas_triage_note_is_accessible_overridable_and_collapsible(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_TRIAGE_UI_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      document.body.classList.add('inspector-collapsed');
+      window.STAGED_CMDS = [];
+      var api = window.KyanbasuNotes;
+      var created = api.createDecisionMap(180, 300, 'Decisions');
+      var root = created.root;
+      api.setContent(root.id, 'Problem / decision: Choose a planning workflow\\nDesired outcome: Make decisions with less friction\\nSuccess means: Used consistently for one week\\nDecision needed by: Friday\\nReassess by: Next Friday');
+      api.selectNote(root.id);
+      setTimeout(function(){
+        try{
+          var primary = document.querySelector('#noteActionToolbar .noteActionPrimary');
+          var initialRecommendation = primary && primary.textContent.trim();
+          primary.click();
+          setTimeout(function(){
+            try{
+              var triageNotes = api.notes().filter(function(note){
+                return note.analysis && note.analysis.tool === 'triage' && note.analysis.role === 'assessment';
+              });
+              var triage = triageNotes[0];
+              var firstFocused = document.activeElement && document.activeElement.getAttribute('role') === 'radio';
+              var repeated = api.createDecisionTriage(root.id);
+              var repeatedFocused = document.activeElement && document.activeElement.getAttribute('role') === 'radio';
+              var card = document.querySelector('.tcNoteNode[data-note-id="'+triage.id+'"]');
+              var groups = Array.prototype.slice.call(card.querySelectorAll('.decisionTriageDimension[role="radiogroup"]'));
+              var labels = groups.map(function(group){
+                var label = document.getElementById(group.getAttribute('aria-labelledby'));
+                return label && label.textContent.trim();
+              });
+              var radios = Array.prototype.slice.call(card.querySelectorAll('button[role="radio"]'));
+              var radioSemantics = radios.every(function(radio){
+                return radio.type === 'button' && ['true','false'].indexOf(radio.getAttribute('aria-checked')) >= 0;
+              });
+              var oneTabStopPerGroup = groups.every(function(group){
+                return group.querySelectorAll('button[role="radio"][tabindex="0"]').length === 1;
+              });
+              var noneSelected = radios.every(function(radio){ return radio.getAttribute('aria-checked') === 'false'; });
+              var incompleteRejected = api.confirmDecisionTriage(triage.id) === null;
+              var confirmInitiallyDisabled = card.querySelector('.decisionTriageConfirm').disabled;
+
+              function key(groupIndex, keyName){
+                var current = groups[groupIndex].querySelector('button[tabindex="0"]');
+                current.focus();
+                current.dispatchEvent(new KeyboardEvent('keydown', {key:keyName, bubbles:true, cancelable:true}));
+                groups = Array.prototype.slice.call(card.querySelectorAll('.decisionTriageDimension[role="radiogroup"]'));
+              }
+              key(0, 'End');
+              key(1, 'End');
+              key(2, 'ArrowRight');
+              key(3, 'Enter');
+              key(4, ' ');
+
+              setTimeout(function(){
+                try{
+                  card = document.querySelector('.tcNoteNode[data-note-id="'+triage.id+'"]');
+                  var reasonText = Array.prototype.map.call(card.querySelectorAll('.decisionTriageReason'), function(el){ return el.textContent.trim(); }).join(' ');
+                  var checkboxes = Array.prototype.slice.call(card.querySelectorAll('.decisionTriageModule input[type="checkbox"]'));
+                  var initialChecked = checkboxes.map(function(input){ return input.checked; });
+                  var inversion = card.querySelector('.decisionTriageModule input[value="inversion"]');
+                  inversion.click();
+                  var explicitOverride = api.decisionProcess(root.id).moduleDraftIds;
+                  var confirm = card.querySelector('.decisionTriageConfirm');
+                  var confirmEnabled = !confirm.disabled;
+                  confirm.click();
+
+                  setTimeout(function(){
+                    try{
+                      var firstProfile = api.decisionProcess(root.id).triageProfile;
+                      card = document.querySelector('.tcNoteNode[data-note-id="'+triage.id+'"]');
+                      var firstSummary = card.querySelector('.decisionTriageSummary');
+                      var firstCollapsed = !!firstSummary && !card.querySelector('.decisionTriageDimensions');
+                      card.click();
+                      setTimeout(function(){
+                        try{
+                          card = document.querySelector('.tcNoteNode[data-note-id="'+triage.id+'"]');
+                          var restored = !!card.querySelector('.decisionTriageDimensions');
+                          var magnitudeLow = card.querySelector('[data-triage-dimension="magnitude"][data-triage-value="low"]');
+                          magnitudeLow.click();
+                          var processAfterChange = api.decisionProcess(root.id);
+                          var pending = /pending changes/i.test(card.querySelector('.decisionTriageStatus').textContent);
+                          var activeModulesUnchanged = JSON.stringify(processAfterChange.triageProfile.acceptedModuleIds) === JSON.stringify(['consequences']);
+                          card.querySelector('[data-triage-dimension="reversibility"][data-triage-value="easy"]').click();
+                          card.querySelector('[data-triage-dimension="uncertainty"][data-triage-value="low"]').click();
+                          card.querySelector('[data-triage-dimension="emotionalPressure"][data-triage-value="low"]').click();
+                          card.querySelector('[data-triage-dimension="duration"][data-triage-value="short"]').click();
+
+                          setTimeout(function(){
+                            try{
+                              card = document.querySelector('.tcNoteNode[data-note-id="'+triage.id+'"]');
+                              var lowExplanation = card.querySelector('.decisionTriageExplanation').textContent.trim();
+                              var lowInversion = card.querySelector('.decisionTriageModule input[value="inversion"]');
+                              var lowConsequences = card.querySelector('.decisionTriageModule input[value="consequences"]');
+                              var lowDefaultUnchecked = !lowInversion.checked && !lowConsequences.checked;
+                              lowInversion.click();
+                              var addedNonRecommended = JSON.stringify(api.decisionProcess(root.id).moduleDraftIds) === JSON.stringify(['inversion']);
+                              card.querySelector('.decisionTriageModule input[value="inversion"]').click();
+                              var explicitCoreOnly = api.decisionProcess(root.id).moduleDraftIds;
+                              var coreConfirm = card.querySelector('.decisionTriageConfirm');
+                              var coreOnlyConfirmable = !coreConfirm.disabled;
+                              coreConfirm.click();
+
+                              setTimeout(function(){
+                                try{
+                                  var finalProcess = api.decisionProcess(root.id);
+                                  card = document.querySelector('.tcNoteNode[data-note-id="'+triage.id+'"]');
+                                  var finalSummary = card.querySelector('.decisionTriageSummary');
+                                  var out = {
+                                    initialRecommendation:initialRecommendation,
+                                    triageCount:triageNotes.length,
+                                    repeatedSame:repeated && repeated.id === triage.id,
+                                    focusFirst:firstFocused,
+                                    focusRepeated:repeatedFocused,
+                                    groupCount:groups.length,
+                                    labels:labels,
+                                    labelsDistinct:(new Set(labels)).size === 5,
+                                    radioSemantics:radioSemantics,
+                                    oneTabStopPerGroup:oneTabStopPerGroup,
+                                    noneSelected:noneSelected,
+                                    incompleteRejected:incompleteRejected,
+                                    confirmInitiallyDisabled:confirmInitiallyDisabled,
+                                    highAnswers:firstProfile.answers,
+                                    reasonsVisible:/High magnitude/.test(reasonText) && /Hard reversibility/.test(reasonText),
+                                    initialChecked:initialChecked,
+                                    explicitOverride:explicitOverride,
+                                    confirmEnabled:confirmEnabled,
+                                    firstRecommended:firstProfile.recommendedModuleIds,
+                                    firstAccepted:firstProfile.acceptedModuleIds,
+                                    firstDeclined:firstProfile.declinedModuleIds,
+                                    firstCollapsed:firstCollapsed,
+                                    firstSummary:firstSummary && firstSummary.textContent.trim(),
+                                    restored:restored,
+                                    pending:pending,
+                                    activeModulesUnchanged:activeModulesUnchanged,
+                                    lowExplanation:lowExplanation,
+                                    lowDefaultUnchecked:lowDefaultUnchecked,
+                                    addedNonRecommended:addedNonRecommended,
+                                    explicitCoreOnly:explicitCoreOnly,
+                                    coreOnlyConfirmable:coreOnlyConfirmable,
+                                    finalAnswers:finalProcess.triageProfile.answers,
+                                    finalRecommended:finalProcess.triageProfile.recommendedModuleIds,
+                                    finalAccepted:finalProcess.triageProfile.acceptedModuleIds,
+                                    finalSummary:finalSummary && finalSummary.textContent.trim(),
+                                    finalCollapsed:!!finalSummary && !card.querySelector('.decisionTriageDimensions'),
+                                    inspectorCollapsed:document.body.classList.contains('inspector-collapsed'),
+                                    staged:window.STAGED_CMDS.slice()
+                                  };
+                                  var pre = document.createElement('pre'); pre.id = 'e2e-out'; pre.textContent = JSON.stringify(out); document.body.appendChild(pre);
+                                }catch(e){ fail(e); }
+                              }, 90);
+                            }catch(e){ fail(e); }
+                          }, 90);
+                        }catch(e){ fail(e); }
+                      }, 90);
+                    }catch(e){ fail(e); }
+                  }, 90);
+                }catch(e){ fail(e); }
+              }, 90);
+            }catch(e){ fail(e); }
+          }, 90);
+        }catch(e){ fail(e); }
+      }, 100);
+    }catch(e){ fail(e); }
+  }, 900);
+  function fail(e){
+    var pre = document.createElement('pre'); pre.id = 'e2e-out'; pre.textContent = 'ERR:' + (e && e.message ? e.message : String(e)); document.body.appendChild(pre);
+  }
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["initialRecommendation"], "Assess decision rigor", msg=json.dumps(result))
+        self.assertEqual(result["triageCount"], 1, msg=json.dumps(result))
+        self.assertTrue(result["repeatedSame"], msg=json.dumps(result))
+        self.assertTrue(result["focusFirst"], msg=json.dumps(result))
+        self.assertTrue(result["focusRepeated"], msg=json.dumps(result))
+        self.assertEqual(result["groupCount"], 5, msg=json.dumps(result))
+        self.assertEqual(result["labels"], ["Magnitude", "Reversibility", "Uncertainty", "Emotional pressure", "Duration / repetition"], msg=json.dumps(result))
+        self.assertTrue(result["labelsDistinct"], msg=json.dumps(result))
+        self.assertTrue(result["radioSemantics"], msg=json.dumps(result))
+        self.assertTrue(result["oneTabStopPerGroup"], msg=json.dumps(result))
+        self.assertTrue(result["noneSelected"], msg=json.dumps(result))
+        self.assertTrue(result["incompleteRejected"], msg=json.dumps(result))
+        self.assertTrue(result["confirmInitiallyDisabled"], msg=json.dumps(result))
+        self.assertEqual(result["highAnswers"], {"magnitude":"high", "reversibility":"hard", "uncertainty":"medium", "emotionalPressure":"low", "duration":"short"}, msg=json.dumps(result))
+        self.assertTrue(result["reasonsVisible"], msg=json.dumps(result))
+        self.assertEqual(result["initialChecked"], [True, True], msg=json.dumps(result))
+        self.assertEqual(result["explicitOverride"], ["consequences"], msg=json.dumps(result))
+        self.assertTrue(result["confirmEnabled"], msg=json.dumps(result))
+        self.assertEqual(result["firstRecommended"], ["consequences", "inversion"], msg=json.dumps(result))
+        self.assertEqual(result["firstAccepted"], ["consequences"], msg=json.dumps(result))
+        self.assertEqual(result["firstDeclined"], ["inversion"], msg=json.dumps(result))
+        self.assertTrue(result["firstCollapsed"], msg=json.dumps(result))
+        self.assertIn("1 module", result["firstSummary"], msg=json.dumps(result))
+        self.assertIn("high / hard / medium / low / short", result["firstSummary"].lower(), msg=json.dumps(result))
+        self.assertTrue(result["restored"], msg=json.dumps(result))
+        self.assertTrue(result["pending"], msg=json.dumps(result))
+        self.assertTrue(result["activeModulesUnchanged"], msg=json.dumps(result))
+        self.assertIn("no available module was triggered", result["lowExplanation"].lower(), msg=json.dumps(result))
+        self.assertTrue(result["lowDefaultUnchecked"], msg=json.dumps(result))
+        self.assertTrue(result["addedNonRecommended"], msg=json.dumps(result))
+        self.assertEqual(result["explicitCoreOnly"], [], msg=json.dumps(result))
+        self.assertTrue(result["coreOnlyConfirmable"], msg=json.dumps(result))
+        self.assertEqual(result["finalAnswers"], {"magnitude":"low", "reversibility":"easy", "uncertainty":"low", "emotionalPressure":"low", "duration":"short"}, msg=json.dumps(result))
+        self.assertEqual(result["finalRecommended"], [], msg=json.dumps(result))
+        self.assertEqual(result["finalAccepted"], [], msg=json.dumps(result))
+        self.assertIn("0 modules", result["finalSummary"], msg=json.dumps(result))
+        self.assertIn("low / easy / low / low / short", result["finalSummary"].lower(), msg=json.dumps(result))
+        self.assertTrue(result["finalCollapsed"], msg=json.dumps(result))
+        self.assertTrue(result["inspectorCollapsed"], msg=json.dumps(result))
+        self.assertEqual(result["staged"], [], msg=json.dumps(result))
 
     def test_canvas_decision_guidance_matrix_is_deterministic(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
@@ -1062,16 +1732,19 @@ window.addEventListener('load', function(){
       if (!guide) throw new Error('Decision guidance API missing');
       var cases = [
         [{noteId:'d', type:'decision', frameComplete:false}, 'complete-decision-frame'],
-        [{noteId:'d', type:'decision', frameComplete:true, optionCount:1}, 'add-option'],
-        [{noteId:'d', type:'decision', frameComplete:true, optionCount:2, factorCount:0}, 'add-factor'],
-        [{noteId:'d', type:'decision', frameComplete:true, optionCount:2, factorCount:1, allOptionsAnalyzed:false}, 'explore-next-option'],
-        [{noteId:'d', type:'decision', frameComplete:true, optionCount:2, factorCount:1, allOptionsAnalyzed:true}, 'review-decision'],
+        [{noteId:'d', type:'decision', frameComplete:true, triageExists:false}, 'assess-decision-rigor'],
+        [{noteId:'d', type:'decision', frameComplete:true, triageExists:true, triageConfirmed:false}, 'complete-decision-triage'],
+        [{noteId:'d', type:'decision', frameComplete:true, triageExists:true, triageConfirmed:true, stateCount:0}, 'add-factor'],
+        [{noteId:'d', type:'decision', frameComplete:true, triageExists:true, triageConfirmed:true, stateCount:1, optionCount:1}, 'add-option'],
+        [{noteId:'d', type:'decision', frameComplete:true, triageExists:true, triageConfirmed:true, stateCount:1, optionCount:2, allOptionsAnalyzed:false}, 'explore-next-option'],
+        [{noteId:'d', type:'decision', frameComplete:true, triageExists:true, triageConfirmed:true, stateCount:1, optionCount:2, allOptionsAnalyzed:true}, 'review-decision'],
         [{noteId:'f', type:'factor'}, 'add-parallel-factor'],
-        [{noteId:'o', type:'option', hasConsequences:false}, 'explore-consequences'],
-        [{noteId:'o', type:'option', hasConsequences:true, consequenceComplete:false}, 'continue-consequences'],
-        [{noteId:'o', type:'option', hasConsequences:true, consequenceComplete:true, inversionExists:false}, 'run-inversion'],
-        [{noteId:'o', type:'option', hasConsequences:true, consequenceComplete:true, inversionExists:true, inversionComplete:false}, 'continue-inversion'],
-        [{noteId:'o', type:'option', hasConsequences:true, consequenceComplete:true, inversionExists:true, inversionComplete:true}, 'review-option'],
+        [{noteId:'s', type:'factor', directlyControllable:true}, 'convert-state-to-option'],
+        [{noteId:'o', type:'option', acceptedModuleIds:['consequences'], hasConsequences:false}, 'explore-consequences'],
+        [{noteId:'o', type:'option', acceptedModuleIds:['consequences'], hasConsequences:true, consequenceComplete:false}, 'continue-consequences'],
+        [{noteId:'o', type:'option', acceptedModuleIds:['inversion'], inversionExists:false}, 'run-inversion'],
+        [{noteId:'o', type:'option', acceptedModuleIds:['inversion'], inversionExists:true, inversionComplete:false}, 'continue-inversion'],
+        [{noteId:'o', type:'option', acceptedModuleIds:['consequences','inversion'], hasConsequences:true, consequenceComplete:true, inversionExists:true, inversionComplete:true}, 'review-option'],
         [{noteId:'c1', type:'consequence', order:1, hasNextOrder:false}, 'add-next-consequence'],
         [{noteId:'c2', type:'consequence', order:2, hasNextOrder:false}, 'add-next-consequence'],
         [{noteId:'c3', type:'consequence', order:3}, 'add-parallel-consequence'],
@@ -1095,14 +1768,15 @@ window.addEventListener('load', function(){
         };
       });
       var grouped = guide.guidanceFor({
-        noteId:'menu', type:'option', hasConsequences:false,
-        validActionIds:['add-option','run-inversion','go-decision','delete-note']
+        noteId:'menu', type:'option', acceptedModuleIds:['consequences'], hasConsequences:false,
+        validActionIds:['add-option','explore-consequences','run-inversion','go-decision','delete-note']
       });
       var firstOrder = guide.guidanceFor({noteId:'c1', type:'consequence', order:1, hasNextOrder:false});
       var thirdOrder = guide.guidanceFor({noteId:'c3', type:'consequence', order:3});
       var out = {
         actual:actual,
         groups:grouped.groups.map(function(group){ return group.id; }),
+        groupedActionIds:grouped.groups.reduce(function(ids, group){ return ids.concat(group.actions.map(function(action){ return action.id; })); }, []),
         deleteDangerous:grouped.groups.some(function(group){ return group.actions.some(function(action){ return action.id === 'delete-note' && action.dangerous; }); }),
         firstOrderLabel:firstOrder.recommended && firstOrder.recommended.label,
         thirdOrderLabel:thirdOrder.recommended && thirdOrder.recommended.label
@@ -1129,6 +1803,7 @@ window.addEventListener('load', function(){
         self.assertTrue(all(row["deterministic"] for row in result["actual"]), msg=json.dumps(result))
         self.assertTrue(all(not row["dangerous"] for row in result["actual"]), msg=json.dumps(result))
         self.assertEqual(result["groups"], ["develop", "analyze", "navigate", "manage"], msg=json.dumps(result))
+        self.assertNotIn("run-inversion", result["groupedActionIds"], msg=json.dumps(result))
         self.assertTrue(result["deleteDangerous"], msg=json.dumps(result))
         self.assertEqual(result["firstOrderLabel"], "Add 2nd-order consequence", msg=json.dumps(result))
         self.assertEqual(result["thirdOrderLabel"], "Add parallel 3rd-order consequence", msg=json.dumps(result))
@@ -1148,10 +1823,35 @@ window.addEventListener('load', function(){
         throw new Error('Decision action adapter missing');
       }
       var events = [];
+      var triageFocuses = [];
       document.addEventListener('kyanbasu:note-state', function(event){ events.push(event.detail || {}); });
+      document.addEventListener('kyanbasu:decision-triage-focus', function(event){ triageFocuses.push(event.detail || {}); });
       var created = api.createDecisionMap(180, 300, 'Decisions');
-      api.setContent(created.root.id, 'Decision: Choose a planning workflow\\nTarget outcome: Make decisions with less friction\\nSuccess means: Used consistently for one week\\nDecision needed by: Friday\\nReassess by: Next Friday');
-      var option = created.options[0];
+      var root = created.root;
+      var triage = api.createDecisionTriage(root.id);
+      var sameTriage = api.createDecisionTriage(root.id);
+      api.setContent(root.id, 'Problem / decision: Choose a planning workflow\\nDesired outcome: Make decisions with less friction\\nSuccess means: Used consistently for one week\\nDecision needed by: Friday\\nReassess by: Next Friday');
+      var triageAction = api.executeDecisionAction('complete-decision-triage', root.id);
+      var exportedForProfile = api.exportData();
+      var rootForProfile = exportedForProfile.notes.filter(function(note){ return note.id === root.id; })[0];
+      rootForProfile.decisionProcess.triageProfile = {
+        answers:{magnitude:'high', reversibility:'hard', uncertainty:'medium', emotionalPressure:'low', duration:'short'},
+        recommendedModuleIds:['consequences','inversion'], acceptedModuleIds:['consequences','inversion'], declinedModuleIds:[],
+        recommendationReasons:[], confirmedAt:Date.now()
+      };
+      api.importData(exportedForProfile);
+      var state = api.createDecisionChild(root.id, 'factor');
+      api.setContent(state.id, 'State: Available time\\nWhy can it affect the outcome? It limits the work.\\nCan I directly choose it? directly\\nWhat would indicate that it is changing? Calendar blocks');
+      var stateActions = api.decisionActions(state.id);
+      var converted = api.executeDecisionAction('convert-state-to-option', state.id);
+      var convertedNote = api.notes().filter(function(note){ return note.id === state.id; })[0];
+      var convertedLinkRetained = api.links().some(function(link){ return link.type === 'child' && link.from === root.id && link.to === state.id; });
+      var nonDirectStates = ['no', 'partly', '', 'unknown'].map(function(value){
+        var item = api.createDecisionChild(root.id, 'factor');
+        api.setContent(item.id, 'State: Constraint\\nCan I directly choose it? ' + value);
+        return api.decisionActions(item.id).recommended.id;
+      });
+      var option = api.createDecisionChild(root.id, 'option');
       api.setContent(option.id, 'Option: Use contextual guidance');
 
       var initialContext = api.decisionActionContext(option.id);
@@ -1167,12 +1867,38 @@ window.addEventListener('load', function(){
       var beforeStale = api.notes().length;
       var stale = api.executeDecisionAction('add-next-consequence', third.id);
       var review = api.reviewContext(option.id);
+      var primaryBeforeProfiles = api.primaryNote();
+      var declinedInversion = api.exportData();
+      declinedInversion.notes.filter(function(note){ return note.id === root.id; })[0].decisionProcess.triageProfile.acceptedModuleIds = ['consequences'];
+      declinedInversion.notes.filter(function(note){ return note.id === root.id; })[0].decisionProcess.triageProfile.declinedModuleIds = ['inversion'];
+      api.importData(declinedInversion);
+      var declinedInversionReviewIds = api.reviewContext(option.id).checks.map(function(check){ return check.id; });
+      var noAccepted = api.exportData();
+      noAccepted.notes.filter(function(note){ return note.id === root.id; })[0].decisionProcess.triageProfile.acceptedModuleIds = [];
+      noAccepted.notes.filter(function(note){ return note.id === root.id; })[0].decisionProcess.triageProfile.declinedModuleIds = ['consequences','inversion'];
+      api.importData(noAccepted);
+      var noAcceptedReviewIds = api.reviewContext(option.id).checks.map(function(check){ return check.id; });
       var out = {
         initialType:initialContext && initialContext.type,
+        rootOnly:Object.keys(created).sort(),
+        triageKind:triage && triage.kind,
+        triageAnalysis:triage && triage.analysis,
+        triageId:triage && triage.id,
+        triageReused:sameTriage && sameTriage.id === triage.id,
+        triageAction:triageAction && triageAction.ok,
+        triageFocuses:triageFocuses,
+        statePrimary:stateActions && stateActions.recommended && stateActions.recommended.id,
+        converted:converted && converted.ok,
+        convertedKind:convertedNote && convertedNote.kind,
+        convertedId:convertedNote && convertedNote.id,
+        expectedConvertedId:state.id,
+        convertedLinkRetained:convertedLinkRetained,
+        convertedContent:convertedNote && convertedNote.content,
+        nonDirectStates:nonDirectStates,
         recommendations:[initial.recommended.id, firstActions.recommended.id, secondActions.recommended.id],
         results:[firstResult.ok, secondResult.ok, thirdResult.ok],
         orders:[first.analysis && first.analysis.order, second.analysis && second.analysis.order, third.analysis && third.analysis.order],
-        primary:api.primaryNote(),
+        primary:primaryBeforeProfiles,
         expectedPrimary:third.id,
         eventCount:events.length,
         eventShape:events.every(function(event){ return typeof event.selectedId === 'string' && typeof event.reason === 'string'; }),
@@ -1181,6 +1907,8 @@ window.addEventListener('load', function(){
         staleCreated:api.notes().length !== beforeStale,
         reviewDecision:review && review.decisionId,
         reviewOption:review && review.proposedOptionId,
+        declinedInversionReviewIds:declinedInversionReviewIds,
+        noAcceptedReviewIds:noAcceptedReviewIds,
         expectedDecision:created.root.id,
         expectedOption:option.id
       };
@@ -1203,6 +1931,22 @@ window.addEventListener('load', function(){
         self.assertNotIn("ERR:", raw)
         result = json.loads(raw)
         self.assertEqual(result["initialType"], "option", msg=json.dumps(result))
+        self.assertEqual(result["rootOnly"], ["root"], msg=json.dumps(result))
+        self.assertEqual(result["triageKind"], "question", msg=json.dumps(result))
+        self.assertEqual(result["triageAnalysis"]["tool"], "triage", msg=json.dumps(result))
+        self.assertEqual(result["triageAnalysis"]["role"], "assessment", msg=json.dumps(result))
+        self.assertTrue(result["triageReused"], msg=json.dumps(result))
+        self.assertTrue(result["triageAction"], msg=json.dumps(result))
+        self.assertEqual(result["triageFocuses"][0]["decisionId"], result["expectedDecision"], msg=json.dumps(result))
+        self.assertEqual(result["triageFocuses"][0]["noteId"], result["triageId"], msg=json.dumps(result))
+        self.assertEqual(result["statePrimary"], "convert-state-to-option", msg=json.dumps(result))
+        self.assertTrue(result["converted"], msg=json.dumps(result))
+        self.assertEqual(result["convertedKind"], "option", msg=json.dumps(result))
+        self.assertEqual(result["convertedId"], result["expectedConvertedId"], msg=json.dumps(result))
+        self.assertTrue(result["convertedLinkRetained"], msg=json.dumps(result))
+        self.assertTrue(result["convertedContent"].startswith("Option:"), msg=json.dumps(result))
+        self.assertIn("Calendar blocks", result["convertedContent"], msg=json.dumps(result))
+        self.assertEqual(result["nonDirectStates"], ["add-parallel-factor"] * 4, msg=json.dumps(result))
         self.assertEqual(result["recommendations"], ["explore-consequences", "add-next-consequence", "add-next-consequence"], msg=json.dumps(result))
         self.assertEqual(result["results"], [True, True, True], msg=json.dumps(result))
         self.assertEqual(result["orders"], [1, 2, 3], msg=json.dumps(result))
@@ -1214,6 +1958,10 @@ window.addEventListener('load', function(){
         self.assertFalse(result["staleCreated"], msg=json.dumps(result))
         self.assertEqual(result["reviewDecision"], result["expectedDecision"], msg=json.dumps(result))
         self.assertEqual(result["reviewOption"], result["expectedOption"], msg=json.dumps(result))
+        self.assertIn("consequences", result["declinedInversionReviewIds"], msg=json.dumps(result))
+        self.assertNotIn("inversion", result["declinedInversionReviewIds"], msg=json.dumps(result))
+        self.assertNotIn("consequences", result["noAcceptedReviewIds"], msg=json.dumps(result))
+        self.assertNotIn("inversion", result["noAcceptedReviewIds"], msg=json.dumps(result))
 
     def test_canvas_contextual_toolbar_and_menu_share_actions(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
@@ -1229,7 +1977,12 @@ window.addEventListener('load', function(){
       var ui = window.KyanbasuNoteActions;
       if (!api || !ui) throw new Error('Contextual note actions missing');
       var created = api.createDecisionMap(180, 300, 'Decisions');
-      var option = created.options[0];
+      var option = api.createDecisionChild(created.root.id, 'option');
+      api.createDecisionTriage(created.root.id);
+      var prepared = api.exportData();
+      var preparedRoot = prepared.notes.filter(function(note){ return note.id === created.root.id; })[0];
+      preparedRoot.decisionProcess.triageProfile = {answers:{magnitude:'high', reversibility:'hard', uncertainty:'medium', emotionalPressure:'low', duration:'short'}, recommendedModuleIds:['consequences'], acceptedModuleIds:['consequences'], declinedModuleIds:['inversion'], recommendationReasons:[], confirmedAt:Date.now()};
+      api.importData(prepared);
       api.setContent(option.id, 'Option: Use contextual guidance');
       api.selectNote(option.id);
       setTimeout(function(){
@@ -1356,6 +2109,268 @@ window.addEventListener('load', function(){
         self.assertTrue(result["focusRestored"], msg=json.dumps(result))
         self.assertTrue(result["hiddenAfterWorkbench"], msg=json.dumps(result))
 
+    def test_canvas_normative_soft_skip_explains_and_continues(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NORMATIVE_SOFT_SKIP_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var api = window.KyanbasuNotes;
+      var ui = window.KyanbasuNoteActions;
+      if (!api || !ui) throw new Error('Decision actions missing');
+      document.body.classList.add('inspector-collapsed');
+      var direct = api.createDecisionMap(80, 100, 'Direct API').root;
+      var directBefore = api.notes().length;
+      var directResult = api.executeDecisionAction('add-option', direct.id);
+      var directAfter = api.notes().length;
+      var created = api.createDecisionMap(180, 300, 'Soft skip').root;
+      api.selectNote(created.id);
+      setTimeout(function(){
+        try{
+          var card = document.querySelector('.tcNoteNode[data-note-id="' + created.id + '"]');
+          var menu = document.getElementById('noteActionMenu');
+          if (!card || !menu) throw new Error('Decision menu missing');
+          function openAndChoose(actionId){
+            card.dispatchEvent(new MouseEvent('contextmenu', {bubbles:true, cancelable:true, clientX:360, clientY:320}));
+            var item = menu.querySelector('[data-action-id="' + actionId + '"]');
+            if (!item) throw new Error('Menu action missing: ' + actionId);
+            item.click();
+          }
+          var initialOptions = api.notes().filter(function(note){ return note.kind === 'option'; }).length;
+          openAndChoose('add-option');
+          setTimeout(function(){
+            try{
+              var backdrop = document.getElementById('decisionSkipBackdrop');
+              var dialog = document.getElementById('decisionSkipDialog');
+              var text = dialog ? dialog.textContent : '';
+              var noOptionBeforeConfirm = api.notes().filter(function(note){ return note.kind === 'option'; }).length === initialOptions;
+              var dialogExplainsAll = /framing/i.test(text) && /rigor/i.test(text) && /state/i.test(text);
+              var initialFocusBack = document.activeElement === document.getElementById('decisionSkipBack');
+              if (document.getElementById('decisionSkipBack')) document.getElementById('decisionSkipBack').click();
+              setTimeout(function(){
+                try{
+                  var focusReturned = document.activeElement === card;
+                  openAndChoose('add-option');
+                  setTimeout(function(){
+                    try{
+                      var continueButton = document.getElementById('decisionSkipContinue');
+                      if (continueButton) continueButton.click();
+                      setTimeout(function(){
+                        try{
+                          var exactlyOneOption = api.notes().filter(function(note){ return note.kind === 'option'; }).length === initialOptions + 1;
+                          var earliestStillRecommended = api.decisionActions(created.id).recommended.id === 'complete-decision-frame';
+                          api.setContent(created.id, 'Problem / decision: Choose a workflow\\nDesired outcome: Make a sound choice\\nSuccess means: Used weekly\\nDecision needed by: Friday\\nReassess by: Next Friday');
+                          openAndChoose('add-factor');
+                          setTimeout(function(){
+                            try{
+                              var laterDialog = document.getElementById('decisionSkipDialog');
+                              var laterText = laterDialog ? laterDialog.textContent : '';
+                              var laterMentionsTriageOnly = /rigor|triage/i.test(laterText) && !/framing/i.test(laterText);
+                              if (document.getElementById('decisionSkipBack')) document.getElementById('decisionSkipBack').click();
+                              setTimeout(function(){
+                                var out = {
+                                  inspectorCollapsed:document.body.classList.contains('inspector-collapsed'),
+                                  directRequiresConfirmation:!!(directResult && directResult.requiresConfirmation),
+                                  directUnchanged:directAfter === directBefore,
+                                  noOptionBeforeConfirm:noOptionBeforeConfirm,
+                                  dialogRole:dialog && dialog.getAttribute('role'),
+                                  dialogModal:dialog && dialog.getAttribute('aria-modal'),
+                                  dialogExplainsAll:dialogExplainsAll,
+                                  initialFocusBack:initialFocusBack,
+                                  focusReturned:focusReturned,
+                                  exactlyOneOption:exactlyOneOption,
+                                  earliestStillRecommended:earliestStillRecommended,
+                                  laterMentionsTriageOnly:laterMentionsTriageOnly
+                                };
+                                var pre = document.createElement('pre');
+                                pre.id = 'e2e-out'; pre.textContent = JSON.stringify(out); document.body.appendChild(pre);
+                              }, 80);
+                            }catch(e4){ fail(e4); }
+                          }, 80);
+                        }catch(e3){ fail(e3); }
+                      }, 80);
+                    }catch(e2){ fail(e2); }
+                  }, 80);
+                }catch(e1){ fail(e1); }
+              }, 80);
+            }catch(e0){ fail(e0); }
+          }, 80);
+        }catch(e){ fail(e); }
+      }, 100);
+    }catch(e){ fail(e); }
+  }, 800);
+  function fail(error){
+    if (document.getElementById('e2e-out')) return;
+    var pre = document.createElement('pre'); pre.id = 'e2e-out';
+    pre.textContent = 'ERR:' + (error && error.message ? error.message : String(error)); document.body.appendChild(pre);
+  }
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["inspectorCollapsed"], msg=json.dumps(result))
+        self.assertTrue(result["directRequiresConfirmation"], msg=json.dumps(result))
+        self.assertTrue(result["directUnchanged"], msg=json.dumps(result))
+        self.assertTrue(result["noOptionBeforeConfirm"], msg=json.dumps(result))
+        self.assertEqual(result["dialogRole"], "dialog", msg=json.dumps(result))
+        self.assertEqual(result["dialogModal"], "true", msg=json.dumps(result))
+        self.assertTrue(result["dialogExplainsAll"], msg=json.dumps(result))
+        self.assertTrue(result["initialFocusBack"], msg=json.dumps(result))
+        self.assertTrue(result["focusReturned"], msg=json.dumps(result))
+        self.assertTrue(result["exactlyOneOption"], msg=json.dumps(result))
+        self.assertTrue(result["earliestStillRecommended"], msg=json.dumps(result))
+        self.assertTrue(result["laterMentionsTriageOnly"], msg=json.dumps(result))
+
+    def test_canvas_normative_skip_modal_traps_tab_focus(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        harness = """
+<script id="E2E_CANVAS_SKIP_FOCUS_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      window.KyanbasuDecisionSkipGate.open({requiresConfirmation:true, noteId:'', actionId:'x', warning:{message:'Confirm'}});
+      setTimeout(function(){
+        var back = document.getElementById('decisionSkipBack');
+        var cont = document.getElementById('decisionSkipContinue');
+        var initial = document.activeElement === back;
+        cont.focus();
+        document.dispatchEvent(new KeyboardEvent('keydown', {key:'Tab', bubbles:true, cancelable:true}));
+        var forward = document.activeElement === back;
+        back.focus();
+        document.dispatchEvent(new KeyboardEvent('keydown', {key:'Tab', shiftKey:true, bubbles:true, cancelable:true}));
+        var backward = document.activeElement === cont;
+        var pre = document.createElement('pre'); pre.id = 'e2e-out'; pre.textContent = JSON.stringify({initial:initial, forward:forward, backward:backward}); document.body.appendChild(pre);
+      }, 40);
+    }catch(e){ var fail = document.createElement('pre'); fail.id = 'e2e-out'; fail.textContent = 'ERR:' + (e && e.message || String(e)); document.body.appendChild(fail); }
+  }, 800);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["initial"], msg=json.dumps(result))
+        self.assertTrue(result["forward"], msg=json.dumps(result))
+        self.assertTrue(result["backward"], msg=json.dumps(result))
+
+    def test_canvas_normative_commit_preserves_triage_profile_and_unresolved_steps(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NORMATIVE_COMMIT_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var api = window.KyanbasuNotes;
+      var created = api.createDecisionMap(180, 300, 'Decisions');
+      var root = created.root;
+      api.setContent(root.id, 'Problem / decision: Choose a planning workflow\\nDesired outcome: Make a durable choice\\nSuccess means: Used every week for a month\\nDecision needed by: Friday\\nReassess by: Next Friday');
+      var triage = api.createDecisionTriage(root.id);
+      ['magnitude','reversibility','uncertainty','emotionalPressure','duration'].forEach(function(id, index){
+        api.setDecisionTriageAnswer(triage.id, id, ['high','hard','medium','low','short'][index]);
+      });
+      api.setDecisionTriageModules(triage.id, ['consequences']);
+      var profile = api.confirmDecisionTriage(triage.id);
+      var state = api.createDecisionChild(root.id, 'factor');
+      api.setContent(state.id, 'State: My available time is limited\\nCan I directly choose it? No');
+      var chosen = api.createDecisionChild(root.id, 'option');
+      var alternative = api.createDecisionChild(root.id, 'option');
+      api.setContent(chosen.id, 'Option: Start a small weekly planning practice');
+      api.setContent(alternative.id, 'Option: Keep the current process');
+      var chosenOutcome = api.createChildNote(chosen.id);
+      api.setNoteKind(chosenOutcome.id, 'outcome');
+      api.setContent(chosenOutcome.id, 'Possible outcome: Better follow-through');
+      var first = api.runConsequences(chosen.id).first;
+      var second = api.createNextConsequence(first.id);
+      api.createNextConsequence(second.id);
+      var review = api.reviewContext(chosen.id);
+      var reviewIds = review.checks.map(function(check){ return check.id; });
+      var reviewTargets = review.checks.reduce(function(targets, check){ targets[check.id] = check.targetId; return targets; }, {});
+      var guidance = api.decisionActions(chosen.id);
+      var actionIds = guidance.groups.reduce(function(ids, group){ return ids.concat(group.actions.map(function(action){ return action.id; })); }, []);
+      var unresolved = review.checks.filter(function(check){ return !check.complete; }).map(function(check){ return {id:check.id, label:check.label}; });
+      var committed = api.commitDecision(root.id, chosen.id, 'The small practice fits the available time', unresolved);
+      var history = api.decisionHistory(root.id);
+      var snapshotRoot = history.commits[0].notes.filter(function(note){ return note.id === root.id; })[0];
+      var exported = api.exportData();
+      var liveRoot = exported.notes.filter(function(note){ return note.id === root.id; })[0];
+      liveRoot.decisionProcess.triageProfile.acceptedModuleIds = [];
+      liveRoot.decisionProcess.triageProfile.declinedModuleIds = ['consequences','inversion'];
+      api.importData(exported);
+      var afterLiveEdit = api.decisionHistory(root.id).commits[0];
+      var exportedAfterLiveEdit = api.exportData();
+      window.KyanbasuWorkbenches.capture();
+      var workbenches = window.KyanbasuWorkbenches.exportData();
+      var active = workbenches.workbenches.filter(function(workbench){ return workbench.id === workbenches.activeId; })[0];
+      var workbenchRoot = active.notes.notes.filter(function(note){ return note.id === root.id; })[0];
+      api.importData(exportedAfterLiveEdit);
+      var imported = api.decisionHistory(root.id).commits[0];
+      var out = {
+        rootId:root.id,
+        triageId:triage.id,
+        alternativeId:alternative.id,
+        profile:profile,
+        reviewIds:reviewIds,
+        reviewTargets:reviewTargets,
+        consequenceComplete:review.checks.filter(function(check){ return check.id === 'consequences'; })[0].complete,
+        inversionRecommended:actionIds.indexOf('run-inversion') >= 0,
+        rationale:committed && committed.rationale,
+        unresolved:committed && committed.unresolvedChecks,
+        snapshotProfile:snapshotRoot && snapshotRoot.decisionProcess && snapshotRoot.decisionProcess.triageProfile,
+        historyProfile:afterLiveEdit && afterLiveEdit.notes.filter(function(note){ return note.id === root.id; })[0].decisionProcess.triageProfile,
+        exportedProfile:exportedAfterLiveEdit.notes.filter(function(note){ return note.id === root.id; })[0].decisionRecord.commits[0].notes.filter(function(note){ return note.id === root.id; })[0].decisionProcess.triageProfile,
+        workbenchProfile:workbenchRoot.decisionRecord.commits[0].notes.filter(function(note){ return note.id === root.id; })[0].decisionProcess.triageProfile,
+        importedProfile:imported.notes.filter(function(note){ return note.id === root.id; })[0].decisionProcess.triageProfile
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out'; pre.textContent = JSON.stringify(out); document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out'; pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e)); document.body.appendChild(pre2);
+    }
+  }, 800);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        expected_checks = ["problem", "target", "success", "triage", "states", "options", "outcomes", "trigger", "consequences"]
+        self.assertEqual(result["reviewIds"], expected_checks, msg=json.dumps(result))
+        self.assertTrue(result["consequenceComplete"], msg=json.dumps(result))
+        self.assertFalse(result["inversionRecommended"], msg=json.dumps(result))
+        self.assertEqual(result["reviewTargets"]["triage"], result["triageId"], msg=json.dumps(result))
+        self.assertEqual(result["reviewTargets"]["states"], result["rootId"], msg=json.dumps(result))
+        self.assertEqual(result["reviewTargets"]["options"], result["rootId"], msg=json.dumps(result))
+        self.assertEqual(result["reviewTargets"]["outcomes"], result["alternativeId"], msg=json.dumps(result))
+        self.assertEqual(result["rationale"], "The small practice fits the available time", msg=json.dumps(result))
+        self.assertEqual([item["id"] for item in result["unresolved"]], ["outcomes"], msg=json.dumps(result))
+        profile = result["snapshotProfile"]
+        self.assertEqual(profile["answers"], {"magnitude": "high", "reversibility": "hard", "uncertainty": "medium", "emotionalPressure": "low", "duration": "short"}, msg=json.dumps(result))
+        self.assertEqual(profile["recommendedModuleIds"], ["consequences", "inversion"], msg=json.dumps(result))
+        self.assertEqual(profile["acceptedModuleIds"], ["consequences"], msg=json.dumps(result))
+        self.assertEqual(profile["declinedModuleIds"], ["inversion"], msg=json.dumps(result))
+        self.assertGreater(profile["confirmedAt"], 0, msg=json.dumps(result))
+        self.assertTrue(any(item["moduleId"] == "consequences" for item in profile["recommendationReasons"]), msg=json.dumps(result))
+        self.assertTrue(any(item["moduleId"] == "inversion" for item in profile["recommendationReasons"]), msg=json.dumps(result))
+        self.assertEqual(result["historyProfile"], profile, msg=json.dumps(result))
+        self.assertEqual(result["exportedProfile"], profile, msg=json.dumps(result))
+        self.assertEqual(result["workbenchProfile"], profile, msg=json.dumps(result))
+        self.assertEqual(result["importedProfile"], profile, msg=json.dumps(result))
+
     def test_canvas_decision_review_soft_gate_round_trips_unresolved_checks(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
@@ -1371,7 +2386,9 @@ window.addEventListener('load', function(){
       if (!api || !reviewUi) throw new Error('Decision review UI missing');
       var created = api.createDecisionMap(180, 300, 'Decisions');
       var root = created.root;
-      var option = created.options[0];
+      var state = api.createDecisionChild(root.id, 'factor');
+      api.setContent(state.id, 'State: Available time is limited\\nCan I directly choose it? No');
+      var option = api.createDecisionChild(root.id, 'option');
       api.setContent(option.id, 'Option: Choose under current time constraints');
       var directBlankRejected = api.commitDecision(root.id, option.id, '   ') === null;
       var directLongRejected = api.commitDecision(root.id, option.id, new Array(502).join('x')) === null;
@@ -1508,9 +2525,9 @@ window.addEventListener('load', function(){
         self.assertEqual(result["commitCount"], 1, msg=json.dumps(result))
         self.assertEqual(result["rationale"], "Chosen under current time constraints", msg=json.dumps(result))
         self.assertEqual(result["unresolved"], result["expectedUnresolved"], msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 8, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
         self.assertEqual(result["workbenchVersion"], 1, msg=json.dumps(result))
-        self.assertEqual(result["nestedVersion"], 8, msg=json.dumps(result))
+        self.assertEqual(result["nestedVersion"], 9, msg=json.dumps(result))
         self.assertEqual(result["importedUnresolved"], result["expectedUnresolved"], msg=json.dumps(result))
         self.assertTrue(result["legacyImported"], msg=json.dumps(result))
         self.assertFalse(result["legacyHasUnresolved"], msg=json.dumps(result))
@@ -1525,29 +2542,53 @@ window.addEventListener('load', function(){
 (function(){
   var browserErrors = [];
   window.addEventListener('error', function(event){ browserErrors.push(event && event.message || 'Browser error'); });
+  window.addEventListener('unhandledrejection', function(event){ browserErrors.push(event && event.reason && event.reason.message || 'Unhandled rejection'); });
   window.addEventListener('load', function(){
     setTimeout(function(){
       var api = window.KyanbasuNotes;
       var ui = window.KyanbasuNoteActions;
       var toolbar = document.getElementById('noteActionToolbar');
       var menu = document.getElementById('noteActionMenu');
-      var created, option, inversionRoot, failure, safeguard;
+      var created, root, triage, state, optionA, optionB, inversionRoot, failure, safeguard;
+      var createdRootOnly = false;
+      var noOptionBeforeTriageConfirmation = false;
+      var noAnalysisBeforeTriageConfirmation = false;
+      var noAnalysisAfterAnswers = false;
+      var noAnalysisBeforeModuleActions = false;
+      var noOptionBeforeState = false;
+      var oneStateBeforeOptions = false;
+      var inspectorStayedCollapsed = true;
+      var acceptedModules = [];
+      var recommendedModules = [];
+      var primaryLabels = [];
+      var menuActions = [];
       var orders = [];
       var flippedAbove = false;
       var leftClamped = false;
       var rightClamped = false;
+      var zoomValue = '';
+      var zoomLabel = '';
+      var commitProfileBeforeMutation = null;
+      var historyProfileAfterLiveMutation = null;
+      var liveProfileAfterMutation = null;
+      var commitProfileImmutable = false;
 
       function primary(){ return toolbar && toolbar.querySelector('.noteActionPrimary'); }
       function primaryLabel(){ return primary() && primary().textContent.trim(); }
       function expectLabel(label){
         if (primaryLabel() !== label) throw new Error('Expected primary "' + label + '", got "' + primaryLabel() + '"');
       }
-      function clickPrimary(label){ expectLabel(label); primary().click(); }
+      function clickPrimary(label){
+        expectLabel(label);
+        primaryLabels.push(label);
+        primary().click();
+      }
       function clickMenu(actionId){
         var overflow = toolbar.querySelector('.noteActionOverflow');
         overflow.click();
         var item = menu.querySelector('[data-action-id="' + actionId + '"]');
         if (!item) throw new Error('Menu action missing: ' + actionId);
+        menuActions.push(actionId);
         item.click();
       }
       function editSelected(text){
@@ -1561,6 +2602,14 @@ window.addEventListener('load', function(){
         var id = api.primaryNote();
         return api.notes().filter(function(note){ return note.id === id; })[0];
       }
+      function notesOfKind(kind){
+        return api.notes().filter(function(note){ return note.kind === kind; });
+      }
+      function chooseTriage(dimension, value){
+        var button = document.querySelector('[data-triage-dimension="' + dimension + '"][data-triage-value="' + value + '"]');
+        if (!button) throw new Error('Triage control missing: ' + dimension + '=' + value);
+        button.click();
+      }
       function fail(error){
         if (document.getElementById('e2e-out')) return;
         var pre = document.createElement('pre');
@@ -1571,20 +2620,88 @@ window.addEventListener('load', function(){
       var steps = [
         function(){
           if (!api || !ui || !toolbar || !menu) throw new Error('Guided decision UI missing');
-          document.body.classList.add('inspector-collapsed');
+          var collapse = document.getElementById('hideInspector');
+          if (!collapse) throw new Error('Collapse inspector control missing');
+          collapse.click();
           created = api.createDecisionMap(180, 300, 'Decisions');
-          option = created.options[0];
-          editSelected('Decision: Choose a planning workflow\\nTarget outcome: Make decisions with less friction\\nSuccess means: Used consistently for one week\\nDecision needed by: Friday\\nReassess by: Next Friday');
+          root = created.root;
+          createdRootOnly = api.notes().length === 1 && api.notes()[0].id === root.id && api.links().length === 0;
+          editSelected('Problem / decision: Choose a planning workflow\\nDesired outcome: Make decisions with less friction\\nSuccess means: Used consistently for one week\\nDecision needed by: Friday\\nReassess by: Next Friday');
+        },
+        function(){ clickPrimary('Assess decision rigor'); },
+        function(){
+          triage = selectedNote();
+          if (!triage || !triage.analysis || triage.analysis.tool !== 'triage') throw new Error('Triage note was not selected');
+          noOptionBeforeTriageConfirmation = notesOfKind('option').length === 0;
+          noAnalysisBeforeTriageConfirmation = !api.notes().some(function(note){
+            return note.analysis && (note.analysis.tool === 'consequences' || note.analysis.tool === 'inversion');
+          });
+          chooseTriage('magnitude', 'high');
+          chooseTriage('reversibility', 'hard');
+          chooseTriage('uncertainty', 'medium');
+          chooseTriage('emotionalPressure', 'low');
+          chooseTriage('duration', 'short');
+          noAnalysisAfterAnswers = !api.notes().some(function(note){
+            return note.analysis && (note.analysis.tool === 'consequences' || note.analysis.tool === 'inversion');
+          });
+        },
+        function(){
+          var card = document.querySelector('.tcNoteNode[data-note-id="' + triage.id + '"]');
+          var checkboxes = Array.prototype.slice.call(card.querySelectorAll('.decisionTriageModule input[type="checkbox"]'));
+          if (checkboxes.length !== 2 || !checkboxes.every(function(input){ return input.checked; })) throw new Error('Both recommended modules were not accepted');
+          var confirm = card.querySelector('.decisionTriageConfirm');
+          if (!confirm || confirm.disabled) throw new Error('Triage profile could not be confirmed');
+          confirm.click();
+        },
+        function(){
+          var process = api.decisionProcess(root.id);
+          acceptedModules = process.triageProfile && process.triageProfile.acceptedModuleIds || [];
+          recommendedModules = process.triageProfile && process.triageProfile.recommendedModuleIds || [];
+          noAnalysisBeforeModuleActions = !api.notes().some(function(note){
+            return note.analysis && (note.analysis.tool === 'consequences' || note.analysis.tool === 'inversion');
+          });
+          noOptionBeforeState = notesOfKind('option').length === 0;
+          clickPrimary('Add state');
+        },
+        function(){
+          state = selectedNote();
+          editSelected('State: Available time and attention\\nWhy can it affect the outcome? It limits how much process can be sustained.\\nCan I directly choose it? No\\nWhat would indicate that it is changing? Two skipped weekly reviews');
+          var rootContext = api.decisionActionContext(root.id);
+          oneStateBeforeOptions = rootContext.stateCount === 1 && rootContext.optionCount === 0;
+          clickMenu('go-decision');
+        },
+        function(){ clickPrimary('Add option'); },
+        function(){
+          optionA = selectedNote();
+          editSelected('Option: Use contextual guidance\\nWhy it may work: It keeps the next normative step visible without opening the inspector.');
+          clickMenu('go-decision');
+        },
+        function(){ clickPrimary('Add option'); },
+        function(){
+          optionB = selectedNote();
+          editSelected('Option: Keep a lightweight manual checklist\\nWhy it may work: It has almost no setup cost and remains familiar.');
+          clickMenu('go-decision');
         },
         function(){ clickPrimary('Explore next option'); },
         function(){
-          if (api.primaryNote() !== option.id) throw new Error('Guidance did not select the first option');
-          editSelected('Option: Use contextual guidance');
+          if (api.primaryNote() !== optionA.id) throw new Error('Guidance did not select the first option');
+          clickPrimary('Explore consequences');
         },
-        function(){ clickPrimary('Explore consequences'); },
-        function(){ orders.push(selectedNote().analysis && selectedNote().analysis.order); clickPrimary('Add 2nd-order consequence'); },
-        function(){ orders.push(selectedNote().analysis && selectedNote().analysis.order); clickPrimary('Add 3rd-order consequence'); },
-        function(){ orders.push(selectedNote().analysis && selectedNote().analysis.order); clickMenu('go-owner-option'); },
+        function(){
+          orders.push(selectedNote().analysis && selectedNote().analysis.order);
+          editSelected('1st-order consequence: The next useful step stays visible\\nTime horizon: Immediate\\nLikelihood: 80%\\nPayoff / cost: Less decision friction\\nValue affected: Focus');
+          clickPrimary('Add 2nd-order consequence');
+        },
+        function(){
+          orders.push(selectedNote().analysis && selectedNote().analysis.order);
+          editSelected('2nd-order consequence: Weekly use becomes more consistent\\nWhat follows from the prior consequence? Less friction increases follow-through\\nTime horizon: One month\\nLikelihood: 65%\\nPayoff / cost: Better decisions for modest effort\\nValue affected: Consistency');
+          clickPrimary('Add 3rd-order consequence');
+        },
+        function(){
+          orders.push(selectedNote().analysis && selectedNote().analysis.order);
+          editSelected('3rd-order consequence: The workflow becomes a durable habit\\nWhat follows from the prior consequence? Consistent use reinforces the practice\\nTime horizon: One quarter\\nLikelihood: 50%\\nPayoff / cost: Durable clarity with maintenance cost\\nValue affected: Reliability');
+          clickMenu('go-owner-option');
+        },
         function(){ clickPrimary('Run inversion'); },
         function(){
           inversionRoot = selectedNote();
@@ -1604,10 +2721,22 @@ window.addEventListener('load', function(){
           editSelected('Prevent: Keep only the guided next action\\nDetect early: Review skipped uses weekly\\nRespond if it happens: Remove the unused control');
         },
         function(){ expectLabel('Add failure mode'); clickMenu('go-owner-option'); },
-        function(){ clickPrimary('Review this option'); },
+        function(){
+          expectLabel('Review this option');
+          clickMenu('go-decision');
+        },
+        function(){ clickPrimary('Explore next option'); },
+        function(){
+          if (api.primaryNote() !== optionB.id) throw new Error('Guidance did not select the second option');
+          expectLabel('Explore consequences');
+          clickMenu('review-option');
+        },
         function(){
           var backdrop = document.getElementById('decisionReviewBackdrop');
           if (!backdrop || backdrop.hidden) throw new Error('Review dialog did not open');
+          var chooseFirst = document.querySelector('input[name="decisionReviewOption"][value="' + optionA.id + '"]');
+          if (!chooseFirst) throw new Error('First option was not available for commitment');
+          chooseFirst.click();
           var rationale = document.getElementById('decisionReviewRationale');
           rationale.value = 'Best fit for the current constraints';
           rationale.dispatchEvent(new Event('input', {bubbles:true}));
@@ -1615,19 +2744,36 @@ window.addEventListener('load', function(){
         },
         function(){
           var confirmation = document.getElementById('decisionReviewConfirmCommit');
-          if (!confirmation) throw new Error('Named soft-gate confirmation missing');
+          if (!confirmation || confirmation.textContent.trim() !== 'Commit with unresolved checks') throw new Error('Named soft-gate confirmation missing');
           confirmation.click();
+        },
+        function(){
+          var historyBeforeMutation = api.decisionHistory(root.id);
+          var snapshotRootBeforeMutation = historyBeforeMutation.commits[0] && historyBeforeMutation.commits[0].notes.filter(function(note){ return note.id === root.id; })[0];
+          commitProfileBeforeMutation = snapshotRootBeforeMutation && snapshotRootBeforeMutation.decisionProcess && snapshotRootBeforeMutation.decisionProcess.triageProfile;
+          api.setDecisionTriageAnswer(triage.id, 'magnitude', 'low');
+          api.setDecisionTriageModules(triage.id, []);
+          api.confirmDecisionTriage(triage.id);
+          liveProfileAfterMutation = api.decisionProcess(root.id).triageProfile;
+          var historyAfterMutation = api.decisionHistory(root.id);
+          var snapshotRootAfterMutation = historyAfterMutation.commits[0] && historyAfterMutation.commits[0].notes.filter(function(note){ return note.id === root.id; })[0];
+          historyProfileAfterLiveMutation = snapshotRootAfterMutation && snapshotRootAfterMutation.decisionProcess && snapshotRootAfterMutation.decisionProcess.triageProfile;
+          commitProfileImmutable = JSON.stringify(commitProfileBeforeMutation) === JSON.stringify(historyProfileAfterLiveMutation);
+          api.selectNote(optionA.id);
         },
         function(){
           var zoom = document.getElementById('zoom');
           zoom.value = '175';
           zoom.dispatchEvent(new Event('input', {bubbles:true}));
-          var card = document.querySelector('.tcNoteNode[data-note-id="' + option.id + '"]');
+          zoomValue = String(zoom.value);
+          zoomLabel = (document.getElementById('zoomPct') || {}).textContent || '';
+          zoomLabel = zoomLabel.trim();
+          var card = document.querySelector('.tcNoteNode[data-note-id="' + optionA.id + '"]');
           card.getBoundingClientRect = function(){ return {left:-48, right:172, top:window.innerHeight - 72, bottom:window.innerHeight - 2, width:220, height:70}; };
           ui.refresh();
         },
         function(){
-          var card = document.querySelector('.tcNoteNode[data-note-id="' + option.id + '"]');
+          var card = document.querySelector('.tcNoteNode[data-note-id="' + optionA.id + '"]');
           flippedAbove = parseFloat(toolbar.style.top) + toolbar.offsetHeight <= card.getBoundingClientRect().top;
           leftClamped = parseFloat(toolbar.style.left) >= 8;
           card.getBoundingClientRect = function(){ return {left:window.innerWidth - 120, right:window.innerWidth + 100, top:180, bottom:250, width:220, height:70}; };
@@ -1635,23 +2781,61 @@ window.addEventListener('load', function(){
         },
         function(){
           rightClamped = parseFloat(toolbar.style.left) + toolbar.offsetWidth <= window.innerWidth - 8;
-          var history = api.decisionHistory(created.root.id);
+          var history = api.decisionHistory(root.id);
           var currentNotes = api.notes();
+          var commitNotes = history.commits[0] && history.commits[0].notes || [];
+          var liveState = currentNotes.filter(function(note){ return note.id === state.id; })[0];
+          var liveOptions = [optionA, optionB].map(function(option){
+            return currentNotes.filter(function(note){ return note.id === option.id; })[0];
+          });
+          var snapshotState = commitNotes.filter(function(note){ return note.id === state.id; })[0];
+          var snapshotOptions = [optionA, optionB].map(function(option){
+            return commitNotes.filter(function(note){ return note.id === option.id; })[0];
+          });
+          var triageNotes = currentNotes.filter(function(note){ return note.analysis && note.analysis.tool === 'triage' && note.analysis.role === 'assessment'; });
+          var consequenceNotes = currentNotes.filter(function(note){ return note.analysis && note.analysis.tool === 'consequences' && note.analysis.ownerId === optionA.id; });
+          var inversionNotes = currentNotes.filter(function(note){ return note.analysis && note.analysis.tool === 'inversion' && note.analysis.ownerId === optionA.id; });
           var out = {
+            createdRootOnly:createdRootOnly,
+            noOptionBeforeTriageConfirmation:noOptionBeforeTriageConfirmation,
+            noAnalysisBeforeTriageConfirmation:noAnalysisBeforeTriageConfirmation,
+            noAnalysisAfterAnswers:noAnalysisAfterAnswers,
+            noAnalysisBeforeModuleActions:noAnalysisBeforeModuleActions,
+            noOptionBeforeState:noOptionBeforeState,
+            oneStateBeforeOptions:oneStateBeforeOptions,
             inspectorCollapsed:document.body.classList.contains('inspector-collapsed'),
-            optionCount:created.options.filter(function(option){
-              return currentNotes.some(function(note){ return note.id === option.id && note.kind === 'option'; });
-            }).length,
-            factorRetained:currentNotes.some(function(note){ return note.id === created.factor.id && note.kind === 'factor'; }),
+            inspectorStayedCollapsed:inspectorStayedCollapsed,
+            optionCount:[optionA, optionB].filter(function(item){ return currentNotes.some(function(note){ return note.id === item.id && note.kind === 'option'; }); }).length,
+            stateRetained:currentNotes.some(function(note){ return note.id === state.id && note.kind === 'factor'; }),
+            triageCount:triageNotes.length,
+            acceptedModules:acceptedModules,
+            recommendedModules:recommendedModules,
+            consequenceActivated:consequenceNotes.length > 0,
+            inversionActivated:inversionNotes.length > 0,
+            primaryLabels:primaryLabels,
+            menuActions:menuActions,
             consequenceOrders:orders,
             inversionRole:inversionRoot && inversionRoot.analysis && inversionRoot.analysis.role,
             failureKind:failure && failure.kind,
             safeguardKind:safeguard && safeguard.kind,
             commitCount:history.commits.length,
+            chosenOptionId:history.chosenOptionId,
+            optionAId:optionA.id,
             commitRationale:history.commits[0] && history.commits[0].rationale,
-            unresolvedCount:history.commits[0] && history.commits[0].unresolvedChecks && history.commits[0].unresolvedChecks.length,
+            unresolvedChecks:history.commits[0] && history.commits[0].unresolvedChecks,
+            unresolvedCheckIds:(history.commits[0] && history.commits[0].unresolvedChecks || []).map(function(check){ return check.id; }),
+            liveStateContent:liveState && liveState.content,
+            liveOptionContents:liveOptions.map(function(note){ return note && note.content; }),
+            snapshotStateContent:snapshotState && snapshotState.content,
+            snapshotOptionContents:snapshotOptions.map(function(note){ return note && note.content; }),
+            commitProfile:commitProfileBeforeMutation,
+            historyProfileAfterLiveMutation:historyProfileAfterLiveMutation,
+            liveProfileAfterMutation:liveProfileAfterMutation,
+            commitProfileImmutable:commitProfileImmutable,
             stagedCommands:(window.STAGED_CMDS || []).length,
             browserErrors:browserErrors,
+            zoomValue:zoomValue,
+            zoomLabel:zoomLabel,
             flippedAbove:flippedAbove,
             leftClamped:leftClamped,
             rightClamped:rightClamped
@@ -1667,6 +2851,7 @@ window.addEventListener('load', function(){
         if (index >= steps.length) return;
         try{ steps[index++](); }
         catch(error){ fail(error); return; }
+        inspectorStayedCollapsed = inspectorStayedCollapsed && document.body.classList.contains('inspector-collapsed');
         setTimeout(advance, 70);
       }
       advance();
@@ -1679,18 +2864,76 @@ window.addEventListener('load', function(){
         raw = self._run_html_harness(html)
         self.assertNotIn("ERR:", raw)
         result = json.loads(raw)
+        self.assertTrue(result["createdRootOnly"], msg=json.dumps(result))
+        self.assertTrue(result["noOptionBeforeTriageConfirmation"], msg=json.dumps(result))
+        self.assertTrue(result["noAnalysisBeforeTriageConfirmation"], msg=json.dumps(result))
+        self.assertTrue(result["noOptionBeforeState"], msg=json.dumps(result))
+        self.assertTrue(result["oneStateBeforeOptions"], msg=json.dumps(result))
         self.assertTrue(result["inspectorCollapsed"], msg=json.dumps(result))
+        self.assertTrue(result["inspectorStayedCollapsed"], msg=json.dumps(result))
         self.assertEqual(result["optionCount"], 2, msg=json.dumps(result))
-        self.assertTrue(result["factorRetained"], msg=json.dumps(result))
+        self.assertTrue(result["stateRetained"], msg=json.dumps(result))
+        self.assertEqual(result["triageCount"], 1, msg=json.dumps(result))
+        self.assertEqual(result["recommendedModules"], ["consequences", "inversion"], msg=json.dumps(result))
+        self.assertEqual(result["acceptedModules"], ["consequences", "inversion"], msg=json.dumps(result))
+        self.assertTrue(result.get("noAnalysisAfterAnswers", False), msg=json.dumps(result))
+        self.assertTrue(result["noAnalysisBeforeModuleActions"], msg=json.dumps(result))
+        self.assertTrue(result["consequenceActivated"], msg=json.dumps(result))
+        self.assertTrue(result["inversionActivated"], msg=json.dumps(result))
+        self.assertEqual(
+            result["primaryLabels"],
+            [
+                "Assess decision rigor",
+                "Add state",
+                "Add option",
+                "Add option",
+                "Explore next option",
+                "Explore consequences",
+                "Add 2nd-order consequence",
+                "Add 3rd-order consequence",
+                "Run inversion",
+                "Continue inversion",
+                "Add safeguard",
+                "Explore next option",
+            ],
+            msg=json.dumps(result),
+        )
+        self.assertEqual(result["menuActions"], ["go-decision", "go-decision", "go-decision", "go-owner-option", "go-owner-option", "go-decision", "review-option"], msg=json.dumps(result))
         self.assertEqual(result["consequenceOrders"], [1, 2, 3], msg=json.dumps(result))
         self.assertEqual(result["inversionRole"], "root", msg=json.dumps(result))
         self.assertEqual(result["failureKind"], "factor", msg=json.dumps(result))
         self.assertEqual(result["safeguardKind"], "action", msg=json.dumps(result))
         self.assertEqual(result["commitCount"], 1, msg=json.dumps(result))
+        self.assertEqual(result["chosenOptionId"], result["optionAId"], msg=json.dumps(result))
         self.assertEqual(result["commitRationale"], "Best fit for the current constraints", msg=json.dumps(result))
-        self.assertGreater(result["unresolvedCount"], 0, msg=json.dumps(result))
+        self.assertEqual(result["unresolvedCheckIds"], ["outcomes"], msg=json.dumps(result))
+        self.assertEqual(
+            result["liveStateContent"],
+            "State: Available time and attention\nWhy can it affect the outcome? It limits how much process can be sustained.\nCan I directly choose it? No\nWhat would indicate that it is changing? Two skipped weekly reviews",
+            msg=json.dumps(result),
+        )
+        self.assertEqual(
+            result["liveOptionContents"],
+            [
+                "Option: Use contextual guidance\nWhy it may work: It keeps the next normative step visible without opening the inspector.",
+                "Option: Keep a lightweight manual checklist\nWhy it may work: It has almost no setup cost and remains familiar.",
+            ],
+            msg=json.dumps(result),
+        )
+        self.assertEqual(result["snapshotStateContent"], result["liveStateContent"], msg=json.dumps(result))
+        self.assertEqual(result["snapshotOptionContents"], result["liveOptionContents"], msg=json.dumps(result))
+        self.assertEqual(result["commitProfile"]["answers"], {"magnitude":"high", "reversibility":"hard", "uncertainty":"medium", "emotionalPressure":"low", "duration":"short"}, msg=json.dumps(result))
+        self.assertEqual(result["commitProfile"]["recommendedModuleIds"], ["consequences", "inversion"], msg=json.dumps(result))
+        self.assertEqual(result["commitProfile"]["acceptedModuleIds"], ["consequences", "inversion"], msg=json.dumps(result))
+        self.assertEqual(result["liveProfileAfterMutation"]["answers"]["magnitude"], "low", msg=json.dumps(result))
+        self.assertEqual(result["liveProfileAfterMutation"]["acceptedModuleIds"], [], msg=json.dumps(result))
+        self.assertNotEqual(result["liveProfileAfterMutation"], result["commitProfile"], msg=json.dumps(result))
+        self.assertTrue(result["commitProfileImmutable"], msg=json.dumps(result))
+        self.assertEqual(result["historyProfileAfterLiveMutation"], result["commitProfile"], msg=json.dumps(result))
         self.assertEqual(result["stagedCommands"], 0, msg=json.dumps(result))
         self.assertEqual(result["browserErrors"], [], msg=json.dumps(result))
+        self.assertEqual(result["zoomValue"], "175", msg=json.dumps(result))
+        self.assertEqual(result["zoomLabel"], "175%", msg=json.dumps(result))
         self.assertTrue(result["flippedAbove"], msg=json.dumps(result))
         self.assertTrue(result["leftClamped"], msg=json.dumps(result))
         self.assertTrue(result["rightClamped"], msg=json.dumps(result))
@@ -1708,16 +2951,22 @@ window.addEventListener('load', function(){
       var api = window.KyanbasuNotes;
       var created = api.createDecisionMap(180, 300, 'Decisions');
       var root = created.root;
-      var optionA = created.options[0];
-      var optionB = created.options[1];
+      var factor = api.createDecisionChild(root.id, 'factor');
+      var optionA = api.createDecisionChild(root.id, 'option');
+      var optionB = api.createDecisionChild(root.id, 'option');
       api.setContent(root.id, 'Decision: Choose a focus\\nTarget outcome: Ship a useful result\\nSuccess means: Used for one week\\nDecision needed by: Friday\\nReassess by: Next Friday');
+      var triage = api.createDecisionTriage(root.id);
+      ['magnitude','reversibility','uncertainty','emotionalPressure','duration'].forEach(function(id, index){
+        api.setDecisionTriageAnswer(triage.id, id, ['low','easy','low','low','short'][index]);
+      });
+      api.confirmDecisionTriage(triage.id);
       api.setContent(optionA.id, 'Option: Build the smaller workflow');
       api.setContent(optionB.id, 'Option: Keep the current process');
       var outcomeA = api.createChildNote(optionA.id);
       var outcomeB = api.createChildNote(optionB.id);
       api.setContent(outcomeA.id, 'Possible outcome: Faster planning\\nBest estimate: 60%\\nReasonable range: 40-75%\\nPayoff / cost: Less friction');
       api.setContent(outcomeB.id, 'Possible outcome: No migration cost\\nBest estimate: 80%\\nReasonable range: 65-90%\\nPayoff / cost: No improvement');
-      var evidence = api.createChildNote(created.factor.id, 'Outside view: similar small workflows were adopted', '');
+      var evidence = api.createChildNote(factor.id, 'Outside view: similar small workflows were adopted', '');
       api.setNoteKind(evidence.id, 'evidence');
       api.selectNote(optionA.id);
       setTimeout(function(){
@@ -1750,7 +2999,7 @@ window.addEventListener('load', function(){
               decisionButton:!!document.getElementById('noteDecisionBtn'),
               mapKinds:api.notes().map(function(note){ return note.kind; }),
               semanticKinds:[kinds.indexOf('factor') >= 0, kinds.indexOf('option') >= 0, kinds.indexOf('outcome') >= 0],
-              optionCount:created.options.length,
+              optionCount:[optionA, optionB].length,
               outcomeKinds:[outcomeA.kind, outcomeB.kind],
               reviewComplete:checklist.filter(function(item){ return item.complete; }).length,
               reviewTotal:checklist.length,
@@ -1798,7 +3047,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["optionCount"], 2, msg=json.dumps(result))
         self.assertEqual(result["outcomeKinds"], ["outcome", "outcome"], msg=json.dumps(result))
         self.assertEqual(result["reviewComplete"], result["reviewTotal"], msg=json.dumps(result))
-        self.assertEqual(result["reviewTotal"], 7, msg=json.dumps(result))
+        self.assertEqual(result["reviewTotal"], 8, msg=json.dumps(result))
         self.assertTrue(result["inspectorChecklist"], msg=json.dumps(result))
         self.assertEqual(result["firstCommitCount"], 1, msg=json.dumps(result))
         self.assertEqual(result["commitCount"], 2, msg=json.dumps(result))
@@ -1810,7 +3059,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["alternativeStatuses"], ["open", "open"], msg=json.dumps(result))
         self.assertEqual(result["chosenBadge"], "Chosen", msg=json.dumps(result))
         self.assertTrue(result["chosenClass"], msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 8, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
         self.assertEqual(result["exportedCommits"], 2, msg=json.dumps(result))
         self.assertEqual(result["workbenchCommits"], 2, msg=json.dumps(result))
         self.assertEqual(result["importedCommits"], 2, msg=json.dumps(result))
@@ -1829,7 +3078,7 @@ window.addEventListener('load', function(){
       var api = window.KyanbasuNotes;
       var created = api.createDecisionMap(180, 300, 'Decisions');
       var root = created.root;
-      var option = created.options[0];
+      var option = api.createDecisionChild(root.id, 'option');
       api.setContent(root.id, 'Decision: Choose a delivery approach\\nTarget outcome: Deliver a useful release\\nSuccess means: Used for one week\\nDecision needed by: Friday\\nReassess by: Next Friday');
       api.setContent(option.id, 'Option: Ship the smallest coherent workflow');
       api.selectNote(option.id);
@@ -1949,7 +3198,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["duplicateExisting"], msg=json.dumps(result))
         self.assertEqual(result["inversionRootCount"], 1, msg=json.dumps(result))
         self.assertEqual(result["snapshotAnalysis"]["tool"], "inversion", msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 8, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
         self.assertEqual(result["exportedAnalysis"]["tool"], "inversion", msg=json.dumps(result))
         self.assertEqual(result["workbenchAnalysis"]["tool"], "inversion", msg=json.dumps(result))
         self.assertEqual(result["importedAnalysis"]["tool"], "inversion", msg=json.dumps(result))
@@ -1978,7 +3227,7 @@ window.addEventListener('load', function(){
       var api = window.KyanbasuNotes;
       var created = api.createDecisionMap(180, 300, 'Decisions');
       var root = created.root;
-      var option = created.options[0];
+      var option = api.createDecisionChild(root.id, 'option');
       api.setContent(option.id, 'Option: Launch a small weekly planning practice');
       api.selectNote(option.id);
       setTimeout(function(){
@@ -2072,7 +3321,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["duplicateExisting"], msg=json.dumps(result))
         self.assertEqual(result["countAfterDuplicate"], 6, msg=json.dumps(result))
         self.assertEqual(result["snapshotAnalysis"]["order"], 3, msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 8, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
         self.assertEqual(result["exportedAnalysis"]["order"], 2, msg=json.dumps(result))
         self.assertEqual(result["workbenchAnalysis"]["order"], 3, msg=json.dumps(result))
         self.assertEqual(result["importedAnalysis"]["order"], 1, msg=json.dumps(result))
@@ -2378,7 +3627,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["pathTitle"], "Challenges")
         self.assertEqual(result["animationName"], "none")
         self.assertEqual(result["toolbarType"], "Challenges")
-        self.assertEqual(result["exportedVersion"], 8)
+        self.assertEqual(result["exportedVersion"], 9)
         self.assertEqual(result["exportedType"], "challenges")
         self.assertEqual(result["relationLabel"], "Challenges")
         self.assertEqual(result["inverseLabel"], "Challenged by")
@@ -2511,7 +3760,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["initial"]["icon"], "?", msg=json.dumps(result))
         self.assertIn("evidence current", result["initial"]["label"], msg=json.dumps(result))
         self.assertEqual(result["selectedKind"], "link", msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 8, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
         self.assertEqual(result["exportedAnnotation"], {"kind": "condition", "text": "Only if validation passes"}, msg=json.dumps(result))
         self.assertEqual(result["importedKind"], "condition", msg=json.dumps(result))
         self.assertIn("validation passes", result["importedLabel"], msg=json.dumps(result))
@@ -2994,7 +4243,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["resultNotes"], 2)
         self.assertEqual(result["resultLinks"], 1)
         self.assertEqual(result["exportedKind"], "kyanbasu.notes")
-        self.assertEqual(result["exportedVersion"], 8)
+        self.assertEqual(result["exportedVersion"], 9)
         self.assertEqual(result["exportedNotes"], 2)
         self.assertEqual(result["exportedLinks"], 1)
         self.assertEqual(result["firstContent"], "Imported root\nLegacy body")
@@ -6586,7 +7835,7 @@ window.addEventListener('load', function(){
         self.assertGreater(result["marked"]["reviewedAt"], 0, msg=json.dumps(result))
         self.assertEqual(result["marked"]["updatedAt"], result["beforeUpdated"], msg=json.dumps(result))
         self.assertNotIn("never-recent", result["neverAfterMark"], msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 8, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
         self.assertEqual(result["exportedMarked"]["reviewedAt"], result["marked"]["reviewedAt"], msg=json.dumps(result))
         self.assertIn("never-reviewed", result["lensIds"], msg=json.dumps(result))
         self.assertIn("stale-open", result["lensIds"], msg=json.dumps(result))
