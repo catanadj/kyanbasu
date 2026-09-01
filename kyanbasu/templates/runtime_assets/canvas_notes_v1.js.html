@@ -799,8 +799,11 @@
     if (!proposed && record.chosenOptionId) proposed = noteById(record.chosenOptionId);
     if (!proposed || options.indexOf(proposed) < 0) proposed = options[0];
     var triage = triageNoteFor(root.id);
+    var outcomeTarget = options.filter(function(option){
+      return !childLinksFrom(option.id).some(function(link){ var note = noteById(link.to); return note && noteKind(note) === 'outcome'; });
+    })[0] || proposed;
     var checks = decisionChecklist(root).map(function(check){
-      var targetId = check.id === 'outcomes' ? proposed.id : (check.id === 'triage' && triage ? triage.id : root.id);
+      var targetId = check.id === 'outcomes' ? outcomeTarget.id : (check.id === 'triage' && triage ? triage.id : root.id);
       return {id:check.id, label:check.label, complete:!!check.complete, targetId:targetId};
     });
     var consequence = consequenceContextFor(proposed.id);

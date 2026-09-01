@@ -2219,6 +2219,7 @@ window.addEventListener('load', function(){
       var out = {
         rootId:root.id,
         triageId:triage.id,
+        alternativeId:alternative.id,
         profile:profile,
         reviewIds:reviewIds,
         reviewTargets:reviewTargets,
@@ -2253,6 +2254,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["reviewTargets"]["triage"], result["triageId"], msg=json.dumps(result))
         self.assertEqual(result["reviewTargets"]["states"], result["rootId"], msg=json.dumps(result))
         self.assertEqual(result["reviewTargets"]["options"], result["rootId"], msg=json.dumps(result))
+        self.assertEqual(result["reviewTargets"]["outcomes"], result["alternativeId"], msg=json.dumps(result))
         self.assertEqual(result["rationale"], "The small practice fits the available time", msg=json.dumps(result))
         self.assertEqual([item["id"] for item in result["unresolved"]], ["outcomes"], msg=json.dumps(result))
         profile = result["snapshotProfile"]
