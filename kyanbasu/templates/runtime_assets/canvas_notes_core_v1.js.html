@@ -244,7 +244,7 @@
     var analysis = normalizeAnalysis(note.analysis);
     if (analysis) row.analysis = analysis;
     var decisionProcess = normalizeDecisionProcess(note.decisionProcess);
-    if (decisionProcess) row.decisionProcess = decisionProcess;
+    if (decisionProcess) row.decisionProcess = JSON.parse(JSON.stringify(decisionProcess));
     return row;
   }
 

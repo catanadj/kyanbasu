@@ -399,8 +399,8 @@
     var inBranch = Object.create(null);
     ids.forEach(function(id){ inBranch[id] = true; });
     var options = decisionOptions(root.id);
-    var factors = ids.map(noteById).filter(function(note){ return note && noteKind(note) === 'factor'; });
-    var evidence = ids.map(noteById).filter(function(note){ return note && noteKind(note) === 'evidence'; });
+    var states = childLinksFrom(root.id).map(function(link){ return noteById(link.to); }).filter(function(note){ return note && noteKind(note) === 'factor'; });
+    var process = NoteCore.normalizeDecisionProcess(root.decisionProcess);
     var outcomesComplete = !!options.length && options.every(function(option){
       return childLinksFrom(option.id).some(function(link){ var note = noteById(link.to); return note && noteKind(note) === 'outcome'; });
     });
@@ -409,12 +409,13 @@
       return link && inBranch[link.from] && inBranch[link.to] && annotation && annotation.kind === 'condition';
     });
     return [
+      {id:'problem', label:'Problem / decision recorded', complete:!!decisionProblem(root)},
       {id:'target', label:'Desired outcome recorded', complete:!!decisionOutcome(root)},
       {id:'success', label:'Success criteria recorded', complete:!!templateValue(root.content, 'Success means')},
+      {id:'triage', label:'Decision rigor assessed and confirmed', complete:!!(process && process.triageProfile)},
+      {id:'states', label:'At least one important state or personal constraint considered', complete:states.length > 0},
       {id:'options', label:'At least two genuine options', complete:options.length >= 2},
-      {id:'factors', label:'Important factors and personal constraints considered', complete:factors.length > 0},
       {id:'outcomes', label:'Every option has a possible outcome', complete:outcomesComplete},
-      {id:'outside', label:'Outside-view evidence recorded', complete:evidence.length > 0},
       {id:'trigger', label:'Reassessment date or conditional trigger recorded', complete:!!templateValue(root.content, 'Reassess by') || hasCondition}
     ];
   }
@@ -797,8 +798,9 @@
     var proposed = noteKind(selected) === 'option' ? selected : null;
     if (!proposed && record.chosenOptionId) proposed = noteById(record.chosenOptionId);
     if (!proposed || options.indexOf(proposed) < 0) proposed = options[0];
+    var triage = triageNoteFor(root.id);
     var checks = decisionChecklist(root).map(function(check){
-      var targetId = check.id === 'outcomes' ? proposed.id : root.id;
+      var targetId = check.id === 'outcomes' ? proposed.id : (check.id === 'triage' && triage ? triage.id : root.id);
       return {id:check.id, label:check.label, complete:!!check.complete, targetId:targetId};
     });
     var consequence = consequenceContextFor(proposed.id);

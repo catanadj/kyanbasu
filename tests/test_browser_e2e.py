@@ -2162,6 +2162,112 @@ window.addEventListener('load', function(){
         self.assertTrue(result["earliestStillRecommended"], msg=json.dumps(result))
         self.assertTrue(result["laterMentionsTriageOnly"], msg=json.dumps(result))
 
+    def test_canvas_normative_commit_preserves_triage_profile_and_unresolved_steps(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_NORMATIVE_COMMIT_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var api = window.KyanbasuNotes;
+      var created = api.createDecisionMap(180, 300, 'Decisions');
+      var root = created.root;
+      api.setContent(root.id, 'Problem / decision: Choose a planning workflow\\nDesired outcome: Make a durable choice\\nSuccess means: Used every week for a month\\nDecision needed by: Friday\\nReassess by: Next Friday');
+      var triage = api.createDecisionTriage(root.id);
+      ['magnitude','reversibility','uncertainty','emotionalPressure','duration'].forEach(function(id, index){
+        api.setDecisionTriageAnswer(triage.id, id, ['high','hard','medium','low','short'][index]);
+      });
+      api.setDecisionTriageModules(triage.id, ['consequences']);
+      var profile = api.confirmDecisionTriage(triage.id);
+      var state = api.createDecisionChild(root.id, 'factor');
+      api.setContent(state.id, 'State: My available time is limited\\nCan I directly choose it? No');
+      var chosen = api.createDecisionChild(root.id, 'option');
+      var alternative = api.createDecisionChild(root.id, 'option');
+      api.setContent(chosen.id, 'Option: Start a small weekly planning practice');
+      api.setContent(alternative.id, 'Option: Keep the current process');
+      var chosenOutcome = api.createChildNote(chosen.id);
+      api.setNoteKind(chosenOutcome.id, 'outcome');
+      api.setContent(chosenOutcome.id, 'Possible outcome: Better follow-through');
+      var first = api.runConsequences(chosen.id).first;
+      var second = api.createNextConsequence(first.id);
+      api.createNextConsequence(second.id);
+      var review = api.reviewContext(chosen.id);
+      var reviewIds = review.checks.map(function(check){ return check.id; });
+      var reviewTargets = review.checks.reduce(function(targets, check){ targets[check.id] = check.targetId; return targets; }, {});
+      var guidance = api.decisionActions(chosen.id);
+      var actionIds = guidance.groups.reduce(function(ids, group){ return ids.concat(group.actions.map(function(action){ return action.id; })); }, []);
+      var unresolved = review.checks.filter(function(check){ return !check.complete; }).map(function(check){ return {id:check.id, label:check.label}; });
+      var committed = api.commitDecision(root.id, chosen.id, 'The small practice fits the available time', unresolved);
+      var history = api.decisionHistory(root.id);
+      var snapshotRoot = history.commits[0].notes.filter(function(note){ return note.id === root.id; })[0];
+      var exported = api.exportData();
+      var liveRoot = exported.notes.filter(function(note){ return note.id === root.id; })[0];
+      liveRoot.decisionProcess.triageProfile.acceptedModuleIds = [];
+      liveRoot.decisionProcess.triageProfile.declinedModuleIds = ['consequences','inversion'];
+      api.importData(exported);
+      var afterLiveEdit = api.decisionHistory(root.id).commits[0];
+      var exportedAfterLiveEdit = api.exportData();
+      window.KyanbasuWorkbenches.capture();
+      var workbenches = window.KyanbasuWorkbenches.exportData();
+      var active = workbenches.workbenches.filter(function(workbench){ return workbench.id === workbenches.activeId; })[0];
+      var workbenchRoot = active.notes.notes.filter(function(note){ return note.id === root.id; })[0];
+      api.importData(exportedAfterLiveEdit);
+      var imported = api.decisionHistory(root.id).commits[0];
+      var out = {
+        rootId:root.id,
+        triageId:triage.id,
+        profile:profile,
+        reviewIds:reviewIds,
+        reviewTargets:reviewTargets,
+        consequenceComplete:review.checks.filter(function(check){ return check.id === 'consequences'; })[0].complete,
+        inversionRecommended:actionIds.indexOf('run-inversion') >= 0,
+        rationale:committed && committed.rationale,
+        unresolved:committed && committed.unresolvedChecks,
+        snapshotProfile:snapshotRoot && snapshotRoot.decisionProcess && snapshotRoot.decisionProcess.triageProfile,
+        historyProfile:afterLiveEdit && afterLiveEdit.notes.filter(function(note){ return note.id === root.id; })[0].decisionProcess.triageProfile,
+        exportedProfile:exportedAfterLiveEdit.notes.filter(function(note){ return note.id === root.id; })[0].decisionRecord.commits[0].notes.filter(function(note){ return note.id === root.id; })[0].decisionProcess.triageProfile,
+        workbenchProfile:workbenchRoot.decisionRecord.commits[0].notes.filter(function(note){ return note.id === root.id; })[0].decisionProcess.triageProfile,
+        importedProfile:imported.notes.filter(function(note){ return note.id === root.id; })[0].decisionProcess.triageProfile
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out'; pre.textContent = JSON.stringify(out); document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out'; pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e)); document.body.appendChild(pre2);
+    }
+  }, 800);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        expected_checks = ["problem", "target", "success", "triage", "states", "options", "outcomes", "trigger", "consequences"]
+        self.assertEqual(result["reviewIds"], expected_checks, msg=json.dumps(result))
+        self.assertTrue(result["consequenceComplete"], msg=json.dumps(result))
+        self.assertFalse(result["inversionRecommended"], msg=json.dumps(result))
+        self.assertEqual(result["reviewTargets"]["triage"], result["triageId"], msg=json.dumps(result))
+        self.assertEqual(result["reviewTargets"]["states"], result["rootId"], msg=json.dumps(result))
+        self.assertEqual(result["reviewTargets"]["options"], result["rootId"], msg=json.dumps(result))
+        self.assertEqual(result["rationale"], "The small practice fits the available time", msg=json.dumps(result))
+        self.assertEqual([item["id"] for item in result["unresolved"]], ["outcomes"], msg=json.dumps(result))
+        profile = result["snapshotProfile"]
+        self.assertEqual(profile["answers"], {"magnitude": "high", "reversibility": "hard", "uncertainty": "medium", "emotionalPressure": "low", "duration": "short"}, msg=json.dumps(result))
+        self.assertEqual(profile["recommendedModuleIds"], ["consequences", "inversion"], msg=json.dumps(result))
+        self.assertEqual(profile["acceptedModuleIds"], ["consequences"], msg=json.dumps(result))
+        self.assertEqual(profile["declinedModuleIds"], ["inversion"], msg=json.dumps(result))
+        self.assertGreater(profile["confirmedAt"], 0, msg=json.dumps(result))
+        self.assertTrue(any(item["moduleId"] == "consequences" for item in profile["recommendationReasons"]), msg=json.dumps(result))
+        self.assertTrue(any(item["moduleId"] == "inversion" for item in profile["recommendationReasons"]), msg=json.dumps(result))
+        self.assertEqual(result["historyProfile"], profile, msg=json.dumps(result))
+        self.assertEqual(result["exportedProfile"], profile, msg=json.dumps(result))
+        self.assertEqual(result["workbenchProfile"], profile, msg=json.dumps(result))
+        self.assertEqual(result["importedProfile"], profile, msg=json.dumps(result))
+
     def test_canvas_decision_review_soft_gate_round_trips_unresolved_checks(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
@@ -2177,6 +2283,8 @@ window.addEventListener('load', function(){
       if (!api || !reviewUi) throw new Error('Decision review UI missing');
       var created = api.createDecisionMap(180, 300, 'Decisions');
       var root = created.root;
+      var state = api.createDecisionChild(root.id, 'factor');
+      api.setContent(state.id, 'State: Available time is limited\\nCan I directly choose it? No');
       var option = api.createDecisionChild(root.id, 'option');
       api.setContent(option.id, 'Option: Choose under current time constraints');
       var directBlankRejected = api.commitDecision(root.id, option.id, '   ') === null;
@@ -2525,6 +2633,11 @@ window.addEventListener('load', function(){
       var optionA = api.createDecisionChild(root.id, 'option');
       var optionB = api.createDecisionChild(root.id, 'option');
       api.setContent(root.id, 'Decision: Choose a focus\\nTarget outcome: Ship a useful result\\nSuccess means: Used for one week\\nDecision needed by: Friday\\nReassess by: Next Friday');
+      var triage = api.createDecisionTriage(root.id);
+      ['magnitude','reversibility','uncertainty','emotionalPressure','duration'].forEach(function(id, index){
+        api.setDecisionTriageAnswer(triage.id, id, ['low','easy','low','low','short'][index]);
+      });
+      api.confirmDecisionTriage(triage.id);
       api.setContent(optionA.id, 'Option: Build the smaller workflow');
       api.setContent(optionB.id, 'Option: Keep the current process');
       var outcomeA = api.createChildNote(optionA.id);
@@ -2612,7 +2725,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["optionCount"], 2, msg=json.dumps(result))
         self.assertEqual(result["outcomeKinds"], ["outcome", "outcome"], msg=json.dumps(result))
         self.assertEqual(result["reviewComplete"], result["reviewTotal"], msg=json.dumps(result))
-        self.assertEqual(result["reviewTotal"], 7, msg=json.dumps(result))
+        self.assertEqual(result["reviewTotal"], 8, msg=json.dumps(result))
         self.assertTrue(result["inspectorChecklist"], msg=json.dumps(result))
         self.assertEqual(result["firstCommitCount"], 1, msg=json.dumps(result))
         self.assertEqual(result["commitCount"], 2, msg=json.dumps(result))
