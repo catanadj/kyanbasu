@@ -2448,10 +2448,12 @@ window.addEventListener('load', function(){
       var ui = window.KyanbasuNoteActions;
       var toolbar = document.getElementById('noteActionToolbar');
       var menu = document.getElementById('noteActionMenu');
-      var created, root, state, optionA, optionB, inversionRoot, failure, safeguard;
+      var created, root, triage, state, optionA, optionB, inversionRoot, failure, safeguard;
       var createdRootOnly = false;
       var noOptionBeforeTriageConfirmation = false;
       var noAnalysisBeforeTriageConfirmation = false;
+      var noAnalysisAfterAnswers = false;
+      var noAnalysisBeforeModuleActions = false;
       var noOptionBeforeState = false;
       var oneStateBeforeOptions = false;
       var inspectorStayedCollapsed = true;
@@ -2463,6 +2465,12 @@ window.addEventListener('load', function(){
       var flippedAbove = false;
       var leftClamped = false;
       var rightClamped = false;
+      var zoomValue = '';
+      var zoomLabel = '';
+      var commitProfileBeforeMutation = null;
+      var historyProfileAfterLiveMutation = null;
+      var liveProfileAfterMutation = null;
+      var commitProfileImmutable = false;
 
       function primary(){ return toolbar && toolbar.querySelector('.noteActionPrimary'); }
       function primaryLabel(){ return primary() && primary().textContent.trim(); }
@@ -2521,7 +2529,7 @@ window.addEventListener('load', function(){
         },
         function(){ clickPrimary('Assess decision rigor'); },
         function(){
-          var triage = selectedNote();
+          triage = selectedNote();
           if (!triage || !triage.analysis || triage.analysis.tool !== 'triage') throw new Error('Triage note was not selected');
           noOptionBeforeTriageConfirmation = notesOfKind('option').length === 0;
           noAnalysisBeforeTriageConfirmation = !api.notes().some(function(note){
@@ -2532,9 +2540,11 @@ window.addEventListener('load', function(){
           chooseTriage('uncertainty', 'medium');
           chooseTriage('emotionalPressure', 'low');
           chooseTriage('duration', 'short');
+          noAnalysisAfterAnswers = !api.notes().some(function(note){
+            return note.analysis && (note.analysis.tool === 'consequences' || note.analysis.tool === 'inversion');
+          });
         },
         function(){
-          var triage = selectedNote();
           var card = document.querySelector('.tcNoteNode[data-note-id="' + triage.id + '"]');
           var checkboxes = Array.prototype.slice.call(card.querySelectorAll('.decisionTriageModule input[type="checkbox"]'));
           if (checkboxes.length !== 2 || !checkboxes.every(function(input){ return input.checked; })) throw new Error('Both recommended modules were not accepted');
@@ -2546,6 +2556,9 @@ window.addEventListener('load', function(){
           var process = api.decisionProcess(root.id);
           acceptedModules = process.triageProfile && process.triageProfile.acceptedModuleIds || [];
           recommendedModules = process.triageProfile && process.triageProfile.recommendedModuleIds || [];
+          noAnalysisBeforeModuleActions = !api.notes().some(function(note){
+            return note.analysis && (note.analysis.tool === 'consequences' || note.analysis.tool === 'inversion');
+          });
           noOptionBeforeState = notesOfKind('option').length === 0;
           clickPrimary('Add state');
         },
@@ -2634,9 +2647,26 @@ window.addEventListener('load', function(){
           confirmation.click();
         },
         function(){
+          var historyBeforeMutation = api.decisionHistory(root.id);
+          var snapshotRootBeforeMutation = historyBeforeMutation.commits[0] && historyBeforeMutation.commits[0].notes.filter(function(note){ return note.id === root.id; })[0];
+          commitProfileBeforeMutation = snapshotRootBeforeMutation && snapshotRootBeforeMutation.decisionProcess && snapshotRootBeforeMutation.decisionProcess.triageProfile;
+          api.setDecisionTriageAnswer(triage.id, 'magnitude', 'low');
+          api.setDecisionTriageModules(triage.id, []);
+          api.confirmDecisionTriage(triage.id);
+          liveProfileAfterMutation = api.decisionProcess(root.id).triageProfile;
+          var historyAfterMutation = api.decisionHistory(root.id);
+          var snapshotRootAfterMutation = historyAfterMutation.commits[0] && historyAfterMutation.commits[0].notes.filter(function(note){ return note.id === root.id; })[0];
+          historyProfileAfterLiveMutation = snapshotRootAfterMutation && snapshotRootAfterMutation.decisionProcess && snapshotRootAfterMutation.decisionProcess.triageProfile;
+          commitProfileImmutable = JSON.stringify(commitProfileBeforeMutation) === JSON.stringify(historyProfileAfterLiveMutation);
+          api.selectNote(optionA.id);
+        },
+        function(){
           var zoom = document.getElementById('zoom');
           zoom.value = '175';
           zoom.dispatchEvent(new Event('input', {bubbles:true}));
+          zoomValue = String(zoom.value);
+          zoomLabel = (document.getElementById('zoomPct') || {}).textContent || '';
+          zoomLabel = zoomLabel.trim();
           var card = document.querySelector('.tcNoteNode[data-note-id="' + optionA.id + '"]');
           card.getBoundingClientRect = function(){ return {left:-48, right:172, top:window.innerHeight - 72, bottom:window.innerHeight - 2, width:220, height:70}; };
           ui.refresh();
@@ -2652,8 +2682,15 @@ window.addEventListener('load', function(){
           rightClamped = parseFloat(toolbar.style.left) + toolbar.offsetWidth <= window.innerWidth - 8;
           var history = api.decisionHistory(root.id);
           var currentNotes = api.notes();
-          var commitRoot = history.commits[0] && history.commits[0].notes.filter(function(note){ return note.id === root.id; })[0];
-          var commitProfile = commitRoot && commitRoot.decisionProcess && commitRoot.decisionProcess.triageProfile;
+          var commitNotes = history.commits[0] && history.commits[0].notes || [];
+          var liveState = currentNotes.filter(function(note){ return note.id === state.id; })[0];
+          var liveOptions = [optionA, optionB].map(function(option){
+            return currentNotes.filter(function(note){ return note.id === option.id; })[0];
+          });
+          var snapshotState = commitNotes.filter(function(note){ return note.id === state.id; })[0];
+          var snapshotOptions = [optionA, optionB].map(function(option){
+            return commitNotes.filter(function(note){ return note.id === option.id; })[0];
+          });
           var triageNotes = currentNotes.filter(function(note){ return note.analysis && note.analysis.tool === 'triage' && note.analysis.role === 'assessment'; });
           var consequenceNotes = currentNotes.filter(function(note){ return note.analysis && note.analysis.tool === 'consequences' && note.analysis.ownerId === optionA.id; });
           var inversionNotes = currentNotes.filter(function(note){ return note.analysis && note.analysis.tool === 'inversion' && note.analysis.ownerId === optionA.id; });
@@ -2661,6 +2698,8 @@ window.addEventListener('load', function(){
             createdRootOnly:createdRootOnly,
             noOptionBeforeTriageConfirmation:noOptionBeforeTriageConfirmation,
             noAnalysisBeforeTriageConfirmation:noAnalysisBeforeTriageConfirmation,
+            noAnalysisAfterAnswers:noAnalysisAfterAnswers,
+            noAnalysisBeforeModuleActions:noAnalysisBeforeModuleActions,
             noOptionBeforeState:noOptionBeforeState,
             oneStateBeforeOptions:oneStateBeforeOptions,
             inspectorCollapsed:document.body.classList.contains('inspector-collapsed'),
@@ -2679,11 +2718,23 @@ window.addEventListener('load', function(){
             failureKind:failure && failure.kind,
             safeguardKind:safeguard && safeguard.kind,
             commitCount:history.commits.length,
+            chosenOptionId:history.chosenOptionId,
+            optionAId:optionA.id,
             commitRationale:history.commits[0] && history.commits[0].rationale,
             unresolvedChecks:history.commits[0] && history.commits[0].unresolvedChecks,
-            commitProfile:commitProfile,
+            unresolvedCheckIds:(history.commits[0] && history.commits[0].unresolvedChecks || []).map(function(check){ return check.id; }),
+            liveStateContent:liveState && liveState.content,
+            liveOptionContents:liveOptions.map(function(note){ return note && note.content; }),
+            snapshotStateContent:snapshotState && snapshotState.content,
+            snapshotOptionContents:snapshotOptions.map(function(note){ return note && note.content; }),
+            commitProfile:commitProfileBeforeMutation,
+            historyProfileAfterLiveMutation:historyProfileAfterLiveMutation,
+            liveProfileAfterMutation:liveProfileAfterMutation,
+            commitProfileImmutable:commitProfileImmutable,
             stagedCommands:(window.STAGED_CMDS || []).length,
             browserErrors:browserErrors,
+            zoomValue:zoomValue,
+            zoomLabel:zoomLabel,
             flippedAbove:flippedAbove,
             leftClamped:leftClamped,
             rightClamped:rightClamped
@@ -2724,6 +2775,8 @@ window.addEventListener('load', function(){
         self.assertEqual(result["triageCount"], 1, msg=json.dumps(result))
         self.assertEqual(result["recommendedModules"], ["consequences", "inversion"], msg=json.dumps(result))
         self.assertEqual(result["acceptedModules"], ["consequences", "inversion"], msg=json.dumps(result))
+        self.assertTrue(result.get("noAnalysisAfterAnswers", False), msg=json.dumps(result))
+        self.assertTrue(result["noAnalysisBeforeModuleActions"], msg=json.dumps(result))
         self.assertTrue(result["consequenceActivated"], msg=json.dumps(result))
         self.assertTrue(result["inversionActivated"], msg=json.dumps(result))
         self.assertEqual(
@@ -2750,13 +2803,36 @@ window.addEventListener('load', function(){
         self.assertEqual(result["failureKind"], "factor", msg=json.dumps(result))
         self.assertEqual(result["safeguardKind"], "action", msg=json.dumps(result))
         self.assertEqual(result["commitCount"], 1, msg=json.dumps(result))
+        self.assertEqual(result["chosenOptionId"], result["optionAId"], msg=json.dumps(result))
         self.assertEqual(result["commitRationale"], "Best fit for the current constraints", msg=json.dumps(result))
-        self.assertGreater(len(result["unresolvedChecks"]), 0, msg=json.dumps(result))
+        self.assertEqual(result["unresolvedCheckIds"], ["outcomes"], msg=json.dumps(result))
+        self.assertEqual(
+            result["liveStateContent"],
+            "State: Available time and attention\nWhy can it affect the outcome? It limits how much process can be sustained.\nCan I directly choose it? No\nWhat would indicate that it is changing? Two skipped weekly reviews",
+            msg=json.dumps(result),
+        )
+        self.assertEqual(
+            result["liveOptionContents"],
+            [
+                "Option: Use contextual guidance\nWhy it may work: It keeps the next normative step visible without opening the inspector.",
+                "Option: Keep a lightweight manual checklist\nWhy it may work: It has almost no setup cost and remains familiar.",
+            ],
+            msg=json.dumps(result),
+        )
+        self.assertEqual(result["snapshotStateContent"], result["liveStateContent"], msg=json.dumps(result))
+        self.assertEqual(result["snapshotOptionContents"], result["liveOptionContents"], msg=json.dumps(result))
         self.assertEqual(result["commitProfile"]["answers"], {"magnitude":"high", "reversibility":"hard", "uncertainty":"medium", "emotionalPressure":"low", "duration":"short"}, msg=json.dumps(result))
         self.assertEqual(result["commitProfile"]["recommendedModuleIds"], ["consequences", "inversion"], msg=json.dumps(result))
         self.assertEqual(result["commitProfile"]["acceptedModuleIds"], ["consequences", "inversion"], msg=json.dumps(result))
+        self.assertEqual(result["liveProfileAfterMutation"]["answers"]["magnitude"], "low", msg=json.dumps(result))
+        self.assertEqual(result["liveProfileAfterMutation"]["acceptedModuleIds"], [], msg=json.dumps(result))
+        self.assertNotEqual(result["liveProfileAfterMutation"], result["commitProfile"], msg=json.dumps(result))
+        self.assertTrue(result["commitProfileImmutable"], msg=json.dumps(result))
+        self.assertEqual(result["historyProfileAfterLiveMutation"], result["commitProfile"], msg=json.dumps(result))
         self.assertEqual(result["stagedCommands"], 0, msg=json.dumps(result))
         self.assertEqual(result["browserErrors"], [], msg=json.dumps(result))
+        self.assertEqual(result["zoomValue"], "175", msg=json.dumps(result))
+        self.assertEqual(result["zoomLabel"], "175%", msg=json.dumps(result))
         self.assertTrue(result["flippedAbove"], msg=json.dumps(result))
         self.assertTrue(result["leftClamped"], msg=json.dumps(result))
         self.assertTrue(result["rightClamped"], msg=json.dumps(result))
