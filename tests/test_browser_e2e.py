@@ -1330,6 +1330,72 @@ window.addEventListener('load', function(){
         self.assertEqual(len(result["ordinaryLinkedCommands"]), 1, msg=json.dumps(result))
         self.assertIn("Ordinary planning note", result["ordinaryLinkedCommands"][0], msg=json.dumps(result))
 
+    def test_canvas_analysis_descendants_are_never_staged_and_declined_modules_are_read_only(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        harness = """
+<script id="E2E_CANVAS_ANALYSIS_DESCENDANT_GUARD_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var api = window.KyanbasuNotes;
+      var root = api.createDecisionMap(180, 300, 'Decisions').root;
+      var triage = api.createDecisionTriage(root.id);
+      var answers = {magnitude:'high', reversibility:'hard', uncertainty:'medium', emotionalPressure:'low', duration:'short'};
+      Object.keys(answers).forEach(function(id){ api.setDecisionTriageAnswer(triage.id, id, answers[id]); });
+      api.setDecisionTriageModules(triage.id, ['consequences','inversion']);
+      api.confirmDecisionTriage(triage.id);
+      var option = api.createDecisionChild(root.id, 'option');
+      var consequence = api.runConsequences(option.id).first;
+      var consequenceChild = api.createNextConsequence(consequence.id);
+      var inversion = api.runInversion(option.id).root;
+      var failure = api.createInversionFailure(inversion.id);
+      var safeguard = api.createInversionSafeguard(failure.id);
+      [triage, consequence, consequenceChild, inversion, failure, safeguard].forEach(function(note, index){ api.selectNote(note.id, index > 0); });
+      window.STAGED_CMDS = [];
+      var staged = api.stageSelectedNotesAsTasks();
+      window.STAGED_CMDS = [];
+      var linked = api.createLinkedTasksFromSelectedNotes();
+      var data = api.exportData();
+      data.notes.filter(function(note){ return note.id === root.id; })[0].decisionProcess.triageProfile.acceptedModuleIds = ['consequences'];
+      api.importData(data);
+      var before = api.notes().length;
+      var declinedRun = api.runInversion(option.id);
+      var declinedFailure = api.createInversionFailure(inversion.id);
+      var declinedSafeguard = api.createInversionSafeguard(failure.id);
+      var pureInput = {magnitude:' HIGH ', reversibility:'unknown', uncertainty:'medium', emotionalPressure:null, duration:'short'};
+      var normalized = window.KyanbasuDecisionTriage.normalizeAnswers(pureInput);
+      var assessed = window.KyanbasuDecisionTriage.assess(pureInput, ['consequences','inversion']);
+      var out = {
+        staged:staged, linked:linked, commands:(window.STAGED_CMDS || []).slice(),
+        descendantsHaveRefs:[triage, consequence, consequenceChild, inversion, failure, safeguard].some(function(note){ return api.linkedTasks(note.id).length; }),
+        declinedRun:!!declinedRun, declinedFailure:!!declinedFailure, declinedSafeguard:!!declinedSafeguard,
+        unchanged:before === api.notes().length, normalized:normalized,
+        recommended:assessed.recommendedModuleIds, reasons:assessed.recommendationReasons
+      };
+      var pre = document.createElement('pre'); pre.id = 'e2e-out'; pre.textContent = JSON.stringify(out); document.body.appendChild(pre);
+    }catch(e){ var fail = document.createElement('pre'); fail.id = 'e2e-out'; fail.textContent = 'ERR:' + (e && e.message || String(e)); document.body.appendChild(fail); }
+  }, 800);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["staged"], 0, msg=json.dumps(result))
+        self.assertEqual(result["linked"], 0, msg=json.dumps(result))
+        self.assertEqual(result["commands"], [], msg=json.dumps(result))
+        self.assertFalse(result["descendantsHaveRefs"], msg=json.dumps(result))
+        self.assertFalse(result["declinedRun"], msg=json.dumps(result))
+        self.assertFalse(result["declinedFailure"], msg=json.dumps(result))
+        self.assertFalse(result["declinedSafeguard"], msg=json.dumps(result))
+        self.assertTrue(result["unchanged"], msg=json.dumps(result))
+        self.assertEqual(result["normalized"], {"magnitude":"high", "reversibility":"", "uncertainty":"medium", "emotionalPressure":"", "duration":"short"}, msg=json.dumps(result))
+        self.assertEqual(result["recommended"], ["consequences", "inversion"], msg=json.dumps(result))
+        self.assertEqual(len(result["reasons"]), 2, msg=json.dumps(result))
+
     def test_canvas_triage_panel_survives_core_render_and_import(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
@@ -2161,6 +2227,41 @@ window.addEventListener('load', function(){
         self.assertTrue(result["exactlyOneOption"], msg=json.dumps(result))
         self.assertTrue(result["earliestStillRecommended"], msg=json.dumps(result))
         self.assertTrue(result["laterMentionsTriageOnly"], msg=json.dumps(result))
+
+    def test_canvas_normative_skip_modal_traps_tab_focus(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        harness = """
+<script id="E2E_CANVAS_SKIP_FOCUS_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      window.KyanbasuDecisionSkipGate.open({requiresConfirmation:true, noteId:'', actionId:'x', warning:{message:'Confirm'}});
+      setTimeout(function(){
+        var back = document.getElementById('decisionSkipBack');
+        var cont = document.getElementById('decisionSkipContinue');
+        var initial = document.activeElement === back;
+        cont.focus();
+        document.dispatchEvent(new KeyboardEvent('keydown', {key:'Tab', bubbles:true, cancelable:true}));
+        var forward = document.activeElement === back;
+        back.focus();
+        document.dispatchEvent(new KeyboardEvent('keydown', {key:'Tab', shiftKey:true, bubbles:true, cancelable:true}));
+        var backward = document.activeElement === cont;
+        var pre = document.createElement('pre'); pre.id = 'e2e-out'; pre.textContent = JSON.stringify({initial:initial, forward:forward, backward:backward}); document.body.appendChild(pre);
+      }, 40);
+    }catch(e){ var fail = document.createElement('pre'); fail.id = 'e2e-out'; fail.textContent = 'ERR:' + (e && e.message || String(e)); document.body.appendChild(fail); }
+  }, 800);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["initial"], msg=json.dumps(result))
+        self.assertTrue(result["forward"], msg=json.dumps(result))
+        self.assertTrue(result["backward"], msg=json.dumps(result))
 
     def test_canvas_normative_commit_preserves_triage_profile_and_unresolved_steps(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")

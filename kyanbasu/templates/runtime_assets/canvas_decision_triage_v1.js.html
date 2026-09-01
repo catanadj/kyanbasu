@@ -50,11 +50,6 @@
     });
   }
 
-  function moduleById(id){
-    for (var i=0; i<MODULES.length; i++) if (MODULES[i].id === id) return MODULES[i];
-    return null;
-  }
-
   function assess(rawAnswers, requestedModules){
     var answers = normalizeAnswers(rawAnswers);
     var available = knownAvailableModules(requestedModules);
@@ -96,12 +91,19 @@
       answers:answers,
       complete:DIMENSIONS.every(function(dimension){ return !!answers[dimension.id]; }),
       recommendations:recommendations,
+      recommendedModuleIds:recommendations.map(function(recommendation){ return recommendation.id; }),
+      recommendationReasons:recommendations.reduce(function(rows, recommendation){
+        return rows.concat(recommendation.reasons.map(function(reason){
+          return {moduleId:recommendation.id, reason:reason};
+        }));
+      }, []),
       profileExplanation:profileExplanation
     };
   }
 
   window.KyanbasuDecisionTriage = {
     assess:assess,
+    normalizeAnswers:normalizeAnswers,
     dimensions:cloneDimensions,
     availableModules:cloneModules
   };

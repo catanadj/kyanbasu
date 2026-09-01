@@ -349,6 +349,31 @@
     var order = analysis && Number(analysis.order);
     return analysis && analysis.tool === 'consequences' && analysis.role === 'consequence' && order >= 1 && order <= 3 ? analysis : null;
   }
+  function workflowModuleFor(id){
+    var cursor = id;
+    var seen = Object.create(null);
+    while (cursor && !seen[cursor]){
+      seen[cursor] = true;
+      var note = noteById(cursor);
+      if (!note) return '';
+      var analysis = noteAnalysis(note);
+      if (analysis && (analysis.tool === 'triage' || analysis.tool === 'consequences' || analysis.tool === 'inversion')) return analysis.tool;
+      var parent = parentLinkFor(cursor);
+      cursor = parent && parent.from;
+    }
+    return '';
+  }
+  function moduleMutationAllowed(id, moduleId){
+    var root = decisionRootFor(id);
+    if (!root) return true;
+    // A decision without the normative triage note is a legacy branch. Keep
+    // those branches usable while requiring an explicit accepted module once
+    // triage has been started.
+    if (!triageNoteFor(root.id)) return true;
+    var process = NoteCore.normalizeDecisionProcess(root.decisionProcess);
+    var profile = process && process.triageProfile;
+    return !!(profile && profile.acceptedModuleIds.indexOf(moduleId) >= 0);
+  }
   function consequenceNodesForOwner(ownerId){
     return notes.filter(function(note){
       var analysis = consequenceAnalysis(note);
@@ -695,9 +720,11 @@
   function consequenceActionContext(note, analysis){
     var root = decisionRootFor(note.id);
     var hasNext = consequenceHasNext(note, analysis);
+    var allowed = moduleMutationAllowed(analysis.ownerId, 'consequences');
     var valid = [];
-    if (Number(analysis.order) < 3 && !hasNext) valid.push('add-next-consequence');
-    valid = valid.concat(['add-parallel-consequence','go-owner-option','go-decision','focus-branch','edit-role','edit-status','edit-bucket','manage-links','delete-note']);
+    if (allowed && Number(analysis.order) < 3 && !hasNext) valid.push('add-next-consequence');
+    if (allowed) valid.push('add-parallel-consequence');
+    valid = valid.concat(['go-owner-option','go-decision','focus-branch','edit-role','edit-status','edit-bucket','manage-links','delete-note']);
     return {
       noteId:note.id,
       type:'consequence',
@@ -705,6 +732,7 @@
       decisionId:root ? root.id : '',
       order:Number(analysis.order),
       hasNextOrder:hasNext,
+      primaryAllowed:allowed,
       validActionIds:valid
     };
   }
@@ -712,7 +740,8 @@
     var analysis = noteAnalysis(root);
     var decision = decisionRootFor(root.id);
     var state = inversionCompletionState(root);
-    var valid = ['add-failure'];
+    var allowed = moduleMutationAllowed(analysis && analysis.ownerId || root.id, 'inversion');
+    var valid = allowed ? ['add-failure'] : [];
     if (state.complete) valid.push('review-owner-option');
     valid = valid.concat(['go-owner-option','go-decision','focus-branch','edit-role','edit-status','edit-bucket','manage-links','delete-note']);
     return {
@@ -723,6 +752,7 @@
       oppositeComplete:state.oppositeComplete,
       failureCount:state.failures.length,
       inversionComplete:state.complete,
+      primaryAllowed:allowed,
       validActionIds:valid
     };
   }
@@ -731,9 +761,11 @@
     var rootAnalysis = noteAnalysis(inversionRoot);
     var decision = decisionRootFor(note.id);
     var safeguards = safeguardNotesForFailure(note.id);
+    var allowed = moduleMutationAllowed(note.id, 'inversion');
     var valid = [];
-    if (!safeguards.length) valid.push('add-safeguard');
-    valid = valid.concat(['add-parallel-failure','go-owner-option','go-decision','focus-branch','edit-role','edit-status','edit-bucket','manage-links','delete-note']);
+    if (allowed && !safeguards.length) valid.push('add-safeguard');
+    if (allowed) valid.push('add-parallel-failure');
+    valid = valid.concat(['go-owner-option','go-decision','focus-branch','edit-role','edit-status','edit-bucket','manage-links','delete-note']);
     return {
       noteId:note.id,
       type:'failure',
@@ -742,6 +774,7 @@
       decisionId:decision ? decision.id : '',
       warningComplete:!!templateValue(note.content, 'Early warning'),
       hasSafeguard:safeguards.length > 0,
+      primaryAllowed:allowed,
       validActionIds:valid
     };
   }
@@ -756,7 +789,8 @@
       inversionRootId:inversionRoot ? inversionRoot.id : '',
       decisionId:decision ? decision.id : '',
       safeguardComplete:safeguardComplete(note),
-      validActionIds:['add-failure','go-owner-option','go-decision','focus-branch','edit-role','edit-status','edit-bucket','manage-links','delete-note']
+      primaryAllowed:moduleMutationAllowed(note.id, 'inversion'),
+      validActionIds:(moduleMutationAllowed(note.id, 'inversion') ? ['add-failure'] : []).concat(['go-owner-option','go-decision','focus-branch','edit-role','edit-status','edit-bucket','manage-links','delete-note'])
     };
   }
   function decisionActionContextFor(id){
@@ -3076,6 +3110,7 @@
   function runInversion(ownerId){
     var owner = noteById(ownerId);
     if (!owner || (noteKind(owner) !== 'decision' && noteKind(owner) !== 'option')) return null;
+    if (!moduleMutationAllowed(owner.id, 'inversion')) return null;
     var existing = directInversionForOwner(owner.id);
     if (existing){
       focusNoteBranch(existing.id);
@@ -3104,16 +3139,19 @@
     var root = noteById(rootId);
     var analysis = noteAnalysis(root);
     if (!root || !analysis || analysis.tool !== 'inversion' || analysis.role !== 'root') return null;
+    if (!moduleMutationAllowed(root.id, 'inversion')) return null;
     return createChildNote(root.id, FAILURE_MODE_TEMPLATE, '', null, 'factor');
   }
   function createInversionSafeguard(factorId){
     var factor = noteById(factorId);
     if (!factor || noteKind(factor) !== 'factor' || !isInversionFailure(factor.id)) return null;
+    if (!moduleMutationAllowed(factor.id, 'inversion')) return null;
     return createChildNote(factor.id, SAFEGUARD_TEMPLATE, '', null, 'action');
   }
   function runConsequences(ownerId){
     var owner = noteById(ownerId);
     if (!owner || noteKind(owner) !== 'option') return null;
+    if (!moduleMutationAllowed(owner.id, 'consequences')) return null;
     var existing = consequenceNodesForOwner(owner.id);
     if (existing.length){
       focusNoteBranch(owner.id);
@@ -3140,7 +3178,7 @@
   }
   function createParallelConsequence(id){
     var note = noteById(id);
-    return consequenceAnalysis(note) ? createSiblingNote(note.id, '', '') : null;
+    return consequenceAnalysis(note) && moduleMutationAllowed(note.id, 'consequences') ? createSiblingNote(note.id, '', '') : null;
   }
   function createFirstConsequence(ownerId){
     var owner = noteById(ownerId);
@@ -3151,7 +3189,7 @@
   function createNextConsequence(id){
     var note = noteById(id);
     var analysis = consequenceAnalysis(note);
-    return analysis && Number(analysis.order) < 3 ? createChildNote(note.id, '', '') : null;
+    return analysis && Number(analysis.order) < 3 && moduleMutationAllowed(note.id, 'consequences') ? createChildNote(note.id, '', '') : null;
   }
   function decisionCommitSnapshot(root, chosenOptionId, rationale, unresolvedChecks){
     var branchIds = descendantNoteIds(root.id);
@@ -4433,6 +4471,9 @@
     var requestedAnalysis = arguments.length > 5 ? NoteCore.normalizeAnalysis(arguments[5]) : null;
     var parent = noteById(parentId);
     if (!parent) return null;
+    var parentModule = workflowModuleFor(parent.id);
+    var childModule = requestedAnalysis && (requestedAnalysis.tool === 'consequences' || requestedAnalysis.tool === 'inversion') ? requestedAnalysis.tool : parentModule;
+    if (parentModule === 'triage' || (childModule && childModule !== 'triage' && !moduleMutationAllowed(parent.id, childModule))) return null;
     var inversionRoot = inversionRootFor(parent.id);
     var parentIsInversionRoot = inversionRoot && inversionRoot.id === parent.id;
     var parentIsFailure = inversionRoot && isInversionFailure(parent.id);
@@ -4477,6 +4518,8 @@
   function createSiblingNote(id, title, body){
     var n = noteById(id);
     if (!n) return null;
+    var siblingModule = workflowModuleFor(n.id);
+    if (siblingModule === 'triage' || (siblingModule && siblingModule !== 'triage' && !moduleMutationAllowed(n.id, siblingModule))) return null;
     var currentKind = noteKind(n);
     var inversionRoot = inversionRootFor(n.id);
     var inversionFailure = inversionRoot && isInversionFailure(n.id);
@@ -4889,7 +4932,7 @@
     if (!ids.length && selectedNoteId) ids = [selectedNoteId];
     return ids.filter(function(id){
       var note = noteById(id);
-      return !!note && !noteAnalysis(note);
+      return !!note && !noteAnalysis(note) && !workflowModuleFor(id);
     });
   }
   function stageSelectedNotesAsTasks(){

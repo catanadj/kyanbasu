@@ -153,7 +153,7 @@
       if (id === 'run-inversion' || id === 'continue-inversion') return accepted.indexOf('inversion') >= 0;
       return true;
     });
-    if (primary && valid.indexOf(primary.id) < 0) valid.unshift(primary.id);
+    if (primary && valid.indexOf(primary.id) < 0 && context.primaryAllowed !== false) valid.unshift(primary.id);
     var groups = GROUPS.map(function(group){
       return {
         id:group.id,

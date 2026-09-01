@@ -49,6 +49,7 @@
     dialog.id = 'decisionSkipDialog';
     dialog.setAttribute('role', 'dialog');
     dialog.setAttribute('aria-modal', 'true');
+    dialog.setAttribute('tabindex', '-1');
     dialog.setAttribute('aria-labelledby', 'decisionSkipTitle');
     dialog.setAttribute('aria-describedby', 'decisionSkipMessage');
     title = document.createElement('h2'); title.id = 'decisionSkipTitle';
@@ -71,8 +72,22 @@
       refreshActions();
     });
     backdrop.addEventListener('click', function(event){ if (event.target === backdrop) close(); });
+    function focusables(){
+      return Array.prototype.slice.call(dialog.querySelectorAll('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),[tabindex]:not([tabindex="-1"])'));
+    }
     document.addEventListener('keydown', function(event){
-      if (!backdrop.hidden && event.key === 'Escape'){
+      if (backdrop.hidden) return;
+      if (event.key === 'Tab'){
+        var items = focusables();
+        if (!items.length){ event.preventDefault(); dialog.focus(); return; }
+        var first = items[0];
+        var last = items[items.length - 1];
+        if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))){
+          event.preventDefault(); last.focus();
+        } else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))){
+          event.preventDefault(); first.focus();
+        }
+      } else if (event.key === 'Escape'){
         event.preventDefault(); event.stopPropagation(); close();
       }
     });
