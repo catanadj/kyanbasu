@@ -1515,6 +1515,186 @@ window.addEventListener('load', function(){
         self.assertTrue(result["legacyImported"], msg=json.dumps(result))
         self.assertFalse(result["legacyHasUnresolved"], msg=json.dumps(result))
 
+    def test_canvas_guided_decision_workflow_never_requires_inspector(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+
+        harness = """
+<script id="E2E_CANVAS_GUIDED_WORKFLOW_HARNESS">
+(function(){
+  var browserErrors = [];
+  window.addEventListener('error', function(event){ browserErrors.push(event && event.message || 'Browser error'); });
+  window.addEventListener('load', function(){
+    setTimeout(function(){
+      var api = window.KyanbasuNotes;
+      var ui = window.KyanbasuNoteActions;
+      var toolbar = document.getElementById('noteActionToolbar');
+      var menu = document.getElementById('noteActionMenu');
+      var created, option, inversionRoot, failure, safeguard;
+      var orders = [];
+      var flippedAbove = false;
+      var leftClamped = false;
+      var rightClamped = false;
+
+      function primary(){ return toolbar && toolbar.querySelector('.noteActionPrimary'); }
+      function primaryLabel(){ return primary() && primary().textContent.trim(); }
+      function expectLabel(label){
+        if (primaryLabel() !== label) throw new Error('Expected primary "' + label + '", got "' + primaryLabel() + '"');
+      }
+      function clickPrimary(label){ expectLabel(label); primary().click(); }
+      function clickMenu(actionId){
+        var overflow = toolbar.querySelector('.noteActionOverflow');
+        overflow.click();
+        var item = menu.querySelector('[data-action-id="' + actionId + '"]');
+        if (!item) throw new Error('Menu action missing: ' + actionId);
+        item.click();
+      }
+      function editSelected(text){
+        var id = api.primaryNote();
+        var editor = document.querySelector('.tcNoteNode[data-note-id="' + id + '"] .tcNoteText');
+        if (!editor) throw new Error('Selected note editor missing');
+        editor.textContent = text;
+        editor.dispatchEvent(new Event('input', {bubbles:true}));
+      }
+      function selectedNote(){
+        var id = api.primaryNote();
+        return api.notes().filter(function(note){ return note.id === id; })[0];
+      }
+      function fail(error){
+        if (document.getElementById('e2e-out')) return;
+        var pre = document.createElement('pre');
+        pre.id = 'e2e-out';
+        pre.textContent = 'ERR:' + (error && error.message ? error.message : String(error));
+        document.body.appendChild(pre);
+      }
+      var steps = [
+        function(){
+          if (!api || !ui || !toolbar || !menu) throw new Error('Guided decision UI missing');
+          document.body.classList.add('inspector-collapsed');
+          created = api.createDecisionMap(180, 300, 'Decisions');
+          option = created.options[0];
+          editSelected('Decision: Choose a planning workflow\\nTarget outcome: Make decisions with less friction\\nSuccess means: Used consistently for one week\\nDecision needed by: Friday\\nReassess by: Next Friday');
+        },
+        function(){ clickPrimary('Explore next option'); },
+        function(){
+          if (api.primaryNote() !== option.id) throw new Error('Guidance did not select the first option');
+          editSelected('Option: Use contextual guidance');
+        },
+        function(){ clickPrimary('Explore consequences'); },
+        function(){ orders.push(selectedNote().analysis && selectedNote().analysis.order); clickPrimary('Add 2nd-order consequence'); },
+        function(){ orders.push(selectedNote().analysis && selectedNote().analysis.order); clickPrimary('Add 3rd-order consequence'); },
+        function(){ orders.push(selectedNote().analysis && selectedNote().analysis.order); clickMenu('go-owner-option'); },
+        function(){ clickPrimary('Run inversion'); },
+        function(){
+          inversionRoot = selectedNote();
+          expectLabel('Complete opposite outcome');
+          editSelected('INVERSION\\nDesired outcome: Make decisions with less friction\\nAnalysed option: Use contextual guidance\\nOpposite outcome: Planning becomes slower and is abandoned\\nHow could I deliberately cause the opposite outcome?');
+        },
+        function(){ clickPrimary('Continue inversion'); },
+        function(){
+          failure = selectedNote();
+          expectLabel('Complete failure mode');
+          editSelected('Failure mode: Add controls without proving value\\nHow could this happen? Build ahead of use\\nEarly warning: The workflow is skipped twice\\nWithin my control: Yes');
+        },
+        function(){ clickPrimary('Add safeguard'); },
+        function(){
+          safeguard = selectedNote();
+          expectLabel('Complete safeguard');
+          editSelected('Prevent: Keep only the guided next action\\nDetect early: Review skipped uses weekly\\nRespond if it happens: Remove the unused control');
+        },
+        function(){ expectLabel('Add failure mode'); clickMenu('go-owner-option'); },
+        function(){ clickPrimary('Review this option'); },
+        function(){
+          var backdrop = document.getElementById('decisionReviewBackdrop');
+          if (!backdrop || backdrop.hidden) throw new Error('Review dialog did not open');
+          var rationale = document.getElementById('decisionReviewRationale');
+          rationale.value = 'Best fit for the current constraints';
+          rationale.dispatchEvent(new Event('input', {bubbles:true}));
+          document.getElementById('decisionReviewCommit').click();
+        },
+        function(){
+          var confirmation = document.getElementById('decisionReviewConfirmCommit');
+          if (!confirmation) throw new Error('Named soft-gate confirmation missing');
+          confirmation.click();
+        },
+        function(){
+          var zoom = document.getElementById('zoom');
+          zoom.value = '175';
+          zoom.dispatchEvent(new Event('input', {bubbles:true}));
+          var card = document.querySelector('.tcNoteNode[data-note-id="' + option.id + '"]');
+          card.getBoundingClientRect = function(){ return {left:-48, right:172, top:window.innerHeight - 72, bottom:window.innerHeight - 2, width:220, height:70}; };
+          ui.refresh();
+        },
+        function(){
+          var card = document.querySelector('.tcNoteNode[data-note-id="' + option.id + '"]');
+          flippedAbove = parseFloat(toolbar.style.top) + toolbar.offsetHeight <= card.getBoundingClientRect().top;
+          leftClamped = parseFloat(toolbar.style.left) >= 8;
+          card.getBoundingClientRect = function(){ return {left:window.innerWidth - 120, right:window.innerWidth + 100, top:180, bottom:250, width:220, height:70}; };
+          ui.refresh();
+        },
+        function(){
+          rightClamped = parseFloat(toolbar.style.left) + toolbar.offsetWidth <= window.innerWidth - 8;
+          var history = api.decisionHistory(created.root.id);
+          var currentNotes = api.notes();
+          var out = {
+            inspectorCollapsed:document.body.classList.contains('inspector-collapsed'),
+            optionCount:created.options.filter(function(option){
+              return currentNotes.some(function(note){ return note.id === option.id && note.kind === 'option'; });
+            }).length,
+            factorRetained:currentNotes.some(function(note){ return note.id === created.factor.id && note.kind === 'factor'; }),
+            consequenceOrders:orders,
+            inversionRole:inversionRoot && inversionRoot.analysis && inversionRoot.analysis.role,
+            failureKind:failure && failure.kind,
+            safeguardKind:safeguard && safeguard.kind,
+            commitCount:history.commits.length,
+            commitRationale:history.commits[0] && history.commits[0].rationale,
+            unresolvedCount:history.commits[0] && history.commits[0].unresolvedChecks && history.commits[0].unresolvedChecks.length,
+            stagedCommands:(window.STAGED_CMDS || []).length,
+            browserErrors:browserErrors,
+            flippedAbove:flippedAbove,
+            leftClamped:leftClamped,
+            rightClamped:rightClamped
+          };
+          var pre = document.createElement('pre');
+          pre.id = 'e2e-out';
+          pre.textContent = JSON.stringify(out);
+          document.body.appendChild(pre);
+        }
+      ];
+      var index = 0;
+      function advance(){
+        if (index >= steps.length) return;
+        try{ steps[index++](); }
+        catch(error){ fail(error); return; }
+        setTimeout(advance, 70);
+      }
+      advance();
+    }, 800);
+  });
+})();
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["inspectorCollapsed"], msg=json.dumps(result))
+        self.assertEqual(result["optionCount"], 2, msg=json.dumps(result))
+        self.assertTrue(result["factorRetained"], msg=json.dumps(result))
+        self.assertEqual(result["consequenceOrders"], [1, 2, 3], msg=json.dumps(result))
+        self.assertEqual(result["inversionRole"], "root", msg=json.dumps(result))
+        self.assertEqual(result["failureKind"], "factor", msg=json.dumps(result))
+        self.assertEqual(result["safeguardKind"], "action", msg=json.dumps(result))
+        self.assertEqual(result["commitCount"], 1, msg=json.dumps(result))
+        self.assertEqual(result["commitRationale"], "Best fit for the current constraints", msg=json.dumps(result))
+        self.assertGreater(result["unresolvedCount"], 0, msg=json.dumps(result))
+        self.assertEqual(result["stagedCommands"], 0, msg=json.dumps(result))
+        self.assertEqual(result["browserErrors"], [], msg=json.dumps(result))
+        self.assertTrue(result["flippedAbove"], msg=json.dumps(result))
+        self.assertTrue(result["leftClamped"], msg=json.dumps(result))
+        self.assertTrue(result["rightClamped"], msg=json.dumps(result))
+
     def test_canvas_decision_maps_commit_immutable_history_and_round_trip(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
