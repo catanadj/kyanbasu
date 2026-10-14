@@ -65,7 +65,7 @@ jobs:
         run: python -m unittest discover -s tests -v
 
       - name: Build wheel
-        run: python -m pip wheel --no-build-isolation --no-deps --wheel-dir dist .
+        run: python -m pip wheel --no-deps --wheel-dir dist .
 
       - name: Smoke test wheel
         run: |
