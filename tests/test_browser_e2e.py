@@ -151,7 +151,7 @@ window.addEventListener('load', function(){
     def test_runtime_diagnostics_reports_perf_hot_paths(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0)
+        html = build_runtime_html(base_html, payload, 0, debug=True)
 
         harness = """
 <script id="E2E_PERF_DIAG_HARNESS">
@@ -1808,7 +1808,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["unchanged"])
         self.assertEqual(result["notes"], 2)
         self.assertEqual(result["links"], 0)
-        self.assertGreaterEqual(result["snapshots"], 1)
+        self.assertEqual(result["snapshots"], 0)
 
     def test_canvas_notes_roles_and_statuses_render_edit_search_and_export(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
@@ -1882,7 +1882,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["status"], "parked")
         self.assertEqual(result["cardKind"], "Decision")
         self.assertEqual(result["cardStatus"], "Status: Parked")
-        self.assertEqual(result["exportedVersion"], 9)
+        self.assertEqual(result["exportedVersion"], 10)
         self.assertEqual(result["exportedKind"], "decision")
         self.assertEqual(result["exportedStatus"], "parked")
         self.assertEqual(result["viewerSemantics"], ["Decision", "Parked"])
@@ -2104,8 +2104,8 @@ window.addEventListener('load', function(){
         self.assertEqual(result["historyAccepted"], ["consequences", "future-module"], msg=json.dumps(result))
         self.assertEqual(result["invalidDraft"], {"magnitude":"", "reversibility":"", "uncertainty":"", "emotionalPressure":"", "duration":""}, msg=json.dumps(result))
         self.assertIsNone(result["invalidProfile"], msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
-        self.assertEqual(result["nestedVersion"], 9, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 10, msg=json.dumps(result))
+        self.assertEqual(result["nestedVersion"], 10, msg=json.dumps(result))
 
     def test_canvas_analysis_notes_never_stage_taskwarrior_commands(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
@@ -2719,16 +2719,16 @@ window.addEventListener('load', function(){
       };
       api.importData(exportedForProfile);
       var state = api.createDecisionChild(root.id, 'factor');
+      var nonDirectStates = ['no', 'partly', '', 'unknown'].map(function(value){
+        api.setContent(state.id, 'State: Constraint\\nCan I directly choose it? ' + value);
+        return api.decisionActions(state.id).recommended.id;
+      });
       api.setContent(state.id, 'State: Available time\\nWhy can it affect the outcome? It limits the work.\\nCan I directly choose it? directly\\nWhat would indicate that it is changing? Calendar blocks');
       var stateActions = api.decisionActions(state.id);
       var converted = api.executeDecisionAction('convert-state-to-option', state.id);
       var convertedNote = api.notes().filter(function(note){ return note.id === state.id; })[0];
+      var convertedContent = convertedNote && convertedNote.content;
       var convertedLinkRetained = api.links().some(function(link){ return link.type === 'child' && link.from === root.id && link.to === state.id; });
-      var nonDirectStates = ['no', 'partly', '', 'unknown'].map(function(value){
-        var item = api.createDecisionChild(root.id, 'factor');
-        api.setContent(item.id, 'State: Constraint\\nCan I directly choose it? ' + value);
-        return api.decisionActions(item.id).recommended.id;
-      });
       var option = api.createDecisionChild(root.id, 'option');
       api.setContent(option.id, 'Option: Use contextual guidance');
 
@@ -2771,7 +2771,7 @@ window.addEventListener('load', function(){
         convertedId:convertedNote && convertedNote.id,
         expectedConvertedId:state.id,
         convertedLinkRetained:convertedLinkRetained,
-        convertedContent:convertedNote && convertedNote.content,
+        convertedContent:convertedContent,
         nonDirectStates:nonDirectStates,
         recommendations:[initial.recommended.id, firstActions.recommended.id, secondActions.recommended.id],
         results:[firstResult.ok, secondResult.ok, thirdResult.ok],
@@ -3403,9 +3403,9 @@ window.addEventListener('load', function(){
         self.assertEqual(result["commitCount"], 1, msg=json.dumps(result))
         self.assertEqual(result["rationale"], "Chosen under current time constraints", msg=json.dumps(result))
         self.assertEqual(result["unresolved"], result["expectedUnresolved"], msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 10, msg=json.dumps(result))
         self.assertEqual(result["workbenchVersion"], 1, msg=json.dumps(result))
-        self.assertEqual(result["nestedVersion"], 9, msg=json.dumps(result))
+        self.assertEqual(result["nestedVersion"], 10, msg=json.dumps(result))
         self.assertEqual(result["importedUnresolved"], result["expectedUnresolved"], msg=json.dumps(result))
         self.assertTrue(result["legacyImported"], msg=json.dumps(result))
         self.assertFalse(result["legacyHasUnresolved"], msg=json.dumps(result))
@@ -3937,7 +3937,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["alternativeStatuses"], ["open", "open"], msg=json.dumps(result))
         self.assertEqual(result["chosenBadge"], "Chosen", msg=json.dumps(result))
         self.assertTrue(result["chosenClass"], msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 10, msg=json.dumps(result))
         self.assertEqual(result["exportedCommits"], 2, msg=json.dumps(result))
         self.assertEqual(result["workbenchCommits"], 2, msg=json.dumps(result))
         self.assertEqual(result["importedCommits"], 2, msg=json.dumps(result))
@@ -4076,7 +4076,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["duplicateExisting"], msg=json.dumps(result))
         self.assertEqual(result["inversionRootCount"], 1, msg=json.dumps(result))
         self.assertEqual(result["snapshotAnalysis"]["tool"], "inversion", msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 10, msg=json.dumps(result))
         self.assertEqual(result["exportedAnalysis"]["tool"], "inversion", msg=json.dumps(result))
         self.assertEqual(result["workbenchAnalysis"]["tool"], "inversion", msg=json.dumps(result))
         self.assertEqual(result["importedAnalysis"]["tool"], "inversion", msg=json.dumps(result))
@@ -4199,7 +4199,7 @@ window.addEventListener('load', function(){
         self.assertTrue(result["duplicateExisting"], msg=json.dumps(result))
         self.assertEqual(result["countAfterDuplicate"], 6, msg=json.dumps(result))
         self.assertEqual(result["snapshotAnalysis"]["order"], 3, msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 10, msg=json.dumps(result))
         self.assertEqual(result["exportedAnalysis"]["order"], 2, msg=json.dumps(result))
         self.assertEqual(result["workbenchAnalysis"]["order"], 3, msg=json.dumps(result))
         self.assertEqual(result["importedAnalysis"]["order"], 1, msg=json.dumps(result))
@@ -4505,7 +4505,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["pathTitle"], "Challenges")
         self.assertEqual(result["animationName"], "none")
         self.assertEqual(result["toolbarType"], "Challenges")
-        self.assertEqual(result["exportedVersion"], 9)
+        self.assertEqual(result["exportedVersion"], 10)
         self.assertEqual(result["exportedType"], "challenges")
         self.assertEqual(result["relationLabel"], "Challenges")
         self.assertEqual(result["inverseLabel"], "Challenged by")
@@ -4638,7 +4638,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["initial"]["icon"], "?", msg=json.dumps(result))
         self.assertIn("evidence current", result["initial"]["label"], msg=json.dumps(result))
         self.assertEqual(result["selectedKind"], "link", msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 10, msg=json.dumps(result))
         self.assertEqual(result["exportedAnnotation"], {"kind": "condition", "text": "Only if validation passes"}, msg=json.dumps(result))
         self.assertEqual(result["importedKind"], "condition", msg=json.dumps(result))
         self.assertIn("validation passes", result["importedLabel"], msg=json.dumps(result))
@@ -5121,7 +5121,7 @@ window.addEventListener('load', function(){
         self.assertEqual(result["resultNotes"], 2)
         self.assertEqual(result["resultLinks"], 1)
         self.assertEqual(result["exportedKind"], "kyanbasu.notes")
-        self.assertEqual(result["exportedVersion"], 9)
+        self.assertEqual(result["exportedVersion"], 10)
         self.assertEqual(result["exportedNotes"], 2)
         self.assertEqual(result["exportedLinks"], 1)
         self.assertEqual(result["firstContent"], "Imported root\nLegacy body")
@@ -5653,8 +5653,8 @@ window.addEventListener('load', function(){
       }
       var r = head.getBoundingClientRect();
       fire(head, 'mousedown', r.left + 10, r.top + 10);
-      fire(document, 'mousemove', r.left + 190, r.top + 120);
-      fire(document, 'mouseup', r.left + 190, r.top + 120);
+      fire(document, 'mousemove', r.left + 130, r.top + 520);
+      fire(document, 'mouseup', r.left + 130, r.top + 520);
       setTimeout(function(){
         var exported = window.KyanbasuNotes.exportData();
         window.KyanbasuNotes.importJSON(JSON.stringify(exported));
@@ -5698,7 +5698,7 @@ window.addEventListener('load', function(){
         self.assertNotIn("ERR:", raw)
         result = json.loads(raw)
         self.assertTrue(result["bucketMoved"])
-        self.assertTrue(result["bucketMovedY"])
+        self.assertTrue(result["bucketMovedY"], msg=json.dumps(result))
         self.assertTrue(result["notesStayed"])
         self.assertNotEqual(result["exportedDx"], 0)
         self.assertNotEqual(result["exportedDy"], 0)
@@ -8713,7 +8713,7 @@ window.addEventListener('load', function(){
         self.assertGreater(result["marked"]["reviewedAt"], 0, msg=json.dumps(result))
         self.assertEqual(result["marked"]["updatedAt"], result["beforeUpdated"], msg=json.dumps(result))
         self.assertNotIn("never-recent", result["neverAfterMark"], msg=json.dumps(result))
-        self.assertEqual(result["exportedVersion"], 9, msg=json.dumps(result))
+        self.assertEqual(result["exportedVersion"], 10, msg=json.dumps(result))
         self.assertEqual(result["exportedMarked"]["reviewedAt"], result["marked"]["reviewedAt"], msg=json.dumps(result))
         self.assertIn("never-reviewed", result["lensIds"], msg=json.dumps(result))
         self.assertIn("stale-open", result["lensIds"], msg=json.dumps(result))
