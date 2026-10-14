@@ -72,6 +72,14 @@ kyanbasu --filter "due.before:today"  # any filter string
 
 - Notes form editable mind maps with keyboard-first sibling and child creation.
 
+- Use **Quick capture** or `Alt+N` to open a thought editor. Enter adds a line, `Ctrl/Cmd+Enter` saves, and Escape cancels. Choose an Inbox or existing bucket, or add the thought as a child of the selected note. Turn on **One note per line** to paste a list as separate notes; one undo removes the batch.
+
+- In note text, Enter creates a sibling, Tab creates a child, Shift+Enter adds a line, and Escape leaves the editor. Canvas undo and redo use `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z`, or `Ctrl+Y`; focused text editors keep their native undo.
+
+- Use the Viewer branch controls or Alt+Arrow keys to move, indent, outdent, and reorder branches. **Pin position** protects a note from automatic layout changes while allowing a direct drag. **Compact branch** arranges a branch as a readable tree and finds room for both its cards and child-link corridors; it keeps the root anchored when the layout fits and leaves pinned notes fixed. Creating a child places it in the nearest clear slot and keeps the parent and nearby notes in place. **Compact area** rearranges unpinned notes in a bucket. Split at the cursor, duplicate a branch, and merge selected sibling notes from their note controls.
+
+- Child links follow the branch layout through the space between parent and child cards. Other relationships, such as supports or references, keep their independent semantic routing and annotations.
+
 - Buckets group related notes and can move their contents as one unit.
 
 - Note identifiers, search, focus mode, editable outliner, colours, multi-selection, and import/export support larger maps.
@@ -164,7 +172,7 @@ kyanbasu --filter "due.before:today"  # any filter string
 
 ## Code layout (for contributors)
 
-- `Kyanbasu.py`: preferred wrapper for direct script execution.
+- `python -m kyanbasu`: source-tree entry point for direct execution.
 - `kyanbasu/`: application package and `python -m kyanbasu` entry point.
 - `kyanbasu/app.py`: app orchestrator and CLI entry point.
 - `kyanbasu/task_io.py`: Taskwarrior export execution and parsing.
@@ -173,7 +181,12 @@ kyanbasu --filter "due.before:today"  # any filter string
 - `kyanbasu/output.py`: cross-platform browser opener.
 - `kyanbasu/injectors.py`: HTML/JS feature injectors and background/overlay patch helpers.
 - `kyanbasu/templates/`: base HTML template, modal replacement fragment, and runtime assets.
+- `.bridge/`: repository-maintainer tooling for passing approved command requests from an agent to a watcher running in the maintainer's environment; it is not part of Kyanbasu or its installed user interface.
 - `CHANGELOG.md`: release history.
+
+### Maintainer command bridge
+
+The optional `.bridge/` directory contains a file-based command bridge for repository maintenance. `bridge_client.py` publishes request files, and `watcher.py`—started separately by the maintainer—executes approved requests and records their results. The watcher runs with the permissions of the environment that starts it, so it should only be enabled intentionally and stopped when the maintenance session ends. Bridge files and this workflow are not required to build or use Kyanbasu.
 
 ---
 
@@ -189,7 +202,6 @@ These launch methods are equivalent:
 ```bash
 kyanbasu              # installed command
 python3 -m kyanbasu   # module entry point
-python3 Kyanbasu.py   # source-tree wrapper
 ```
 
 - The Python distribution and import package are both named `kyanbasu`.
@@ -199,6 +211,8 @@ python3 Kyanbasu.py   # source-tree wrapper
   them to its current format when they are exported again.
 - Downloaded files use `kyanbasu-notes.json`, `kyanbasu-workbenches.json`, and `kyanbasu-reviewed-commands.sh`.
 - Browser integrations use `window.KyanbasuNotes`, `window.KyanbasuWorkbenches`, and the other `window.Kyanbasu*` APIs.
+- Notes export version 10 adds `outlineOrder` for stable outline ordering and `pinned` for fixed note positions. Older note exports import with coordinate-based sibling order and unpinned notes.
+- Workbench records include an additive `viewState` with selection, focus, lens, search, and review position. Older workbenches without `viewState` open with the default note view. Canvas scroll and zoom remain in layout state.
 
 ---
 
@@ -207,7 +221,7 @@ python3 Kyanbasu.py   # source-tree wrapper
 - Unit tests:
   - `python3 -m unittest discover -s tests -v`
 - Integration test (real Taskwarrior):
-  - `KYANBASU_RUN_INTEGRATION=1 python3 -m unittest tests.test_task_io_integration -v`
+  - `python3 -m unittest tests.test_task_io_integration -v` (runs when Taskwarrior is installed)
 - Combined local release check:
   - `./scripts/release_check.sh`
 - Build the distributable wheel:
