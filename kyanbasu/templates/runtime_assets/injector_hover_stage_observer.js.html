@@ -101,5 +101,5 @@
   startObserver();
   document.addEventListener('twdata', function(){ setTimeout(startObserver, 0); });
   window.addEventListener('load', function(){ setTimeout(startObserver, 60); });
-  console.log('[observer] hover stage observer active (toggle-aware)');
+  if (window.KYANBASU_DEBUG) console.log('[observer] hover stage observer active (toggle-aware)');
 })();</script>

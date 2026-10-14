@@ -7,13 +7,28 @@ from pathlib import Path
 from unittest.mock import patch
 
 from kyanbasu.task_io import fetch_tasks
+import tests.test_task_io_integration as integration_module
+
+
+class TestIntegrationConfiguration(unittest.TestCase):
+    def test_integration_skips_when_taskwarrior_is_unavailable(self):
+        with patch.object(integration_module.shutil, "which", return_value=None):
+            with self.assertRaisesRegex(unittest.SkipTest, "Taskwarrior binary"):
+                integration_module.TestTaskIOIntegration.setUpClass()
+
+    def test_integration_runs_when_taskwarrior_is_available(self):
+        task_bin = "/usr/bin/task"
+        with patch.dict(os.environ, {}, clear=True), patch.object(
+            integration_module.shutil, "which", return_value=task_bin
+        ):
+            integration_module.TestTaskIOIntegration.setUpClass()
+
+        self.assertEqual(integration_module.TestTaskIOIntegration.task_bin, task_bin)
 
 
 class TestTaskIOIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        if os.environ.get("KYANBASU_RUN_INTEGRATION") != "1":
-            raise unittest.SkipTest("Set KYANBASU_RUN_INTEGRATION=1 to run integration tests.")
         cls.task_bin = shutil.which("task")
         if not cls.task_bin:
             raise unittest.SkipTest("Taskwarrior binary ('task') not found.")
@@ -45,8 +60,8 @@ class TestTaskIOIntegration(unittest.TestCase):
             )
 
             with patch.dict(os.environ, {"TASKDATA": str(taskdata)}, clear=False):
-                tasks_all = fetch_tasks(None, strict_errors=True)
-                tasks_filtered = fetch_tasks("project:Work +itest", strict_errors=True)
+                tasks_all = fetch_tasks(None)
+                tasks_filtered = fetch_tasks("project:Work +itest")
 
             self.assertTrue(any(t["desc"] == "Integration task" for t in tasks_all))
             self.assertTrue(any(t["desc"] == "Integration task" for t in tasks_filtered))

@@ -34,3 +34,5 @@ class RuntimePayloadBase(TypedDict):
 
 class RuntimePayload(RuntimePayloadBase, total=False):
     workspace_id: str
+    init_projects: list[str]
+    init_task_uuids: list[str]

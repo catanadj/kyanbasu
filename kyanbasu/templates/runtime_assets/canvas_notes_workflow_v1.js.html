@@ -1,0 +1,198 @@
+<style id="FEATURE_CANVAS_NOTES_WORKFLOW_V1_CSS">
+  #quickCaptureBtn{border-color:rgba(97,208,255,.45);color:#bfeeff}
+  .kyanbasuCaptureShade{position:fixed;inset:0;z-index:10050;background:rgba(4,10,18,.72);display:grid;place-items:center;padding:20px}
+  .kyanbasuCapturePanel{width:min(620px,96vw);padding:18px;border:1px solid #344b65;border-radius:12px;background:#101b2b;color:#e6edf7;box-shadow:0 18px 60px #0009}
+  .kyanbasuCapturePanel h2{margin:0 0 12px;font-size:18px}
+  .kyanbasuCapturePanel textarea{box-sizing:border-box;width:100%;min-height:160px;resize:vertical;padding:11px;border:1px solid #405672;border-radius:8px;background:#091321;color:#f3f7fc;font:inherit;line-height:1.5}
+  .kyanbasuCapturePanel select{max-width:100%;margin-top:10px;padding:7px;background:#091321;color:#f3f7fc;border:1px solid #405672;border-radius:6px}
+  .kyanbasuCaptureHelp{font-size:12px;color:#a9b8ca;margin:9px 0}
+  .kyanbasuCaptureActions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+  .kyanbasuMergePreview{max-height:180px;overflow:auto;padding-left:24px;font-size:13px;white-space:pre-wrap}
+  .kyanbasuMergeContent{max-height:180px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:10px;border-radius:7px;background:#091321;color:#e3edf9;font:inherit}
+</style>
+<script id="FEATURE_CANVAS_NOTES_WORKFLOW_V1">
+(function(){
+  if (window.__CANVAS_NOTES_WORKFLOW_V1__) return;
+  window.__CANVAS_NOTES_WORKFLOW_V1__ = true;
+  var notes = window.KyanbasuNotes;
+  if (!notes) return;
+  var previousFocus = null;
+  function toast(message){
+    if (typeof window.showToast === 'function') window.showToast(message);
+  }
+  function bucketNames(){
+    var seen = Object.create(null), result = [];
+    notes.notes().forEach(function(note){
+      var name = String(note.bucket || '').trim();
+      if (name && !seen[name]){ seen[name] = true; result.push(name); }
+    });
+    if (!seen.Inbox) result.unshift('Inbox');
+    return result;
+  }
+  function previewLines(text){
+    return String(text == null ? '' : text).replace(/\r\n?/g,'\n').split('\n').map(function(line){ return line.trim(); }).filter(function(line){ return !!line; });
+  }
+  function focusCaptured(id){
+    var state = typeof notes.focusState === 'function' ? notes.focusState() : null;
+    var lens = typeof notes.lensState === 'function' ? notes.lensState() : null;
+    var hadFilter = !!(state && state.kind && state.kind !== 'none') || !!(lens && lens.id);
+    if (typeof notes.clearFocus === 'function') notes.clearFocus();
+    if (typeof notes.clearLens === 'function') notes.clearLens();
+    if (typeof notes.focusSearchResult === 'function') notes.focusSearchResult(id);
+    else notes.selectNote(id);
+    if (hadFilter) toast('Cleared the current note filter to show the captured thought.');
+    if (typeof window.renderViewer === 'function') window.renderViewer();
+    setTimeout(function(){
+      var editor = document.querySelector('.tcNoteNode[data-note-id="'+String(id).replace(/"/g,'\\"')+'"] .tcNoteText');
+      if (editor) editor.focus();
+      if (typeof window.focusViewerNoteEditor === 'function') window.focusViewerNoteEditor(id);
+    }, 40);
+  }
+  function captureNotes(text, options){
+    options = options || {};
+    text = String(text == null ? '' : text);
+    var lines = options.mode === 'lines' ? previewLines(text) : (text.trim() ? [text.trim()] : []);
+    if (!lines.length) return {ok:false, ids:[], reason:'blank'};
+    var parentId = options.parentId ? String(options.parentId) : '';
+    var parent = parentId && notes.notes().filter(function(note){ return note.id === parentId; })[0];
+    if (parentId && !parent) return {ok:false, ids:[], reason:'missing-parent'};
+    var bucket = parent ? String(parent.bucket || '') : String(options.bucket || 'Inbox');
+    var x = parent ? Number(parent.x || 160) + 300 : 180;
+    var y = parent ? Number(parent.y || 160) + 128 : 180;
+    var createdIds = [];
+    var mutate = function(){
+      for (var i=0; i<lines.length; i++){
+        var created = parent ? notes.createChildNote(parentId, lines[i], '') : notes.createNote(x, y + i * 128, lines[i], '', bucket, {skipAutoLayout:true});
+        if (!created) return {ok:false, reason:'denied'};
+        createdIds.push(created.id);
+      }
+      focusCaptured(createdIds[createdIds.length - 1]);
+      return {ok:true, ids:createdIds.slice()};
+    };
+    var result = window.KyanbasuHistory && typeof window.KyanbasuHistory.transaction === 'function'
+      ? window.KyanbasuHistory.transaction('quick capture', mutate)
+      : mutate();
+    if (!result || result.ok === false) return {ok:false, ids:[], reason:(result && result.reason) || 'denied'};
+    return {ok:true, ids:createdIds};
+  }
+  notes.captureNotes = captureNotes;
+  function closeDialog(restore){
+    var shade = document.getElementById('kyanbasuNoteCapture');
+    if (shade) shade.remove();
+    if (restore && previousFocus && document.contains(previousFocus)) previousFocus.focus();
+    previousFocus = null;
+  }
+  function openCapture(){
+    if (document.getElementById('kyanbasuNoteCapture')) return;
+    previousFocus = document.activeElement;
+    var shade = document.createElement('div');
+    shade.id = 'kyanbasuNoteCapture'; shade.className = 'kyanbasuCaptureShade';
+    shade.setAttribute('role','presentation');
+    var panel = document.createElement('section');
+    panel.className = 'kyanbasuCapturePanel'; panel.setAttribute('role','dialog'); panel.setAttribute('aria-modal','true'); panel.setAttribute('aria-labelledby','kyanbasuCaptureTitle');
+    var title = document.createElement('h2'); title.id='kyanbasuCaptureTitle'; title.textContent='Quick capture';
+    var area = document.createElement('textarea'); area.setAttribute('aria-label','Thought'); area.placeholder='Capture a thought…';
+    var linesLabel=document.createElement('label'); linesLabel.className='kyanbasuCaptureHelp';
+    var linesMode=document.createElement('input'); linesMode.type='checkbox'; linesMode.setAttribute('aria-label','One note per line');
+    linesLabel.appendChild(linesMode); linesLabel.appendChild(document.createTextNode(' One note per line'));
+    var preview=document.createElement('div'); preview.className='kyanbasuCaptureHelp'; preview.setAttribute('aria-live','polite');
+    var select = document.createElement('select'); select.setAttribute('aria-label','Save location');
+    bucketNames().forEach(function(bucket){ var option=document.createElement('option'); option.value='bucket:'+bucket; option.textContent=bucket; if(bucket==='Inbox') option.selected=true; select.appendChild(option); });
+    var selected = notes.selectedNotes();
+    if (selected.length){ var option=document.createElement('option'); option.value='parent:'+selected[selected.length-1]; option.textContent='Child of selected note'; select.appendChild(option); }
+    var help=document.createElement('div'); help.className='kyanbasuCaptureHelp'; help.textContent='Enter adds a line · Ctrl/Cmd+Enter saves · Escape cancels · Alt+N opens capture';
+    var actions=document.createElement('div'); actions.className='kyanbasuCaptureActions';
+    var cancel=document.createElement('button'); cancel.type='button'; cancel.className='btn ghost'; cancel.textContent='Cancel';
+    var save=document.createElement('button'); save.type='button'; save.className='btn'; save.textContent='Capture';
+    var submitted=false;
+    var updatePreview=function(){ preview.textContent=linesMode.checked ? (previewLines(area.value).length+' notes will be created') : 'One note will be created'; };
+    var submit=function(){
+      if(submitted) return;
+      var destination=select.value || 'bucket:Inbox';
+      var opts=destination.indexOf('parent:')===0 ? {parentId:destination.slice(7)} : {bucket:destination.slice(7)};
+      opts.mode=linesMode.checked?'lines':'single';
+      var result=captureNotes(area.value,opts);
+      if (!result.ok){ if(result.reason==='blank') area.focus(); else toast('Could not capture that thought.'); return; }
+      submitted=true;
+      closeDialog(false);
+    };
+    cancel.addEventListener('click',function(){ closeDialog(true); });
+    save.addEventListener('click',submit);
+    area.addEventListener('input',updatePreview);
+    linesMode.addEventListener('change',updatePreview);
+    area.addEventListener('keydown',function(ev){
+      if(ev.isComposing || ev.keyCode===229) return;
+      if(ev.key==='Escape'){ ev.preventDefault(); closeDialog(true); }
+      else if(ev.key==='Enter' && (ev.ctrlKey || ev.metaKey)){ ev.preventDefault(); submit(); }
+    });
+    shade.addEventListener('mousedown',function(ev){ if(ev.target===shade) closeDialog(true); });
+    actions.appendChild(cancel); actions.appendChild(save);
+    panel.appendChild(title); panel.appendChild(area); panel.appendChild(linesLabel); panel.appendChild(preview); panel.appendChild(select); panel.appendChild(help); panel.appendChild(actions);
+    updatePreview();
+    shade.appendChild(panel); document.body.appendChild(shade); area.focus();
+  }
+  function openMerge(){
+    var ids=notes.selectedNotes();
+    if(ids.length<2){toast('Select two or more sibling notes to merge.');return;}
+    var rows=notes.notes(), labels=notes.noteLabels?notes.noteLabels():{}, chosen=ids[0];
+    var check=notes.validateMerge(ids,chosen);
+    var shade=document.createElement('div');shade.id='kyanbasuNoteMerge';shade.className='kyanbasuCaptureShade';
+    var panel=document.createElement('section');panel.className='kyanbasuCapturePanel';panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');
+    var title=document.createElement('h2');title.textContent='Merge notes';
+    var hint=document.createElement('div');hint.className='kyanbasuCaptureHelp';hint.textContent='Notes are previewed in outline order. The selected note keeps its ID, position, color, and status.';
+    var previewList=document.createElement('ol');previewList.className='kyanbasuMergePreview';
+    var survivorLabel=document.createElement('label');survivorLabel.textContent='Keep note: ';
+    var survivor=document.createElement('select');survivor.setAttribute('aria-label','Surviving note');
+    ids.forEach(function(id){
+      var note=rows.filter(function(item){return item.id===id;})[0];if(!note)return;
+      var option=document.createElement('option');option.value=id;option.textContent=(labels[id]?labels[id]+' · ':'')+String(note.content||'').slice(0,48);survivor.appendChild(option);
+    });
+    survivor.value=chosen;survivorLabel.appendChild(survivor);
+    var body=document.createElement('pre');body.className='kyanbasuMergeContent';
+    var reason=document.createElement('div');reason.className='kyanbasuCaptureHelp';reason.setAttribute('role','status');
+    var actions=document.createElement('div');actions.className='kyanbasuCaptureActions';
+    var cancel=document.createElement('button');cancel.type='button';cancel.className='btn ghost';cancel.textContent='Cancel';
+    var submit=document.createElement('button');submit.type='button';submit.className='btn';submit.textContent='Merge notes';
+    function update(){
+      var validation=notes.validateMerge(ids,survivor.value);
+      reason.textContent=validation.ok?'':validation.reason;
+      submit.disabled=!validation.ok;
+      previewList.innerHTML='';
+      (validation.orderedIds||ids).forEach(function(id){var note=rows.filter(function(item){return item.id===id;})[0];if(note){var li=document.createElement('li');li.textContent=note.content||'';previewList.appendChild(li);}});
+      body.textContent=validation.preview||'';
+    }
+    survivor.addEventListener('change',update);
+    submit.addEventListener('click',function(){
+      var result=notes.mergeNotes(ids,survivor.value);
+      if(!result.ok){reason.textContent=result.reason;return;}
+      shade.remove();
+    });
+    cancel.addEventListener('click',function(){shade.remove();});
+    actions.appendChild(cancel);actions.appendChild(submit);
+    panel.appendChild(title);panel.appendChild(hint);panel.appendChild(previewList);panel.appendChild(survivorLabel);panel.appendChild(body);panel.appendChild(reason);panel.appendChild(actions);
+    shade.appendChild(panel);document.body.appendChild(shade);update();cancel.focus();
+  }
+  window.KyanbasuNotesWorkflow = {openCapture:openCapture, openMerge:openMerge, previewLines:previewLines};
+  function installButton(){
+    if(document.getElementById('quickCaptureBtn')) return true;
+    var group=document.getElementById('noteToolsGroup');
+    if(!group) return false;
+    var button=document.createElement('button'); button.id='quickCaptureBtn'; button.type='button'; button.className='btn ghost';
+    button.textContent='Quick capture'; button.title='Capture a thought (Alt+N)'; button.addEventListener('click',openCapture); group.insertBefore(button,group.firstChild);
+    var merge=document.createElement('button');merge.id='mergeNotesBtn';merge.type='button';merge.className='btn ghost';merge.textContent='Merge notes';
+    merge.title='Merge selected sibling notes; conflicting link annotations are kept separate and block the merge.';
+    merge.addEventListener('click',openMerge);merge.disabled=notes.selectedNotes().length<2;group.insertBefore(merge,button.nextSibling);
+    return true;
+  }
+  var tries=0, timer=setInterval(function(){ tries++; if(installButton()||tries>=40) clearInterval(timer); },100);
+  document.addEventListener('keydown',function(ev){
+    if(ev.isComposing || ev.keyCode===229 || !ev.altKey || ev.ctrlKey || ev.metaKey || ev.key.toLowerCase()!=='n') return;
+    var target=ev.target, tag=String(target && target.tagName || '').toLowerCase();
+    if(target && (target.isContentEditable || tag==='input' || tag==='textarea' || tag==='select')) return;
+    ev.preventDefault(); openCapture();
+  },true);
+  document.addEventListener('kyanbasu:note-state',function(){
+    var button=document.getElementById('mergeNotesBtn');if(button)button.disabled=notes.selectedNotes().length<2;
+  });
+})();
+</script>

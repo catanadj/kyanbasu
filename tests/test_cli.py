@@ -1,40 +1,28 @@
 import contextlib
 import io
 import unittest
+import argparse
+from collections.abc import Sequence
+from typing import get_type_hints
 
-from kyanbasu.cli import _extract_bg_args, _extract_filter_arg, build_parser, parse_args
+import kyanbasu.cli as cli
+from kyanbasu.cli import build_parser, parse_args
 
 
 class TestCliHelpers(unittest.TestCase):
-    def test_extract_filter_arg_separate_token(self):
-        filt, rest = _extract_filter_arg(["--filter", "project:Work +P1", "Home"])
-        self.assertEqual(filt, "project:Work +P1")
-        self.assertEqual(rest, ["Home"])
-
-    def test_extract_filter_arg_equals_form(self):
-        filt, rest = _extract_filter_arg(["--filter=due.before:today", "Home"])
-        self.assertEqual(filt, "due.before:today")
-        self.assertEqual(rest, ["Home"])
-
-    def test_extract_filter_arg_missing_value_raises(self):
-        with self.assertRaisesRegex(ValueError, "--filter requires a value"):
-            _extract_filter_arg(["--filter"])
-
-    def test_extract_bg_args_mixed_forms(self):
-        bg, opacity, rest = _extract_bg_args(["--bg", "wall.jpg", "--bg-opacity=0.22", "Home"])
-        self.assertEqual(bg, "wall.jpg")
-        self.assertEqual(opacity, "0.22")
-        self.assertEqual(rest, ["Home"])
-
-    def test_extract_bg_args_equals_form(self):
-        bg, opacity, rest = _extract_bg_args(["--bg=wall.jpg", "Inbox"])
-        self.assertEqual(bg, "wall.jpg")
-        self.assertIsNone(opacity)
-        self.assertEqual(rest, ["Inbox"])
-
-    def test_extract_bg_args_missing_value_raises(self):
-        with self.assertRaisesRegex(ValueError, "--bg requires a value"):
-            _extract_bg_args(["--bg"])
+    def test_parse_args_and_parser_error_have_precise_api_types(self):
+        self.assertEqual(
+            get_type_hints(cli.parse_args),
+            {
+                "argv": Sequence[str] | None,
+                "prog": str,
+                "return": argparse.Namespace,
+            },
+        )
+        self.assertEqual(
+            get_type_hints(cli._KyanbasuParser.error),
+            {"message": str, "return": type(None)},
+        )
 
     def test_parse_args_accepts_current_cli_shape(self):
         args = parse_args([

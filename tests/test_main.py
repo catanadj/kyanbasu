@@ -4,9 +4,11 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
+from typing import get_type_hints
 from unittest.mock import patch
 
 import kyanbasu.app as Kyanbasu
+from kyanbasu.task_types import RuntimePayload, TaskRecord
 
 
 def _task(uuid: str, desc: str, project: str = "Work", depends=None, due=None):
@@ -23,6 +25,78 @@ def _task(uuid: str, desc: str, project: str = "Work", depends=None, due=None):
 
 
 class TestMainFlow(unittest.TestCase):
+    def test_app_boundaries_use_task_and_payload_contracts(self):
+        self.assertEqual(get_type_hints(Kyanbasu._load_pending_tasks)["return"], list[TaskRecord])
+        self.assertEqual(
+            get_type_hints(Kyanbasu._resolve_initial_projects)["tasks_all"],
+            list[TaskRecord],
+        )
+        self.assertEqual(
+            get_type_hints(Kyanbasu._apply_initial_placements)["payload"],
+            RuntimePayload,
+        )
+        self.assertEqual(get_type_hints(Kyanbasu._render_html)["payload"], RuntimePayload)
+        self.assertEqual(get_type_hints(Kyanbasu._json_text)["data"], RuntimePayload)
+
+    def test_runtime_payload_declares_optional_initial_placement_fields(self):
+        self.assertEqual(get_type_hints(RuntimePayload).get("init_projects"), list[str])
+        self.assertEqual(get_type_hints(RuntimePayload).get("init_task_uuids"), list[str])
+
+    def test_runtime_config_resolves_output_and_log_level_per_invocation(self):
+        with patch.dict(
+            Kyanbasu.os.environ,
+            {"KYANBASU_OUTPUT": "/tmp/first/Kyanbasu.html", "KYANBASU_LOG_LEVEL": "WARNING"},
+            clear=True,
+        ):
+            first = Kyanbasu._resolve_runtime_config()
+            first_level = first.logger.level
+        with patch.dict(
+            Kyanbasu.os.environ,
+            {"KYANBASU_OUTPUT": "/tmp/second/Kyanbasu.html", "KYANBASU_LOG_LEVEL": "ERROR"},
+            clear=True,
+        ):
+            second = Kyanbasu._resolve_runtime_config()
+
+        self.assertEqual(first.out_html, Path("/tmp/first/Kyanbasu.html"))
+        self.assertEqual(second.out_html, Path("/tmp/second/Kyanbasu.html"))
+        self.assertEqual(first_level, logging.WARNING)
+        self.assertEqual(second.logger.level, logging.ERROR)
+
+    def test_output_replace_failure_preserves_existing_html_and_cleans_temp_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "Kyanbasu.html"
+            output.write_text("previous", encoding="utf-8")
+
+            with patch.object(Kyanbasu.os, "replace", side_effect=OSError("replace failed")):
+                with self.assertRaisesRegex(RuntimeError, "replace failed"):
+                    Kyanbasu._write_output_html("new", output)
+
+            self.assertEqual(output.read_text(encoding="utf-8"), "previous")
+            self.assertEqual(list(Path(tmp).iterdir()), [output])
+
+    def test_runtime_config_does_not_read_legacy_module_output_global(self):
+        legacy_output = Path("/tmp/legacy-output.html")
+        with patch.dict(Kyanbasu.__dict__, {"OUT_HTML": legacy_output}), patch.dict(
+            Kyanbasu.os.environ, {}, clear=True
+        ):
+            config = Kyanbasu._resolve_runtime_config()
+
+        self.assertNotEqual(config.out_html, legacy_output)
+
+    def test_render_html_logs_embedded_task_count_at_application_boundary(self):
+        with patch.object(Kyanbasu, "_load_runtime_html", return_value="base"), patch.object(
+            Kyanbasu, "build_runtime_html", return_value="rendered"
+        ), patch.object(Kyanbasu, "eprint") as mock_eprint:
+            result = Kyanbasu._render_html([_task("a", "Alpha")], {"tasks": [], "graph": {}})
+
+        self.assertEqual(result, "rendered")
+        mock_eprint.assert_called_once_with("Embedded tasks: 1")
+
+    def test_resolve_initial_projects_propagates_unexpected_selector_errors(self):
+        with patch.object(Kyanbasu, "run_project_selector", side_effect=RuntimeError("selector bug")):
+            with self.assertRaisesRegex(RuntimeError, "selector bug"):
+                Kyanbasu._resolve_initial_projects([_task("a", "Alpha")], [], True)
+
     def test_logger_uses_kyanbasu_log_level(self):
         original_level = Kyanbasu.LOGGER.level
         try:
@@ -37,7 +111,10 @@ class TestMainFlow(unittest.TestCase):
             _task("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "Alpha", project="Home"),
             _task("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", "Beta"),
         ]
-        filtered_tasks = [_task("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", "Beta")]
+        filtered_tasks = [
+            _task("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", "Beta"),
+            _task("cccccccc-cccc-cccc-cccc-cccccccccccc", "Not in pending payload"),
+        ]
 
         calls = []
 
@@ -47,10 +124,10 @@ class TestMainFlow(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             out_html = Path(tmp) / "Kyanbasu.html"
-            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+            with patch.dict(Kyanbasu.os.environ, {"KYANBASU_OUTPUT": str(out_html)}), patch.object(
                 Kyanbasu, "fetch_tasks", side_effect=fake_fetch
             ), patch.object(
-                Kyanbasu, "build_payload", return_value={"tasks": [], "graph": {}}
+                Kyanbasu, "build_payload", return_value={"tasks": all_tasks, "graph": {}}
             ), patch.object(
                 Kyanbasu, "run_project_selector", return_value=["FromSelector"]
             ), patch.object(
@@ -88,6 +165,20 @@ class TestMainFlow(unittest.TestCase):
             self.assertEqual(payload["init_projects"], ["FromSelector", "Home"])
             self.assertEqual(payload["init_task_uuids"], ["bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"])
 
+    def test_apply_initial_placements_omits_filter_ids_missing_from_payload(self):
+        payload = {"tasks": [_task("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", "Beta")], "graph": {}}
+
+        result = Kyanbasu._apply_initial_placements(
+            payload,
+            [],
+            [
+                "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                "cccccccc-cccc-cccc-cccc-cccccccccccc",
+            ],
+        )
+
+        self.assertEqual(result["init_task_uuids"], ["bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"])
+
     def test_main_returns_error_on_invalid_filter(self):
         def fake_fetch(filter_str=None, timeout=30, log_fn=None, strict_errors=False):
             if filter_str is None:
@@ -96,7 +187,7 @@ class TestMainFlow(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             out_html = Path(tmp) / "Kyanbasu.html"
-            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+            with patch.dict(Kyanbasu.os.environ, {"KYANBASU_OUTPUT": str(out_html)}), patch.object(
                 Kyanbasu, "fetch_tasks", side_effect=fake_fetch
             ), patch.object(
                 Kyanbasu, "_load_runtime_html"
@@ -115,7 +206,7 @@ class TestMainFlow(unittest.TestCase):
     def test_main_returns_error_on_missing_filter_value(self):
         with tempfile.TemporaryDirectory() as tmp:
             out_html = Path(tmp) / "Kyanbasu.html"
-            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+            with patch.dict(Kyanbasu.os.environ, {"KYANBASU_OUTPUT": str(out_html)}), patch.object(
                 Kyanbasu, "fetch_tasks"
             ) as mock_fetch, patch.object(
                 Kyanbasu, "open_file"
@@ -132,7 +223,7 @@ class TestMainFlow(unittest.TestCase):
     def test_main_returns_error_on_missing_bg_value(self):
         with tempfile.TemporaryDirectory() as tmp:
             out_html = Path(tmp) / "Kyanbasu.html"
-            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+            with patch.dict(Kyanbasu.os.environ, {"KYANBASU_OUTPUT": str(out_html)}), patch.object(
                 Kyanbasu, "fetch_tasks", return_value=[]
             ), patch.object(
                 Kyanbasu, "_find_bg_file"
@@ -151,7 +242,7 @@ class TestMainFlow(unittest.TestCase):
     def test_main_returns_error_on_template_load_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
             out_html = Path(tmp) / "Kyanbasu.html"
-            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+            with patch.dict(Kyanbasu.os.environ, {"KYANBASU_OUTPUT": str(out_html)}), patch.object(
                 Kyanbasu, "fetch_tasks", return_value=[]
             ), patch.object(
                 Kyanbasu, "build_payload", return_value={"tasks": [], "graph": {}}
@@ -173,7 +264,7 @@ class TestMainFlow(unittest.TestCase):
     def test_main_succeeds_even_if_auto_open_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
             out_html = Path(tmp) / "Kyanbasu.html"
-            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+            with patch.dict(Kyanbasu.os.environ, {"KYANBASU_OUTPUT": str(out_html)}), patch.object(
                 Kyanbasu, "fetch_tasks", return_value=[]
             ), patch.object(
                 Kyanbasu, "_find_bg_file", return_value=None
@@ -200,7 +291,7 @@ class TestMainFlow(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             out_html = Path(tmp) / "Kyanbasu.html"
-            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+            with patch.dict(Kyanbasu.os.environ, {"KYANBASU_OUTPUT": str(out_html)}), patch.object(
                 Kyanbasu, "fetch_tasks", return_value=tasks
             ), patch.object(
                 Kyanbasu, "_find_bg_file", return_value=None
@@ -259,7 +350,7 @@ class TestMainFlow(unittest.TestCase):
     def test_main_generates_distinct_reset_and_clear_canvas_paths(self):
         with tempfile.TemporaryDirectory() as tmp:
             out_html = Path(tmp) / "Kyanbasu.html"
-            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+            with patch.dict(Kyanbasu.os.environ, {"KYANBASU_OUTPUT": str(out_html)}), patch.object(
                 Kyanbasu, "fetch_tasks", return_value=[]
             ), patch.object(
                 Kyanbasu, "_find_bg_file", return_value=None
@@ -282,7 +373,7 @@ class TestMainFlow(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             out_html = Path(tmp) / "Kyanbasu.html"
-            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+            with patch.dict(Kyanbasu.os.environ, {"KYANBASU_OUTPUT": str(out_html)}), patch.object(
                 Kyanbasu, "fetch_tasks", return_value=tasks
             ), patch.object(
                 Kyanbasu, "_find_bg_file", return_value=None
@@ -300,7 +391,7 @@ class TestMainFlow(unittest.TestCase):
     def test_main_places_dependency_lines_between_bubbles_and_labels(self):
         with tempfile.TemporaryDirectory() as tmp:
             out_html = Path(tmp) / "Kyanbasu.html"
-            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+            with patch.dict(Kyanbasu.os.environ, {"KYANBASU_OUTPUT": str(out_html)}), patch.object(
                 Kyanbasu, "fetch_tasks", return_value=[]
             ), patch.object(
                 Kyanbasu, "_find_bg_file", return_value=None
@@ -322,7 +413,7 @@ class TestMainFlow(unittest.TestCase):
     def test_main_generates_dependency_details_for_task_inspector(self):
         with tempfile.TemporaryDirectory() as tmp:
             out_html = Path(tmp) / "Kyanbasu.html"
-            with patch.object(Kyanbasu, "OUT_HTML", out_html), patch.object(
+            with patch.dict(Kyanbasu.os.environ, {"KYANBASU_OUTPUT": str(out_html)}), patch.object(
                 Kyanbasu, "fetch_tasks", return_value=[]
             ), patch.object(
                 Kyanbasu, "_find_bg_file", return_value=None

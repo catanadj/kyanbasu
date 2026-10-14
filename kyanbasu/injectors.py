@@ -1,5 +1,5 @@
 import re
-import sys
+import logging
 from pathlib import Path
 from typing import Callable
 
@@ -11,22 +11,17 @@ from kyanbasu.runtime_support import (
     load_runtime_asset,
 )
 
-ENERGY_ARROW_CSS = load_runtime_asset("injector_energy_arrows.css.html")
+GENERATOR_LOGGER = logging.getLogger("Kyanbasu")
 
 
-ENERGY_ARROW_JS = load_runtime_asset("injector_energy_arrows.js.html")
+def _report_injector_failure(log_fn: Callable[[str], None] | None, message: str) -> None:
+    if log_fn is None:
+        GENERATOR_LOGGER.warning(message)
+    else:
+        log_fn(message)
 
 
-CSS_WIRE_DEPS_AS_MAIN = load_runtime_asset("injector_wire_deps_as_main.css.html")
-
-
-JS_WIRE_DEPS_AS_MAIN = load_runtime_asset("injector_wire_deps_as_main.js.html")
-
-
-REMOVE_MODE_JS = load_runtime_asset("injector_remove_mode_v61.js.txt")
-
-
-def inject_hover_console_features(html: str, *, log=True) -> str:
+def inject_hover_console_features(html: str, *, log: bool = True) -> str:
     """
     Injects:
       - Modify injector (short IDs)
@@ -36,10 +31,7 @@ def inject_hover_console_features(html: str, *, log=True) -> str:
     Prints generator-side logs.
     """
     def logp(*a):
-        if log: print(*a, file=sys.stderr)
-
-    def append_before_body(doc: str, snippet: str) -> str:
-        return inject_body(doc, snippet)
+        if log: GENERATOR_LOGGER.info(" ".join(str(value) for value in a))
 
     snip_obs = load_runtime_asset("injector_hover_stage_observer.js.html")
     snip_shortify = load_runtime_asset("injector_shortify_render.js.html")
@@ -66,26 +58,26 @@ def inject_hover_console_features(html: str, *, log=True) -> str:
             html = new_html
         else:
             # Fallback: append at </body> so it still works if the anchor shifts/minifies away
-            html = append_before_body(html, "<script>" + snip_modify + "</script>\n")
+            html = inject_body(html, "<script>" + snip_modify + "</script>\n")
             logp("[gen] modify injector: fallback appended at </body>.")
 
     # Ensure observer present
     if "FEATURE_HOVER_STAGE_OBSERVER_V1" not in html:
-        html = append_before_body(html, snip_obs + "\n")
+        html = inject_body(html, snip_obs + "\n")
         logp("[gen] observer: appended.")
     else:
         logp("[gen] observer: already present.")
 
     # Ensure shortify present
     if "FEATURE_SHORTIFY_RENDER_V1" not in html:
-        html = append_before_body(html, snip_shortify + "\n")
+        html = inject_body(html, snip_shortify + "\n")
         logp("[gen] shortify: appended.")
     else:
         logp("[gen] shortify: already present.")
 
     # Ensure merge wrapper present
     if "FEATURE_CONSOLE_MERGE_V3" not in html:
-        html = append_before_body(html, snip_merge + "\n")
+        html = inject_body(html, snip_merge + "\n")
         logp("[gen] merge wrapper: appended.")
     else:
         logp("[gen] merge wrapper: already present.")
@@ -171,20 +163,22 @@ def _append_remove_mode(html):
         if '__FIXPACK_V61__' in html:
             return html
 
+        remove_mode_js = load_runtime_asset("injector_remove_mode_v61.js.txt")
         return inject_body(
             html,
-            '\n<script id="__FIXPACK_V61__">\n' + REMOVE_MODE_JS + '\n</script>\n',
+            '\n<script id="__FIXPACK_V61__">\n' + remove_mode_js + '\n</script>\n',
         )
 
-    except Exception as e:
-        # Log error but don't break the build
-        print(f"Warning: Failed to inject working JS for remove mode: {e}")
+    except RuntimeError as e:
+        GENERATOR_LOGGER.warning("Failed to inject working JS for remove mode: %s", e)
         return html
 
 
 def inject_wire_deps_as_main(html: str) -> str:
-    html = inject_head_once(html, "__ONLY_DEPS_CONSOLE_CSS__", CSS_WIRE_DEPS_AS_MAIN + "\n")
-    html = inject_body_once(html, "__ONLY_DEPS_CONSOLE_JS__", JS_WIRE_DEPS_AS_MAIN + "\n")
+    css = load_runtime_asset("injector_wire_deps_as_main.css.html")
+    js = load_runtime_asset("injector_wire_deps_as_main.js.html")
+    html = inject_head_once(html, "__ONLY_DEPS_CONSOLE_CSS__", css + "\n")
+    html = inject_body_once(html, "__ONLY_DEPS_CONSOLE_JS__", js + "\n")
     return html
 
 
@@ -228,7 +222,7 @@ def inject_custom_background(
     Ensures the background image is next to out_html and injects a <style> overlay.
     Uses a body::before fixed cover layer with adjustable opacity.
     """
-    import re, shutil
+    import shutil
     try:
         out_dir = out_html.parent
         out_img = out_dir / img_path.name
@@ -238,9 +232,12 @@ def inject_custom_background(
                 shutil.copyfile(str(img_path), str(out_img))
                 if log_fn:
                     log_fn(f"Copied background to {out_img.name}")
-            except Exception as e:
-                if log_fn:
-                    log_fn(f"Background copy failed: {e}; will still reference original name.")
+            except OSError as e:
+                _report_injector_failure(log_fn, f"Background copy failed: {e}")
+                return html
+        elif not out_img.is_file():
+            _report_injector_failure(log_fn, f"Background file is missing: {out_img}")
+            return html
         op = opacity if (opacity and opacity.strip()) else "0.18"
         css = f"""
 <style id="FEATURE_CUSTOM_BG_V1">
@@ -256,15 +253,16 @@ def inject_custom_background(
   .app{{position:relative; z-index:1;}}
 </style>""".strip()
         return inject_head(html, css + "\n")
-    except Exception as e:
-        if log_fn:
-            log_fn(f"Custom background injection failed: {e}")
+    except (OSError, RuntimeError) as e:
+        _report_injector_failure(log_fn, f"Custom background injection failed: {e}")
         return html
 
 
 def inject_energy_arrows(html: str) -> str:
-    html = inject_head_once(html, "__ENERGY_ARROW_CSS__", ENERGY_ARROW_CSS + "\n")
-    html = inject_body_once(html, "__ENERGY_ARROW_JS__", ENERGY_ARROW_JS + "\n")
+    css = load_runtime_asset("injector_energy_arrows.css.html")
+    js = load_runtime_asset("injector_energy_arrows.js.html")
+    html = inject_head_once(html, "__ENERGY_ARROW_CSS__", css + "\n")
+    html = inject_body_once(html, "__ENERGY_ARROW_JS__", js + "\n")
     return html
 
 
@@ -282,12 +280,15 @@ def inject_command_preflight(html: str) -> str:
     return inject_body_once(html, 'id="FEATURE_COMMAND_PREFLIGHT_V1"', js + "\n")
 
 
-def inject_runtime_diagnostics(html: str) -> str:
+def inject_runtime_diagnostics(html: str, *, debug: bool = False) -> str:
     """
     Lightweight browser diagnostics:
       - captures global error / unhandledrejection events
       - keeps a bounded in-memory ring buffer
       - exposes snapshot via window.KyanbasuDiagnostics()
     """
-    js = load_runtime_asset("injector_runtime_diagnostics_v1.js.html")
+    js = (
+        f"<script>window.KYANBASU_DEBUG = {str(debug).lower()};</script>\n"
+        + load_runtime_asset("injector_runtime_diagnostics_v1.js.html")
+    )
     return inject_body_once(html, 'id="FEATURE_RUNTIME_DIAGNOSTICS_V1"', js + "\n")

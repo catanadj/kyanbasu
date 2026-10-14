@@ -87,9 +87,21 @@
     if (note) note.updatedAt = Date.now();
     return note;
   }
+  function globalMutationAllowed(action, context){
+    var policy = window.KyanbasuNotePolicy;
+    if (!policy) return true;
+    var authorize = typeof policy === 'function' ? policy : policy.authorize;
+    if (typeof authorize !== 'function') return true;
+    try{
+      return authorize(action, context || {}) !== false;
+    }catch(_){
+      return false;
+    }
+  }
   function markNoteReviewed(id, skipRender){
     var note = noteById(id);
     if (!note) return false;
+    if (!globalMutationAllowed('review', {noteId:id})) return false;
     note.reviewedAt = Date.now();
     saveSoon();
     if (!skipRender){
@@ -111,6 +123,7 @@
   function setNoteContent(id, content){
     var n = noteById(id);
     if (!n) return false;
+    if (!globalMutationAllowed('content', {noteId:id})) return false;
     var next = String(content || '').trim() || 'New note';
     if (n.content === next) return true;
     n.content = next;
@@ -1152,9 +1165,16 @@
   }
   function addNoteLink(from, to, type){
     type = NoteCore.normalizeRelation(type);
+    if (!globalMutationAllowed('link.create', {from:from, to:to, type:type})) return false;
     var validation = validateLink(from, to, type, links, null, null);
     if (!validation.ok){ noteFeedback(validation.reason); return false; }
     links.push({from:from, to:to, type:type});
+    if (type === 'child'){
+      var child = noteById(to);
+      if (child) child.outlineOrder = childLinksFrom(from).length - 1;
+      renumberOutlineGroup(from);
+      renumberOutlineGroup(null);
+    }
     touchNote(noteById(from));
     touchNote(noteById(to));
     return true;
@@ -1167,6 +1187,7 @@
       var link = links[i];
       if (noteLinkKey(link) !== key) continue;
       if (NoteCore.normalizeRelation(link.type) === type) return true;
+      if (!globalMutationAllowed('link.type', {key:key, from:link.from, to:link.to, type:type})) return false;
       var validation = validateLink(link.from, link.to, type, links, key, null);
       if (!validation.ok){ noteFeedback(validation.reason); return false; }
       link.type = type;
@@ -1187,6 +1208,7 @@
       var link = links[i];
       if (noteLinkKey(link) !== key) continue;
       var normalized = NoteCore.normalizeLinkAnnotation(annotation);
+      if (!globalMutationAllowed('link.annotation', {key:key, from:link.from, to:link.to})) return false;
       if (normalized) link.annotation = normalized;
       else delete link.annotation;
       touchNote(noteById(link.from));
@@ -1210,6 +1232,113 @@
   }
   function noteOutline(){
     return NoteCore.outline(notes, links);
+  }
+  function siblingsForParent(parentId){
+    var siblings = parentId ? childLinksFrom(parentId).map(function(link){ return noteById(link.to); }).filter(Boolean) : notes.filter(function(note){ return !parentLinkFor(note.id); });
+    return siblings.slice().sort(function(a,b){
+      if (typeof a.outlineOrder === 'number' && typeof b.outlineOrder === 'number' && a.outlineOrder !== b.outlineOrder) return a.outlineOrder-b.outlineOrder;
+      if (parentId){ if (toInt(a.y,160)!==toInt(b.y,160)) return toInt(a.y,160)-toInt(b.y,160); }
+      else if (toInt(a.x,160)!==toInt(b.x,160)) return toInt(a.x,160)-toInt(b.x,160);
+      return toInt(a.y,160)-toInt(b.y,160) || String(a.id).localeCompare(String(b.id));
+    });
+  }
+  function renumberOutlineGroup(parentId){
+    siblingsForParent(parentId).forEach(function(note,index){ note.outlineOrder=index; });
+  }
+  function initializeOutlineOrders(){
+    var parents=Object.create(null);
+    notes.forEach(function(note){ var parent=parentLinkFor(note.id); parents[parent ? parent.from : '']=true; });
+    Object.keys(parents).forEach(function(key){
+      var parentId=key || null, group=siblingsForParent(parentId);
+      if (group.some(function(note){ return typeof note.outlineOrder !== 'number'; })){
+        group.sort(function(a,b){
+          if(parentId){ if(toInt(a.y,160)!==toInt(b.y,160)) return toInt(a.y,160)-toInt(b.y,160); }
+          else if(toInt(a.x,160)!==toInt(b.x,160)) return toInt(a.x,160)-toInt(b.x,160);
+          return toInt(a.y,160)-toInt(b.y,160) || String(a.id).localeCompare(String(b.id));
+        }).forEach(function(note,index){note.outlineOrder=index;});
+      } else group.forEach(function(note,index){note.outlineOrder=index;});
+    });
+  }
+  function structuralEditProtected(note){
+    if (!note) return true;
+    if (noteAnalysis(note) || note.decisionRecord || note.decisionProcess) return true;
+    if (['decision','option','factor','outcome'].indexOf(noteKind(note)) !== -1) return true;
+    return !!workflowModuleFor(note.id);
+  }
+  function branchSubtreeIds(id){
+    var seen=Object.create(null), stack=[id], result=[];
+    while(stack.length){ var next=stack.pop(); if(seen[next]) continue; seen[next]=true; result.push(next); childLinksFrom(next).forEach(function(link){stack.push(link.to);}); }
+    return result;
+  }
+  function moveBranch(id,parentId,index){
+    id=String(id||''); parentId=parentId==null || parentId==='' ? null : String(parentId);
+    var note=noteById(id);
+    if(!note) return {ok:false,reason:'Missing source note.'};
+    if(parentId && !noteById(parentId)) return {ok:false,reason:'Missing destination note.'};
+    if(parentId===id) return {ok:false,reason:'A note cannot be its own parent.'};
+    if(typeof index!=='number' || !isFinite(index) || Math.floor(index)!==index) return {ok:false,reason:'Index must be an integer.'};
+    var subtree=branchSubtreeIds(id);
+    if(parentId && subtree.indexOf(parentId)!==-1) return {ok:false,reason:'A branch cannot move beneath its descendant.'};
+    var cursor=note;
+    while(cursor){
+      if(structuralEditProtected(cursor)) return {ok:false,reason:'Decision branches cannot be moved with generic branch controls.'};
+      var ancestor=parentLinkFor(cursor.id); cursor=ancestor ? noteById(ancestor.from) : null;
+    }
+    cursor=parentId ? noteById(parentId) : null;
+    while(cursor){
+      if(structuralEditProtected(cursor)) return {ok:false,reason:'Decision branches cannot be moved with generic branch controls.'};
+      var destinationParent=parentLinkFor(cursor.id); cursor=destinationParent ? noteById(destinationParent.from) : null;
+    }
+    for(var si=0;si<subtree.length;si++) if(structuralEditProtected(noteById(subtree[si]))) return {ok:false,reason:'Decision branches cannot be moved with generic branch controls.'};
+    var oldLink=parentLinkFor(id), oldParent=oldLink ? oldLink.from : null;
+    var originalGroup=siblingsForParent(oldParent), oldIndex=originalGroup.map(function(n){return n.id;}).indexOf(id);
+    var targetGroup=siblingsForParent(parentId).filter(function(n){return n.id!==id;});
+    var targetIndex=Math.max(0,Math.min(targetGroup.length,index));
+    if(oldParent===parentId && oldIndex===targetIndex) return {ok:true,changed:false};
+    var allowed=globalMutationAllowed('branch.move',{noteId:id,parentId:parentId,index:targetIndex});
+    if(!allowed) return {ok:false,reason:'This branch move is not authorized.'};
+    var candidateLinks=links.filter(function(link){ return !(link && link.type==='child' && link.to===id); });
+    if(parentId){
+      var valid=NoteCore.validateLink({from:parentId,to:id,type:'child'},candidateLinks,{notes:notes});
+      if(!valid.ok) return {ok:false,reason:valid.reason};
+    }
+    var apply=function(){
+      links=candidateLinks;
+      if(parentId){
+        var nextLink={from:parentId,to:id,type:'child'};
+        if(oldLink && oldLink.annotation) nextLink.annotation=NoteCore.normalizeLinkAnnotation(oldLink.annotation);
+        links.push(nextLink);
+      }
+      var inserted=siblingsForParent(parentId).filter(function(n){return n.id!==id;});
+      inserted.splice(targetIndex,0,note);
+      inserted.forEach(function(sibling,order){sibling.outlineOrder=order;});
+      if(oldParent!==parentId) renumberOutlineGroup(oldParent);
+      selectNote(id);
+      renderAll(); refreshViewerOutline(); syncNoteLabels(); saveSoon();
+      try{ if(typeof renderViewer==='function') renderViewer(); }catch(_){}
+      return {ok:true,changed:true};
+    };
+    if(window.KyanbasuHistory && typeof window.KyanbasuHistory.transaction==='function') return window.KyanbasuHistory.transaction('move note branch',apply) || {ok:false,reason:'Move was rolled back.'};
+    return apply();
+  }
+  function reorderBranch(id,index){
+    var link=parentLinkFor(String(id||''));
+    if(!noteById(id)) return {ok:false,reason:'Missing source note.'};
+    return moveBranch(id,link?link.from:null,index);
+  }
+  function moveToSiblingIndex(id,delta){
+    var parent=parentLinkFor(id), group=siblingsForParent(parent?parent.from:null), index=group.map(function(note){return note.id;}).indexOf(id);
+    return reorderBranch(id,index+delta);
+  }
+  function indentBranch(id){
+    var link=parentLinkFor(String(id||'')), siblings=siblingsForParent(link?link.from:null), at=siblings.map(function(n){return n.id;}).indexOf(id);
+    if(at<=0) return {ok:false,reason:'There is no preceding sibling to indent beneath.'};
+    var parent=siblings[at-1]; return moveBranch(id,parent.id,childLinksFrom(parent.id).length);
+  }
+  function outdentBranch(id){
+    var link=parentLinkFor(String(id||'')); if(!link) return {ok:false,reason:'This note is already at the root level.'};
+    var parent=noteById(link.from), grand=parentLinkFor(parent.id), peers=siblingsForParent(grand?grand.from:null), parentAt=peers.map(function(n){return n.id;}).indexOf(parent.id);
+    return moveBranch(id,grand?grand.from:null,parentAt+1);
   }
   function focusedNoteOutline(){
     if (!noteFocus && !noteLens) return noteOutline();
@@ -1468,6 +1597,47 @@
       currentId:noteReview.ids[noteReview.index] || null,
       context:reviewContextLabel()
     };
+  }
+  function captureViewState(){
+    var search=document.getElementById('noteSearchInput');
+    return {
+      version:1,
+      selectedIds:selectedIds().filter(function(id){return !!noteById(id);}),
+      primaryId:selectedNoteId && noteById(selectedNoteId) ? selectedNoteId : null,
+      focus:noteFocus ? cloneValue(noteFocus) : null,
+      lens:noteLens ? {id:noteLens.id,query:noteLens.query} : null,
+      searchText:search ? search.value : noteSearchQuery,
+      review:noteReviewSnapshot()
+    };
+  }
+  function restoreViewState(state){
+    state=state && typeof state==='object' ? state : {};
+    noteFocus=null; noteLens=null; noteReview=null;
+    noteSearchQuery=String(state.searchText||'');
+    var search=document.getElementById('noteSearchInput'); if(search) search.value=noteSearchQuery;
+    var focus=state.focus;
+    if(focus && focus.kind==='branch' && noteById(focus.value)) noteFocus={kind:'branch',value:focus.value};
+    else if(focus && focus.kind==='bucket' && notes.some(function(note){return noteBucket(note)===bucketText(focus.value);})) noteFocus={kind:'bucket',value:bucketText(focus.value)};
+    var lensState=state.lens, definition=lensState && noteLensDefinition(lensState.id);
+    if(definition) noteLens={id:definition.id,label:definition.label,query:definition.query,ids:Object.create(null)};
+    renderAll();
+    var picked=Array.isArray(state.selectedIds) ? state.selectedIds.filter(function(id){return !!noteById(id);}) : [];
+    var primary=state.primaryId && picked.indexOf(state.primaryId)!==-1 ? state.primaryId : (picked[picked.length-1]||null);
+    selectNotes(picked,false);
+    if(primary) selectedNoteId=primary;
+    syncSelection();
+    var review=state.review || {};
+    if(review.active){
+      var candidates=reviewCandidateIds();
+      if(candidates.length){
+        var index=review.currentId ? candidates.indexOf(review.currentId) : -1;
+        noteReview={ids:candidates,index:index>=0?index:0};
+        focusReviewNote();
+      }
+    }
+    renderNoteReviewPanel();
+    refreshViewerOutline();
+    return true;
   }
   function syncNoteReviewQueue(){
     if (!noteReview) return;
@@ -1807,6 +1977,7 @@
   function setBucketColor(bucket, color){
     bucket = bucketText(bucket);
     color = String(color || '').trim();
+    if (!globalMutationAllowed('bucket.color', {bucket:bucket, color:color})) return false;
     if (bucketPalette.indexOf(color) === -1 && !hexToRgb(color)) return false;
     bucketColorState[bucket] = color;
     renderAll();
@@ -1819,6 +1990,7 @@
   function setNoteColor(id, color){
     var n = noteById(id);
     if (!n) return false;
+    if (!globalMutationAllowed('color', {noteId:id, color:color})) return false;
     color = String(color || '').trim();
     if (!color || color === 'bucket'){
       delete n.color;
@@ -1839,6 +2011,7 @@
   function setNoteKind(id, kind){
     var n = noteById(id);
     if (!n) return false;
+    if (!globalMutationAllowed('kind', {noteId:id, kind:kind})) return false;
     kind = NoteCore.normalizeKind(kind);
     if (n.kind === kind) return true;
     n.kind = kind;
@@ -1851,6 +2024,7 @@
   function setNoteStatus(id, status){
     var n = noteById(id);
     if (!n) return false;
+    if (!globalMutationAllowed('status', {noteId:id, status:status})) return false;
     status = NoteCore.normalizeStatus(status);
     if (n.status === status) return true;
     n.status = status;
@@ -1926,6 +2100,7 @@
   function linkNoteToTask(noteId, taskOrId){
     var n = noteById(noteId);
     if (!n) return false;
+    if (!globalMutationAllowed('task.link', {noteId:noteId})) return false;
     var task = typeof taskOrId === 'string' ? taskById(taskOrId) : taskOrId;
     var ref = taskRefFromTask(task) || normalizeTaskRef(taskOrId);
     if (!ref) return false;
@@ -1943,6 +2118,7 @@
   function unlinkNoteTask(noteId, taskKey){
     var n = noteById(noteId);
     if (!n) return false;
+    if (!globalMutationAllowed('task.unlink', {noteId:noteId, taskKey:taskKey})) return false;
     taskKey = String(taskKey || '');
     var refs = noteTaskRefs(n);
     var next = refs.filter(function(ref){ return taskRefKey(ref) !== taskKey; });
@@ -2191,7 +2367,7 @@
     };
   }
   function moveNoteTo(note, x, y){
-    if (!note || !note.id) return;
+    if (!note || !note.id || note.pinned) return;
     note.x = Math.max(0, Math.round(x));
     note.y = Math.max(0, Math.round(y));
     var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(note.id)+'"]');
@@ -2222,6 +2398,7 @@
     });
     var nextY = inserted.y + inserted.h + pad;
     lane.forEach(function(item){
+      if (item.note.pinned){ nextY=Math.max(nextY,item.rect.y+item.rect.h+pad); return; }
       if (item.rect.y < nextY){
         moveNoteTo(item.note, item.rect.x, nextY);
         item.rect.y = nextY;
@@ -2253,6 +2430,7 @@
     });
     var nextX = inserted.x + inserted.w + pad;
     lane.forEach(function(item){
+      if (item.note.pinned){ nextX=Math.max(nextX,item.rect.x+item.rect.w+pad); return; }
       if (item.rect.x < nextX){
         moveNoteTo(item.note, nextX, item.rect.y);
         item.rect.x = nextX;
@@ -2383,6 +2561,7 @@
         for (var j = i + 1; j < items.length; j++){
           var a = items[i];
           var b = items[j];
+          if(a.n.pinned && b.n.pinned) continue;
           var ax = a.x + a.w / 2;
           var ay = a.y + a.h / 2;
           var bx = b.x + b.w / 2;
@@ -2403,16 +2582,15 @@
           var push = Math.max(6, Math.min(overlapX, overlapY) / 2);
           var dx = Math.round(vx * push);
           var dy = Math.round(vy * push);
-          a.x = Math.max(0, a.x - dx);
-          a.y = Math.max(0, a.y - dy);
-          b.x = Math.max(0, b.x + dx);
-          b.y = Math.max(0, b.y + dy);
-          a.n.x = a.x; a.n.y = a.y;
-          b.n.x = b.x; b.n.y = b.y;
-          a.el.style.left = a.x + 'px';
-          a.el.style.top = a.y + 'px';
-          b.el.style.left = b.x + 'px';
-          b.el.style.top = b.y + 'px';
+          if(a.n.pinned){ b.x=Math.max(0,b.x+dx*2); b.y=Math.max(0,b.y+dy*2); b.n.x=b.x; b.n.y=b.y; b.el.style.left=b.x+'px'; b.el.style.top=b.y+'px'; }
+          else if(b.n.pinned){ a.x=Math.max(0,a.x-dx*2); a.y=Math.max(0,a.y-dy*2); a.n.x=a.x; a.n.y=a.y; a.el.style.left=a.x+'px'; a.el.style.top=a.y+'px'; }
+          else {
+            a.x = Math.max(0, a.x - dx); a.y = Math.max(0, a.y - dy);
+            b.x = Math.max(0, b.x + dx); b.y = Math.max(0, b.y + dy);
+            a.n.x = a.x; a.n.y = a.y; b.n.x = b.x; b.n.y = b.y;
+            a.el.style.left = a.x + 'px'; a.el.style.top = a.y + 'px';
+            b.el.style.left = b.x + 'px'; b.el.style.top = b.y + 'px';
+          }
           moved = true;
           changed = true;
         }
@@ -2432,7 +2610,7 @@
     return rects;
   }
   function settleNoteAgainstBuckets(note, preferHorizontal){
-    if (!note || !note.id) return false;
+    if (!note || !note.id || note.pinned) return false;
     var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(note.id)+'"]');
     if (!el || el.style.display === 'none') return false;
     var rect = {
@@ -2510,6 +2688,7 @@
       }).filter(Boolean);
       for (var i = 0; i < visible.length; i++){
         var item = visible[i];
+        if(item.note.pinned) continue;
         if (!overlapsAnyRect(item.rect, rects)) continue;
         var otherNotes = visible.filter(function(other){ return other.note.id !== item.note.id; }).map(function(other){ return other.rect; });
         var move = findNearestOpenNoteMove(item.rect, rects.concat(otherNotes), {preferVertical:true});
@@ -3046,6 +3225,7 @@
   function createNote(x, y, title, body){
     var bucket = arguments.length > 4 ? arguments[4] : null;
     var opts = arguments.length > 5 ? arguments[5] : null;
+    if (!globalMutationAllowed('note.create', {bucket:bucket, kind:opts && opts.kind})) return null;
     var n = normalizeNote({
       id: uid(),
       x: toInt(x, 160),
@@ -3058,6 +3238,7 @@
       collapsed: false,
       taskRefs: []
     });
+    n.outlineOrder = siblingsForParent(null).length;
     notes.push(n);
     renderNote(n);
     if (opts && opts.preservePosition){
@@ -3265,7 +3446,7 @@
       el.className = 'tcNoteNode';
       el.setAttribute('data-note-id', n.id);
       el.innerHTML =
-        '<div class="tcNoteHead"><div class="tcNoteMeta"><span class="tcNoteCode" title="Note"></span><span class="tcNoteKindBadge" hidden></span><span class="tcNoteAnalysisBadge" hidden></span><span class="tcNoteDecisionBadge" hidden></span><button type="button" class="tcNoteBucketLabel" title="Edit bucket"></button><span class="tcNoteStatusBadge" hidden></span><button type="button" class="tcNoteTaskBadge" title="No linked tasks" hidden></button></div><div class="tcNoteActions"><button type="button" data-note-collapse title="Collapse branch">v</button><button type="button" data-note-child title="Add child note">+</button><button type="button" data-note-delete title="Delete selected notes">x</button></div></div>' +
+        '<div class="tcNoteHead"><div class="tcNoteMeta"><span class="tcNoteCode" title="Note"></span><span class="tcNotePinned" hidden>PIN</span><span class="tcNoteKindBadge" hidden></span><span class="tcNoteAnalysisBadge" hidden></span><span class="tcNoteDecisionBadge" hidden></span><button type="button" class="tcNoteBucketLabel" title="Edit bucket"></button><span class="tcNoteStatusBadge" hidden></span><button type="button" class="tcNoteTaskBadge" title="No linked tasks" hidden></button></div><div class="tcNoteActions"><button type="button" data-note-split title="Split at cursor">↵</button><button type="button" data-note-duplicate title="Duplicate branch. External links and task references stay with the original.">⧉</button><button type="button" data-note-compact title="Compact this branch">▦</button><button type="button" data-note-pin title="Pin position">⌖</button><button type="button" data-note-collapse title="Collapse branch">v</button><button type="button" data-note-child title="Add child note">+</button><button type="button" data-note-delete title="Delete selected notes">x</button></div></div>' +
         '<div class="tcNoteText" contenteditable="true"></div>';
       st.appendChild(el);
       wireNote(el);
@@ -3278,6 +3459,7 @@
     el.style.left = toInt(n.x, 160) + 'px';
     el.style.top = toInt(n.y, 160) + 'px';
     el.classList.toggle('collapsed', !!n.collapsed);
+    el.classList.toggle('pinned', !!n.pinned);
     el.classList.toggle('statusResolved', noteStatus(n) === 'resolved');
     el.classList.toggle('statusParked', noteStatus(n) === 'parked');
     var optionDecisionRoot = noteKind(n) === 'option' ? decisionRootFor(n.id) : null;
@@ -3288,6 +3470,10 @@
     el.setAttribute('data-note-kind', noteKind(n));
     el.setAttribute('data-note-status', noteStatus(n));
     var kindBadge = qs('.tcNoteKindBadge', el);
+    var pinBadge=qs('.tcNotePinned',el);
+    if(pinBadge) pinBadge.hidden=!n.pinned;
+    var pinButton=qs('[data-note-pin]',el);
+    if(pinButton){pinButton.title=n.pinned?'Unpin position':'Pin position';pinButton.setAttribute('aria-label',pinButton.title);pinButton.classList.toggle('active',!!n.pinned);}
     if (kindBadge){
       kindBadge.hidden = noteKind(n) === 'note';
       kindBadge.textContent = NoteCore.kindLabel(noteKind(n));
@@ -3374,6 +3560,25 @@
     qs('[data-note-collapse]', el).addEventListener('click', function(ev){
       ev.preventDefault(); ev.stopPropagation();
       toggleCollapse(id);
+    });
+    qs('[data-note-pin]',el).addEventListener('click',function(ev){
+      ev.preventDefault();ev.stopPropagation();
+      setPinned([id],!noteById(id).pinned);
+    });
+    qs('[data-note-split]',el).addEventListener('click',function(ev){
+      ev.preventDefault();ev.stopPropagation();
+      var result=splitNoteAtSelection(id,text);
+      if(!result.ok) noteFeedback(result.reason||'Could not split note.');
+    });
+    qs('[data-note-duplicate]',el).addEventListener('click',function(ev){
+      ev.preventDefault();ev.stopPropagation();
+      var result=duplicateBranch(id);
+      if(!result.ok) noteFeedback(result.reason||'Could not duplicate branch.');
+    });
+    qs('[data-note-compact]',el).addEventListener('click',function(ev){
+      ev.preventDefault();ev.stopPropagation();
+      var result=compactScopeWithHistory({branchId:id});
+      if(result&&!result.ok)noteFeedback(result.reason||'Could not compact this branch.');
     });
     var handle = document.createElement('button');
     handle.type = 'button';
@@ -3668,6 +3873,7 @@
     ids.forEach(function(id){ if (noteById(id)) doomed[id] = true; });
     var doomedIds = Object.keys(doomed);
     if (!doomedIds.length) return;
+    if (!globalMutationAllowed('note.delete', {noteIds:doomedIds.slice()})) return;
     if (noteFocus && noteFocus.kind === 'branch' && doomed[noteFocus.value]) clearNoteFocus(true);
     notes = notes.filter(function(n){ return !doomed[n.id]; });
     links = links.filter(function(l){ return !doomed[l.from] && !doomed[l.to]; });
@@ -3761,7 +3967,7 @@
       box.style.top = rect.y + 'px';
       box.style.width = rect.w + 'px';
       box.style.height = rect.h + 'px';
-      box.innerHTML = '<div class="tcNoteBucketHead"><button type="button" class="tcNoteBucketColor" title="Change bucket color"></button><button type="button" class="tcNoteBucketToggle" title="Collapse bucket"></button><button type="button" class="tcNoteBucketTitle"></button><span class="tcNoteBucketCount"></span></div>';
+      box.innerHTML = '<div class="tcNoteBucketHead"><button type="button" class="tcNoteBucketColor" title="Change bucket color"></button><button type="button" class="tcNoteBucketToggle" title="Collapse bucket"></button><button type="button" class="tcNoteBucketTitle"></button><button type="button" class="tcNoteBucketCompact" title="Compact unpinned notes in this bucket">Compact</button><span class="tcNoteBucketCount"></span></div>';
       var colorBtn = qs('.tcNoteBucketColor', box);
       colorBtn.style.backgroundColor = colorVars.accent;
       colorBtn.setAttribute('aria-label', 'Change bucket color');
@@ -3801,6 +4007,12 @@
         toggleBucketFollow(bucket);
       });
       qs('.tcNoteBucketHead', box).insertBefore(followBtn, qs('.tcNoteBucketCount', box));
+      var compactBtn = qs('.tcNoteBucketCompact', box);
+      compactBtn.addEventListener('click', function(ev){
+        ev.preventDefault();
+        ev.stopPropagation();
+        compactScopeWithHistory({bucket:bucket});
+      });
       var count = bucketNotes(bucket).length;
       qs('.tcNoteBucketCount', box).textContent = count + ' note' + (count === 1 ? '' : 's');
       layer.appendChild(box);
@@ -4378,6 +4590,15 @@
     }
     syncLinkAnnotationZoom();
   }
+  function childLinkPathData(source,target){
+    var sourceRect={x:toInt(source.style.left,0),y:toInt(source.style.top,0),w:source.offsetWidth||220,h:source.offsetHeight||92};
+    var targetRect={x:toInt(target.style.left,0),y:toInt(target.style.top,0),w:target.offsetWidth||220,h:target.offsetHeight||92};
+    if(targetRect.x<sourceRect.x)return linkPathData(centerPoint(source),centerPoint(target));
+    var p1={x:sourceRect.x+sourceRect.w,y:sourceRect.y+sourceRect.h/2};
+    var p2={x:targetRect.x,y:targetRect.y+targetRect.h/2};
+    var dx=Math.max(0,p2.x-p1.x),control=Math.min(80,dx/2,Math.max(8,dx*.45));
+    return 'M '+p1.x+' '+p1.y+' C '+(p1.x+control)+' '+p1.y+' '+(p2.x-control)+' '+p2.y+' '+p2.x+' '+p2.y;
+  }
   function renderLinks(){
     var layer = ensureLinkLayer();
     if (!layer) return;
@@ -4397,7 +4618,7 @@
         {x:toInt(b.style.left, 0), y:toInt(b.style.top, 0), w:b.offsetWidth || 220, h:b.offsetHeight || 92}
       ) : null;
       var p1 = points ? points.source : centerPoint(a), p2 = points ? points.target : centerPoint(b);
-      var d = linkPathData(p1, p2);
+      var d = l.type === 'child' ? childLinkPathData(a,b) : linkPathData(p1, p2);
       var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('class', 'tcNoteLink' + (selectedLinkKey === key ? ' selected' : ''));
       path.setAttribute('d', d);
@@ -4489,26 +4710,36 @@
     var childAnalysis = requestedAnalysis || derivedConsequence;
     var childKind = requestedKind ? NoteCore.normalizeKind(requestedKind) : (childAnalysis ? 'outcome' : (parentIsInversionRoot ? 'factor' : (parentIsFailure ? 'action' : (noteKind(parent) === 'decision' ? 'option' : (noteKind(parent) === 'option' ? 'outcome' : 'note')))));
     var childTitle = title || (childAnalysis ? consequenceTemplate(childAnalysis.order) : (parentIsInversionRoot && childKind === 'factor' ? FAILURE_MODE_TEMPLATE : (parentIsFailure && childKind === 'action' ? SAFEGUARD_TEMPLATE : decisionTemplateForKind(childKind))));
+    var wasCollapsed=!!parent.collapsed;
     parent.collapsed = false;
-    var anchor = anchorId ? noteById(anchorId) : null;
-    var existing = childLinksFrom(parentId).length;
-    var childX = parent.x + 300;
-    var childY = anchor ? toInt(anchor.y, parent.y + existing * 124) : parent.y + existing * 124;
+    var parentRect=noteRect(parent)||{x:toInt(parent.x,160),y:toInt(parent.y,160),w:220,h:92};
+    var childX=parentRect.x+parentRect.w+36;
+    var childY=parentRect.y+(parentRect.h-92)/2;
     var childOptions = {kind:childKind};
     if (childAnalysis) childOptions.analysis = childAnalysis;
-    if (anchor) childOptions.skipAutoLayout = true;
+    childOptions.skipAutoLayout=true;
     var child = createNote(childX, childY, childTitle, body || '', noteBucket(parent), childOptions);
-    addNoteLink(parent.id, child.id, 'child');
-    syncNoteLabels();
-    if (anchor){
-      insertNoteRightOfReference(child, anchor);
-      renderBuckets();
-      renderLinks();
+    function rollbackChild(){
+      for(var li=links.length-1;li>=0;li--)if(links[li]&&links[li].type==='child'&&links[li].from===parent.id&&child&&links[li].to===child.id)links.splice(li,1);
+      if(child){for(var ni=notes.length-1;ni>=0;ni--)if(notes[ni].id===child.id)notes.splice(ni,1);var el=document.querySelector('.tcNoteNode[data-note-id="'+escAttr(child.id)+'"]');if(el)el.remove();}
+      parent.collapsed=wasCollapsed;
+      renderNote(parent);applyVisibility();renderBuckets();renderLinks();selectNote(parent.id);refreshViewerOutline();saveSoon();
     }
+    if(!child){parent.collapsed=wasCollapsed;renderNote(parent);applyVisibility();return null;}
+    if(!addNoteLink(parent.id, child.id, 'child')){rollbackChild();return null;}
+    renderNote(parent);
+    var childRect=noteRect(child)||{x:child.x,y:child.y,w:220,h:92};
+    var preferred={x:parentRect.x+parentRect.w+36,y:parentRect.y+(parentRect.h-childRect.h)/2};
+    var obstacles=canvasOccupiedRects();
+    notes.forEach(function(note){if(note.id===child.id)return;var rect=noteRect(note);if(rect){rect.noteId=note.id;obstacles.push(rect);}});
+    var placement=findBranchPlacement(child.id,preferred,obstacles,{rightOnly:true,minimumX:preferred.x,maxDistance:720,clearance:24,parentId:parent.id});
+    if(!placement.ok){rollbackChild();noteFeedback(placement.reason);return null;}
+    var childPosition=placement.positions[child.id];moveNoteTo(child,childPosition.x,childPosition.y);
+    syncNoteLabels();
     if (noteFocus){
       if (!noteAllowedByFocus(child.id)) clearNoteFocus(true);
-      renderAll();
     }
+    applyVisibility();renderBuckets();renderLinks();
     selectNote(child.id);
     focusNoteText(child.id);
     refreshViewerOutline();
@@ -4585,7 +4816,8 @@
     if (!n || (seen && seen[id])) return;
     seen = seen || {};
     seen[id] = true;
-    n.x = x; n.y = y;
+    if(!n.pinned) moveNoteTo(n,x,y);
+    x=toInt(n.x,x); y=toInt(n.y,y);
     var el = document.querySelector('.tcNoteNode[data-note-id="'+escAttr(id)+'"]');
     if (el){ el.style.left = x + 'px'; el.style.top = y + 'px'; }
     var kids = childLinksFrom(id);
@@ -4603,9 +4835,13 @@
   }
   function moveBucketNotes(bucket, dx, dy){
     bucket = bucketText(bucket);
+    var changed=false;
     bucketNotes(bucket).forEach(function(n){
+      var x=toInt(n.x,160),y=toInt(n.y,160);
       moveNoteTo(n, toInt(n.x, 160) + dx, toInt(n.y, 160) + dy);
+      if(n.x!==x||n.y!==y) changed=true;
     });
+    return changed;
   }
   function bucketTreeRoots(bucket){
     bucket = bucketText(bucket);
@@ -4615,7 +4851,7 @@
     });
     return roots.sort(function(a, b){ return (toInt(a.y, 160) - toInt(b.y, 160)) || (toInt(a.x, 160) - toInt(b.x, 160)); });
   }
-  function compactMindMap(){
+  function compactMindMapImpl(){
     if (!notes.length) return false;
     qsa('.tcNoteNode').forEach(function(el){ el.remove(); });
     notes.forEach(renderNote);
@@ -4628,7 +4864,7 @@
     if (wrap && wrap.clientWidth) layoutW = Math.max(720, Math.min(1600, (wrap.clientWidth / (window.ZSCALE || 1)) - 120));
     var originX = 120;
     var originY = 140;
-    var occupiedRects = canvasOccupiedRects();
+    var occupiedRects = canvasOccupiedRects().concat(notes.filter(function(note){return note.pinned;}).map(noteRect).filter(Boolean));
     var placedRects = [];
     var changed = false;
     var buckets = bucketNames().sort(function(a, b){
@@ -4654,11 +4890,12 @@
       var slot = compactSlotForRect(rect, occupiedRects, placedRects, originX, originY, layoutW, Math.max(bucketGap, rowGap));
       var dx = slot.x - rect.x;
       var dy = slot.y - rect.y;
-      moveBucketNotes(bucket, dx, dy);
+      var movedNotes=moveBucketNotes(bucket, dx, dy);
       var layout = bucketLayout(bucket);
+      if(layout.dx||layout.dy) changed=true;
       layout.dx = 0;
       layout.dy = 0;
-      changed = true;
+      changed = changed || movedNotes;
       rect = bucketVisualRect(bucket) || rect;
       placedRects.push(rect);
     });
@@ -4666,6 +4903,166 @@
     saveBucketLayoutState();
     saveSoon();
     return changed;
+  }
+  function compactMindMap(){
+    var result;
+    var run=function(){result=compactMindMapImpl();return {ok:true,changed:!!result};};
+    if(window.KyanbasuHistory&&typeof window.KyanbasuHistory.transaction==='function') window.KyanbasuHistory.transaction('compact note map',run);
+    else run();
+    return !!result;
+  }
+  function orderedChildNotes(id){
+    return childLinksFrom(id).map(function(link,index){return {link:link,index:index,note:noteById(link.to)};}).sort(function(a,b){
+      var ao=Number(a.note&&a.note.outlineOrder),bo=Number(b.note&&b.note.outlineOrder);
+      var av=isFinite(ao),bv=isFinite(bo);
+      if(av&&bv&&ao!==bo)return ao-bo;
+      if(av!==bv)return av?-1:1;
+      return a.index-b.index;
+    }).map(function(row){return row.note;}).filter(Boolean);
+  }
+  function planBranchLayout(rootId,origin,fixedRects,options){
+    origin=origin||{};options=options||{};fixedRects=Array.isArray(fixedRects)?fixedRects:[];
+    var root=noteById(rootId);if(!root)return {ok:false,positions:{},bounds:null,reason:'Branch note was not found.'};
+    var hGap=Math.max(24,toInt(options.horizontalGap,36)),vGap=Math.max(16,toInt(options.verticalGap,24));
+    var depthWidths=[],specs=Object.create(null),visiting=Object.create(null);
+    function measure(id,depth){
+      if(visiting[id])return null;
+      var note=noteById(id);if(!note)return null;
+      visiting[id]=true;
+      var rect=noteRect(note),size={w:Math.max(1,rect?rect.w:220),h:Math.max(1,rect?rect.h:92)};
+      depthWidths[depth]=Math.max(depthWidths[depth]||0,size.w);
+      var children=note.collapsed?[]:orderedChildNotes(id).map(function(child){return measure(child.id,depth+1);}).filter(Boolean);
+      var childrenHeight=children.reduce(function(total,child){return total+child.subtreeHeight;},0)+Math.max(0,children.length-1)*vGap;
+      var spec={id:id,note:note,size:size,depth:depth,children:children,subtreeHeight:Math.max(size.h,childrenHeight)};
+      specs[id]=spec;delete visiting[id];return spec;
+    }
+    var tree=measure(rootId,0);if(!tree)return {ok:false,positions:{},bounds:null,reason:'Could not measure branch.'};
+    var columns=[toInt(origin.x,root.x)];
+    for(var d=0;d<depthWidths.length;d++)columns[d+1]=columns[d]+depthWidths[d]+hGap;
+    var positions=Object.create(null),bounds=null;
+    function place(spec,nodeTop){
+      var x=columns[spec.depth],y=nodeTop;
+      if(spec.note.pinned){x=toInt(spec.note.x,160);y=toInt(spec.note.y,160);}
+      positions[spec.id]={x:Math.max(0,Math.round(x)),y:Math.max(0,Math.round(y))};
+      var rect={x:positions[spec.id].x,y:positions[spec.id].y,w:spec.size.w,h:spec.size.h};
+      bounds=bounds?{x:Math.min(bounds.x,rect.x),y:Math.min(bounds.y,rect.y),right:Math.max(bounds.right,rect.x+rect.w),bottom:Math.max(bounds.bottom,rect.y+rect.h)}:{x:rect.x,y:rect.y,right:rect.x+rect.w,bottom:rect.y+rect.h};
+      var childHeight=spec.children.reduce(function(total,child){return total+child.subtreeHeight;},0)+Math.max(0,spec.children.length-1)*vGap;
+      var cursor=y+spec.size.h/2-childHeight/2;
+      spec.children.forEach(function(child){place(child,cursor+(child.subtreeHeight-child.size.h)/2);cursor+=child.subtreeHeight+vGap;});
+    }
+    place(tree,toInt(origin.y,root.y));
+    var ids=Object.keys(positions);
+    for(var i=0;i<ids.length;i++){
+      var id=ids[i],pos=positions[id],size=specs[id].size;
+      if(specs[id].note.pinned&&(pos.x!==toInt(specs[id].note.x,160)||pos.y!==toInt(specs[id].note.y,160)))continue;
+      var candidate=inflatedRect({x:pos.x,y:pos.y,w:size.w,h:size.h},Math.floor(vGap/2));
+      if(overlapsAnyRect(candidate,fixedRects))return {ok:false,positions:{},bounds:bounds,reason:'No clear branch placement fits around the fixed notes and canvas areas.'};
+    }
+    if(bounds)bounds={x:bounds.x,y:bounds.y,w:bounds.right-bounds.x,h:bounds.bottom-bounds.y};
+    return {ok:true,positions:positions,bounds:bounds,reason:''};
+  }
+  function findBranchPlacement(rootId,anchor,obstacles,options){
+    anchor=anchor||{};options=options||{};obstacles=Array.isArray(obstacles)?obstacles:[];
+    var root=noteById(rootId);if(!root)return {ok:false,positions:{},reason:'Branch note was not found.'};
+    var layout=planBranchLayout(rootId,{x:toInt(anchor.x,root.x),y:toInt(anchor.y,root.y)},[],options);
+    if(!layout.ok)return layout;
+    var bounds=layout.bounds,gap=Math.max(18,toInt(options.clearance,24)),maxDistance=Math.max(0,toInt(options.maxDistance,1800));
+    var xs=[0],ys=[0],seenX={'0':true},seenY={'0':true};
+    function add(list,seen,value){value=Math.round(value);var key=String(value);if(!seen[key]){seen[key]=true;list.push(value);}}
+    obstacles.forEach(function(obstacle){
+      add(xs,seenX,obstacle.x-gap-(bounds.x+bounds.w));
+      add(xs,seenX,obstacle.x+obstacle.w+gap-bounds.x);
+      add(ys,seenY,obstacle.y-gap-(bounds.y+bounds.h));
+      add(ys,seenY,obstacle.y+obstacle.h+gap-bounds.y);
+    });
+    var offsets=[],branchIds=branchSubtreeIds(rootId),hasPinned=branchIds.some(function(id){var note=noteById(id);return !!(note&&note.pinned);});
+    xs.forEach(function(dx){ys.forEach(function(dy){
+      var distance=Math.abs(dx)+Math.abs(dy);
+      if(distance>maxDistance)return;
+      if(options.rightOnly&&bounds.x+dx<toInt(options.minimumX,bounds.x))return;
+      if((root.pinned||hasPinned)&&(dx||dy))return;
+      offsets.push({dx:dx,dy:dy,distance:distance});
+    });});
+    offsets.sort(function(a,b){return a.distance-b.distance||Math.abs(a.dy)-Math.abs(b.dy)||a.dx-b.dx||a.dy-b.dy;});
+    var stageBounds=noteStageBounds();
+    for(var oi=0;oi<offsets.length;oi++){
+      var offset=offsets[oi],fits=true;
+      var candidateBounds={x:bounds.x+offset.dx,y:bounds.y+offset.dy,w:bounds.w,h:bounds.h};
+      if(candidateBounds.x<stageBounds.minX||candidateBounds.y<stageBounds.minY||candidateBounds.x+candidateBounds.w>stageBounds.maxX||candidateBounds.y+candidateBounds.h>stageBounds.maxY)continue;
+      var ids=Object.keys(layout.positions);
+      for(var ni=0;ni<ids.length&&fits;ni++){
+        var id=ids[ni],note=noteById(id),pos=layout.positions[id],rect=noteRect(note);
+        if(!rect)continue;
+        var moved={x:pos.x+offset.dx,y:pos.y+offset.dy,w:rect.w,h:rect.h};
+        for(var oi2=0;oi2<obstacles.length;oi2++)if(obstacles[oi2].noteId!==id&&rectsOverlap(inflatedRect(moved,gap/2),obstacles[oi2])){fits=false;break;}
+      }
+      for(var li=0;li<links.length&&fits;li++){
+        var link=links[li];if(link.type!=='child')continue;
+        var fromIn=!!layout.positions[link.from],toIn=!!layout.positions[link.to];
+        if(!fromIn&&!toIn)continue;
+        if(!fromIn&&!(options.parentId===link.from&&toIn))continue;
+        if(!toIn&&!(options.parentId===link.to&&fromIn))continue;
+        var fromNote=noteById(link.from),toNote=noteById(link.to),fromRect=noteRect(fromNote),toRect=noteRect(toNote);
+        if(!fromRect||!toRect)continue;
+        var fromPos=layout.positions[link.from]||fromNote,toPos=layout.positions[link.to]||toNote;
+        var fromX=fromPos.x+(layout.positions[link.from]?offset.dx:0),fromY=fromPos.y+(layout.positions[link.from]?offset.dy:0);
+        var toX=toPos.x+(layout.positions[link.to]?offset.dx:0),toY=toPos.y+(layout.positions[link.to]?offset.dy:0);
+        if(toX<fromX)continue;
+        var corridor={x:fromX+fromRect.w,y:Math.min(fromY+fromRect.h/2,toY+toRect.h/2)-6,w:Math.max(0,toX-(fromX+fromRect.w)),h:Math.abs((toY+toRect.h/2)-(fromY+fromRect.h/2))+12};
+        for(var ci=0;ci<obstacles.length;ci++)if(obstacles[ci].noteId!==link.from&&obstacles[ci].noteId!==link.to&&rectsOverlap(corridor,obstacles[ci])){fits=false;break;}
+      }
+      if(fits){
+        var positions=Object.create(null);
+        branchIds.forEach(function(id){var pos=layout.positions[id],note=noteById(id);if(!note)return;positions[id]={x:(pos?pos.x:toInt(note.x,160))+offset.dx,y:(pos?pos.y:toInt(note.y,160))+offset.dy};});
+        return {ok:true,positions:positions,bounds:candidateBounds,reason:''};
+      }
+    }
+    return {ok:false,positions:{},reason:'No clear nearby space is available for this branch.'};
+  }
+  function compactScope(scope){
+    scope=scope&&typeof scope==='object'?scope:{};
+    var ids=Object.create(null), targets=[];
+    if(scope.branchId){
+      if(!noteById(scope.branchId)) return {ok:false,reason:'Branch note was not found.'};
+      branchSubtreeIds(scope.branchId).forEach(function(id){ids[id]=true;});
+    } else if(scope.bucket){
+      var bucket=bucketText(scope.bucket);
+      notes.filter(function(note){return noteBucket(note)===bucket;}).forEach(function(note){ids[note.id]=true;});
+    } else return {ok:false,reason:'Choose a branch or bucket to compact.'};
+    targets=notes.filter(function(note){return !!ids[note.id]&&!note.pinned;});
+    if(!targets.length) return {ok:true,changed:false};
+    if(scope.branchId){
+      var root=noteById(scope.branchId),fixed=canvasOccupiedRects();
+      notes.forEach(function(note){if(!ids[note.id]||note.pinned){var obstacle=noteRect(note);if(obstacle){obstacle.noteId=note.id;fixed.push(obstacle);}}});
+      var planned=findBranchPlacement(scope.branchId,{x:root.x,y:root.y},fixed,{clearance:18,maxDistance:1200});
+      if(!planned.ok)return planned;
+      var branchChanged=false;
+      Object.keys(planned.positions).forEach(function(id){var note=noteById(id),pos=planned.positions[id];if(!note||note.pinned)return;if(note.x!==pos.x||note.y!==pos.y){moveNoteTo(note,pos.x,pos.y);branchChanged=true;}});
+      if(branchChanged){renderAll();saveSoon();}
+      return {ok:true,changed:branchChanged};
+    }
+    var labels=NoteCore.computeLabels(notes,links);
+    targets.sort(function(a,b){return String(labels[a.id]||'').localeCompare(String(labels[b.id]||''));});
+    var fixed=canvasOccupiedRects();
+    notes.forEach(function(note){if(!ids[note.id]||note.pinned){var rect=noteRect(note);if(rect)fixed.push(rect);}});
+    var placed=[], changed=false, originX=120, originY=140, layoutW=1200;
+    var wrap=document.getElementById('builderWrap');
+    if(wrap&&wrap.clientWidth) layoutW=Math.max(720,Math.min(1600,(wrap.clientWidth/(window.ZSCALE||1))-120));
+    targets.forEach(function(note){
+      var rect=noteRect(note); if(!rect) return;
+      var slot=compactSlotForRect(rect,fixed,placed,originX,originY,layoutW,24);
+      if(note.x!==slot.x||note.y!==slot.y){moveNoteTo(note,slot.x,slot.y);changed=true;}
+      placed.push({x:note.x,y:note.y,w:rect.w,h:rect.h});
+    });
+    if(changed){renderAll();saveSoon();}
+    return {ok:true,changed:changed};
+  }
+  function compactScopeWithHistory(scope){
+    var result;
+    var run=function(){result=compactScope(scope);return result;};
+    if(result&&result.ok===false) return result;
+    var applied=window.KyanbasuHistory&&typeof window.KyanbasuHistory.transaction==='function'?window.KyanbasuHistory.transaction('compact note area',run):run();
+    return applied&&applied.ok===false?applied:(result||applied);
   }
   function reflowMindMap(preferredRootId){
     if (!notes.length) return;
@@ -4803,6 +5200,17 @@
     document.addEventListener('mousemove', updateLinkDrag, true);
     document.addEventListener('mouseup', finishLinkDrag, true);
     document.addEventListener('keydown', function(ev){
+      if (ev.isComposing || ev.keyCode === 229) return;
+      if (ev.altKey && !ev.ctrlKey && !ev.metaKey && !ev.shiftKey && ['ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].indexOf(ev.key)!==-1){
+        if(ev.target && ev.target.closest && ev.target.closest('input,textarea,select,[contenteditable="true"]')) return;
+        var selected=selectedNoteId && noteById(selectedNoteId);
+        if(!selected) return;
+        ev.preventDefault();
+        if(ev.key==='ArrowRight') indentBranch(selected.id);
+        else if(ev.key==='ArrowLeft') outdentBranch(selected.id);
+        else moveToSiblingIndex(selected.id,ev.key==='ArrowUp'?-1:1);
+        return;
+      }
       if (ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
       if (ev.target && ev.target.closest && ev.target.closest('input, textarea, select')) return;
       if (ev.target && ev.target.closest && ev.target.closest('[contenteditable="true"]') && !ev.target.closest('.tcNoteText')) return;
@@ -4844,10 +5252,10 @@
     });
     return {
       kind: 'kyanbasu.notes',
-      version: 9,
+      version: 10,
       exportedAt: new Date().toISOString(),
       notes: notes.map(function(n){
-        var row = {id:n.id, x:toInt(n.x, 160), y:toInt(n.y, 160), content:n.content || 'New note', bucket:noteBucket(n), kind:noteKind(n), status:noteStatus(n), collapsed:!!n.collapsed, taskRefs:noteTaskRefs(n).slice(), createdAt:Number(n.createdAt) || 0, updatedAt:Number(n.updatedAt) || 0, reviewedAt:Number(n.reviewedAt) || 0};
+        var row = {id:n.id, x:toInt(n.x, 160), y:toInt(n.y, 160), outlineOrder:toInt(n.outlineOrder, 0), content:n.content || 'New note', bucket:noteBucket(n), kind:noteKind(n), status:noteStatus(n), collapsed:!!n.collapsed, pinned:!!n.pinned, taskRefs:noteTaskRefs(n).slice(), createdAt:Number(n.createdAt) || 0, updatedAt:Number(n.updatedAt) || 0, reviewedAt:Number(n.reviewedAt) || 0};
         if (n.color) row.color = n.color;
         var analysis = noteAnalysis(n);
         if (analysis) row.analysis = analysis;
@@ -4886,6 +5294,7 @@
     if (data.kind && data.kind !== 'kyanbasu.notes' && data.kind !== 'taskcanvas.notes'){
       throw new Error('Unsupported notes export kind');
     }
+    if (!globalMutationAllowed('import', {count:data.notes.length})) return null;
     removeLinkAnnotationEditor(false);
     var nextNotes = data.notes.map(normalizeNote);
     var ids = {};
@@ -4897,6 +5306,7 @@
     var nextLinks = sanitized.links;
     notes = nextNotes;
     links = nextLinks;
+    initializeOutlineOrders();
     noteFocus = null;
     noteLens = null;
     noteReview = null;
@@ -4982,12 +5392,192 @@
   function setBucket(id, bucket){
     var n = noteById(id);
     if (!n) return false;
+    if (!globalMutationAllowed('bucket', {noteId:id, bucket:bucket})) return false;
     n.bucket = bucketText(bucket);
     touchNote(n);
     renderAll();
     refreshViewerOutline();
     saveSoon();
     return true;
+  }
+  function setPinned(ids,pinned){
+    ids=Array.isArray(ids)?ids:[ids];
+    ids=ids.map(function(id){return String(id||'');}).filter(Boolean);
+    if(!ids.length) return {ok:false,reason:'Select at least one note.'};
+    var targets=ids.map(noteById);
+    if(targets.some(function(note){return !note;})) return {ok:false,reason:'A selected note no longer exists.'};
+    pinned=!!pinned;
+    for(var i=0;i<targets.length;i++) if(!globalMutationAllowed('note.pin',{noteId:targets[i].id,pinned:pinned})) return {ok:false,reason:'Pin change is not authorized.'};
+    if(targets.every(function(note){return !!note.pinned===pinned;})) return {ok:true,changed:false};
+    var apply=function(){
+      targets.forEach(function(note){note.pinned=pinned;touchNote(note);});
+      renderAll();refreshViewerOutline();saveSoon();
+      return {ok:true,changed:true};
+    };
+    if(window.KyanbasuHistory&&typeof window.KyanbasuHistory.transaction==='function') return window.KyanbasuHistory.transaction(pinned?'pin note positions':'unpin note positions',apply)||{ok:false,reason:'Pin change was rolled back.'};
+    return apply();
+  }
+  function splitNote(id,offset){
+    var source=noteById(String(id||''));
+    if(!source) return {ok:false,createdId:null,reason:'Note was not found.'};
+    if(typeof offset!=='number'||!isFinite(offset)||Math.floor(offset)!==offset) return {ok:false,createdId:null,reason:'Cursor position must be an integer.'};
+    var content=String(source.content||'');
+    if(offset<=0||offset>=content.length) return {ok:false,createdId:null,reason:'Place the cursor between two nonempty parts.'};
+    var beforeCode=content.charCodeAt(offset-1), afterCode=content.charCodeAt(offset);
+    if(beforeCode>=0xD800&&beforeCode<=0xDBFF&&afterCode>=0xDC00&&afterCode<=0xDFFF) return {ok:false,createdId:null,reason:'The cursor cannot split a Unicode character.'};
+    var first=content.slice(0,offset), second=content.slice(offset);
+    if(!first.trim()||!second.trim()) return {ok:false,createdId:null,reason:'Both parts need text.'};
+    if(noteAnalysis(source)||source.decisionRecord||source.decisionProcess||['decision','option','factor','outcome'].indexOf(noteKind(source))!==-1||workflowModuleFor(source.id)) return {ok:false,createdId:null,reason:'This guided decision note cannot be split.'};
+    if(!globalMutationAllowed('note.split',{noteId:source.id,offset:offset})) return {ok:false,createdId:null,reason:'Split is not authorized.'};
+    var parentLink=parentLinkFor(source.id), parentId=parentLink?parentLink.from:null;
+    var siblings=siblingsForParent(parentId), sourceAt=siblings.map(function(note){return note.id;}).indexOf(source.id);
+    var createdId=null;
+    var apply=function(){
+      source.content=first;source.reviewedAt=0;touchNote(source);
+      var created=createNote(source.x,source.y+132,second,'',noteBucket(source),{kind:noteKind(source),skipAutoLayout:true});
+      if(!created) return {ok:false,reason:'Could not create the second note.'};
+      created.content=second;created.color=source.color||'';created.status='open';created.reviewedAt=0;created.updatedAt=created.createdAt;
+      if(parentId&&!addNoteLink(parentId,created.id,'child')) return {ok:false,reason:'Could not attach the new sibling.'};
+      var ordered=siblingsForParent(parentId).filter(function(note){return note.id!==created.id;});
+      ordered.splice(Math.max(0,sourceAt+1),0,created);
+      ordered.forEach(function(note,index){note.outlineOrder=index;});
+      createdId=created.id;
+      renderAll();refreshViewerOutline();selectNote(created.id);focusNoteText(created.id);saveSoon();
+      return {ok:true,createdId:created.id};
+    };
+    var result=window.KyanbasuHistory&&typeof window.KyanbasuHistory.transaction==='function'?window.KyanbasuHistory.transaction('split note',apply):apply();
+    return result&&result.ok?result:{ok:false,createdId:null,reason:(result&&result.reason)||'Split was rolled back.'};
+  }
+  function splitNoteAtSelection(id,editor){
+    var selection=window.getSelection&&window.getSelection();
+    if(!selection||!selection.rangeCount||!selection.isCollapsed||!editor||!editor.contains(selection.anchorNode)) return {ok:false,reason:'Place the cursor in the note text first.'};
+    var range=document.createRange();range.selectNodeContents(editor);range.setEnd(selection.anchorNode,selection.anchorOffset);
+    return splitNote(id,range.toString().length);
+  }
+  function duplicateBranch(id){
+    var root=noteById(String(id||''));
+    if(!root) return {ok:false,rootId:null,idMap:{},reason:'Branch note was not found.'};
+    var sourceIds=branchSubtreeIds(root.id), sourceSet=Object.create(null), idMap=Object.create(null), copies=[];
+    for(var i=0;i<sourceIds.length;i++){
+      var source=noteById(sourceIds[i]);
+      if(structuralEditProtected(source)) return {ok:false,rootId:null,idMap:{},reason:'Guided decision branches cannot be duplicated with this control.'};
+      sourceSet[source.id]=true;
+      var nextId=uid();while(noteById(nextId)) nextId=uid();
+      idMap[source.id]=nextId;
+    }
+    var now=Date.now(),dx=280,dy=28;
+    sourceIds.forEach(function(sourceId){
+      var source=noteById(sourceId), copy=cloneValue(source);
+      copy.id=idMap[sourceId];copy.x=toInt(source.x,160)+dx;copy.y=toInt(source.y,160)+dy;
+      copy.taskRefs=[];copy.pinned=false;copy.reviewedAt=0;copy.createdAt=now;copy.updatedAt=now;
+      copies.push(normalizeNote(copy));
+    });
+    if(!globalMutationAllowed('branch.duplicate',{sourceId:root.id,count:copies.length})) return {ok:false,rootId:null,idMap:{},reason:'Branch duplication is not authorized.'};
+    for(var ci=0;ci<copies.length;ci++) if(!globalMutationAllowed('note.create',{sourceId:sourceIds[ci],noteId:copies[ci].id,bucket:copies[ci].bucket,duplicate:true})) return {ok:false,rootId:null,idMap:{},reason:'Branch duplication is not authorized.'};
+    var originalParent=parentLinkFor(root.id), parentId=originalParent?originalParent.from:null;
+    var siblings=siblingsForParent(parentId), sourceIndex=siblings.map(function(note){return note.id;}).indexOf(root.id);
+    var clonedLinks=links.filter(function(link){return sourceSet[link.from]&&sourceSet[link.to];}).map(function(link){
+      var next={from:idMap[link.from],to:idMap[link.to],type:link.type};
+      if(link.annotation) next.annotation=NoteCore.normalizeLinkAnnotation(link.annotation);
+      return next;
+    });
+    if(parentId) clonedLinks.push({from:parentId,to:idMap[root.id],type:'child'});
+    var nextNotes=notes.concat(copies),validIds=Object.create(null);
+    nextNotes.forEach(function(note){validIds[note.id]=true;});
+    var candidate=NoteCore.sanitizeLinks(links.concat(clonedLinks),validIds);
+    if(candidate.dropped) return {ok:false,rootId:null,idMap:{},reason:'The copied branch does not form a valid graph.'};
+    for(var li=0;li<clonedLinks.length;li++) if(!globalMutationAllowed('link.create',clonedLinks[li])) return {ok:false,rootId:null,idMap:{},reason:'A copied link is not authorized.'};
+    var apply=function(){
+      notes=nextNotes;links=candidate.links;
+      var ordered=siblingsForParent(parentId).filter(function(note){return note.id!==idMap[root.id];});
+      ordered.splice(Math.max(0,sourceIndex+1),0,noteById(idMap[root.id]));
+      ordered.forEach(function(note,index){note.outlineOrder=index;});
+      selectNote(idMap[root.id]);renderAll();refreshViewerOutline();focusNoteText(idMap[root.id]);saveSoon();
+      return {ok:true,rootId:idMap[root.id],idMap:idMap};
+    };
+    var result=window.KyanbasuHistory&&typeof window.KyanbasuHistory.transaction==='function'?window.KyanbasuHistory.transaction('duplicate note branch',apply):apply();
+    return result&&result.ok?result:{ok:false,rootId:null,idMap:{},reason:(result&&result.reason)||'Branch duplication was rolled back.'};
+  }
+  function mergePlan(ids,survivorId){
+    ids=Array.isArray(ids)?ids.map(function(id){return String(id||'');}).filter(Boolean):[];
+    ids=ids.filter(function(id,index){return ids.indexOf(id)===index;});
+    if(ids.length<2) return {ok:false,reason:'Select at least two notes.'};
+    var selected=ids.map(noteById);
+    if(selected.some(function(note){return !note;})) return {ok:false,reason:'A selected note no longer exists.'};
+    var parent=parentLinkFor(selected[0].id),parentId=parent?parent.from:null;
+    for(var i=0;i<selected.length;i++){
+      var note=selected[i],parentLink=parentLinkFor(note.id);
+      if((parentLink?parentLink.from:null)!==parentId) return {ok:false,reason:'Notes must have the same parent.'};
+      if(noteBucket(note)!==noteBucket(selected[0])) return {ok:false,reason:'Notes must be in the same bucket.'};
+      if(noteKind(note)!==noteKind(selected[0])) return {ok:false,reason:'Notes must have the same thinking role.'};
+      if(structuralEditProtected(note)) return {ok:false,reason:'Guided decision notes cannot be merged.'};
+      var descendants=branchSubtreeIds(note.id);
+      for(var d=1;d<descendants.length;d++) if(ids.indexOf(descendants[d])!==-1) return {ok:false,reason:'Ancestor and descendant notes cannot be merged together.'};
+    }
+    if(ids.some(function(id){return parentId===id;})) return {ok:false,reason:'Ancestor and descendant notes cannot be merged together.'};
+    if(ids.indexOf(String(survivorId||''))===-1) return {ok:false,reason:'Choose one selected note to keep.'};
+    var order=siblingsForParent(parentId).filter(function(note){return ids.indexOf(note.id)!==-1;});
+    var orderedIds=order.map(function(note){return note.id;}),absorbed=ids.filter(function(id){return id!==survivorId;}),removed=Object.create(null);
+    absorbed.forEach(function(id){removed[id]=true;});
+    var refs=[],seenRefs=Object.create(null);
+    order.forEach(function(note){
+      noteTaskRefs(note).forEach(function(ref){
+        var key=ref.uuid?'uuid:'+ref.uuid:(ref.short?'short:'+ref.short:'');
+        if(!key||seenRefs[key]) return;seenRefs[key]=true;refs.push(cloneValue(ref));
+      });
+    });
+    var content=order.map(function(note){return String(note.content||'');}).filter(function(text){return !!text.trim();}).join('\n\n');
+    var candidateLinks=[], byKey=Object.create(null), byEndpoints=Object.create(null), childOrder=[], endpointConflict=false;
+    order.forEach(function(note){siblingsForParent(note.id).forEach(function(child){if(childOrder.indexOf(child.id)===-1)childOrder.push(child.id);});});
+    links.forEach(function(link){
+      if(!link) return;
+      var from=removed[link.from]?survivorId:link.from, to=removed[link.to]?survivorId:link.to;
+      if(from===to) return;
+      var next={from:from,to:to,type:link.type};
+      var annotation=NoteCore.normalizeLinkAnnotation(link.annotation);
+      if(annotation) next.annotation=annotation;
+      var key=[from,to,NoteCore.normalizeRelation(link.type)].join('::');
+      var endpoint=[from,to].join('::');
+      if(byEndpoints[endpoint]&&byEndpoints[endpoint]!==key){endpointConflict=true;return;}
+      byEndpoints[endpoint]=key;
+      if(byKey[key]){
+        var prior=byKey[key],priorAnnotation=prior.annotation?JSON.stringify(prior.annotation):'null',nextAnnotation=next.annotation?JSON.stringify(next.annotation):'null';
+        if(priorAnnotation!==nextAnnotation) byKey[key].conflict=true;
+        return;
+      }
+      byKey[key]=next;candidateLinks.push(next);
+    });
+    var conflict=Object.keys(byKey).some(function(key){return byKey[key].conflict;});
+    if(conflict) return {ok:false,reason:'Conflicting link annotations would be combined. Reconcile those links before merging.'};
+    if(endpointConflict||Object.keys(byEndpoints).length!==candidateLinks.length) return {ok:false,reason:'The merge would combine different link types on the same note pair.'};
+    var remaining=notes.filter(function(note){return !removed[note.id];}),validIds=Object.create(null);
+    remaining.forEach(function(note){validIds[note.id]=true;});
+    var sanitized=NoteCore.sanitizeLinks(candidateLinks,validIds);
+    if(sanitized.dropped) return {ok:false,reason:'The merged notes would create an invalid link graph.'};
+    return {ok:true,survivorId:survivorId,orderedIds:orderedIds,content:content,taskRefs:refs,
+      parentId:parentId,absorbedIds:absorbed,remaining:remaining,links:sanitized.links,childOrder:childOrder};
+  }
+  function validateMerge(ids,survivorId){
+    var plan=mergePlan(ids,survivorId);
+    return plan.ok?{ok:true,survivorId:plan.survivorId,orderedIds:plan.orderedIds,preview:plan.content,reason:''}:{ok:false,reason:plan.reason};
+  }
+  function mergeNotes(ids,survivorId){
+    var plan=mergePlan(ids,survivorId);
+    if(!plan.ok) return {ok:false,survivorId:survivorId||null,reason:plan.reason};
+    if(!globalMutationAllowed('note.merge',{ids:plan.orderedIds,survivorId:plan.survivorId})) return {ok:false,survivorId:survivorId,reason:'Merge is not authorized.'};
+    var survivor=noteById(plan.survivorId), now=Date.now();
+    var apply=function(){
+      survivor.content=plan.content;survivor.taskRefs=plan.taskRefs;survivor.updatedAt=now;survivor.reviewedAt=0;
+      notes=plan.remaining;links=plan.links;
+      var childIds=[];
+      var directChildren=plan.childOrder.filter(function(id){return links.some(function(link){return link.type==='child'&&link.from===plan.survivorId&&link.to===id;});});
+      directChildren.forEach(function(id,index){var child=noteById(id);if(child)child.outlineOrder=index;});
+      renumberOutlineGroup(plan.parentId);
+      renderAll();selectNote(plan.survivorId);refreshViewerOutline();saveSoon();
+      return {ok:true,survivorId:plan.survivorId};
+    };
+    var result=window.KyanbasuHistory&&typeof window.KyanbasuHistory.transaction==='function'?window.KyanbasuHistory.transaction('merge notes',apply):apply();
+    return result&&result.ok?result:{ok:false,survivorId:survivorId,reason:(result&&result.reason)||'Merge was rolled back.'};
   }
   function boot(){
     ensureToolbar();
@@ -4997,6 +5587,7 @@
     loadBucketFollowState();
     loadBucketColorState();
     loadCustomLenses();
+    initializeOutlineOrders();
     renderAll();
     installCanvasClick();
     installTaskLinking();
@@ -5012,6 +5603,17 @@
   }
   window.KyanbasuNotes = {
     createNote: createNote,
+    setPinned: setPinned,
+    splitNote: splitNote,
+    splitAtSelection: splitNoteAtSelection,
+    duplicateBranch: duplicateBranch,
+    validateMerge: validateMerge,
+    mergeNotes: mergeNotes,
+    moveBranch: moveBranch,
+    reorderBranch: reorderBranch,
+    indentBranch: indentBranch,
+    outdentBranch: outdentBranch,
+    moveToSiblingIndex: moveToSiblingIndex,
     createDecisionMap: createDecisionMap,
     createDecisionChild: createDecisionChild,
     createDecisionTriage: createDecisionTriage,
@@ -5076,8 +5678,11 @@
     nextReview: function(){ return moveNoteReview(1); },
     previousReview: function(){ return moveNoteReview(-1); },
     reviewState: noteReviewSnapshot,
+    captureViewState: captureViewState,
+    restoreViewState: restoreViewState,
     reflowMindMap: reflowMindMap,
     compactMindMap: compactMindMap,
+    compactScope: compactScopeWithHistory,
     toggleCollapse: toggleCollapse,
     setBucket: setBucket,
     setBucketColor: setBucketColor,
@@ -5089,6 +5694,12 @@
     bucketPalette: function(){ return bucketPalette.slice(); },
     setContent: setNoteContent,
     selectNote: selectNote,
+    restoreSelection: function(ids, primary){
+      selectNotes(Array.isArray(ids) ? ids : [], false);
+      if (primary && selectedNoteIds[primary]) selectedNoteId = primary;
+      syncSelection();
+      renderLinks();
+    },
     clearSelection: clearNoteSelection,
     primaryNote: function(){ return selectedNoteId; },
     selectedNotes: function(){ return selectedIds(); },

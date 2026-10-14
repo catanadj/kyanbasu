@@ -53,5 +53,5 @@
   // Listen early so we own the combo
   window.addEventListener('keydown', onRemap, true);
 
-  console.log('[hotkey] ONLY Ctrl+Shift+D toggles console; plain/Shift D suppressed');
+  if (window.KYANBASU_DEBUG) console.log('[hotkey] ONLY Ctrl+Shift+D toggles console; plain/Shift D suppressed');
 })();</script>

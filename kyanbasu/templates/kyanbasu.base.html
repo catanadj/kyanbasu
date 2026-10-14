@@ -1503,7 +1503,7 @@
 <body><script>(function(){
   function safeInit(){
     try{ if(!window.__INIT_DONE__ && typeof initFromDATA==='function'){ window.__INIT_DONE__=true; initFromDATA(); }}
-    catch(e){ console.log('[boot] init error', e); }
+    catch(e){ console.error('[boot] init error', e); }
   }
   document.addEventListener('twdata', safeInit, {once:true});
   window.addEventListener('load', function(){ if(window.DATA_READY) safeInit(); }, {once:true});
@@ -1532,7 +1532,7 @@
         window.__INIT_DONE__ = true;
         initFromDATA();
       }
-    } catch(e){ console.log('[boot] init error', e); }
+    } catch(e){ console.error('[boot] init error', e); }
   }
   document.addEventListener('twdata', safeInit, { once:true });
   window.addEventListener('load', function(){ if (window.DATA_READY) safeInit(); }, { once:true });
@@ -4194,6 +4194,42 @@ function appendViewerNote(outlineEl, item){
     '<div class="viewerNoteText" contenteditable="true" spellcheck="true"></div>' +
     '<div class="viewerNoteSemantics"></div>' +
     '<div class="viewerNoteBucket"></div>';
+  var structure=document.createElement('div'); structure.className='viewerNoteStructure';
+  var move=document.createElement('select'); move.setAttribute('aria-label','Move branch'); move.title='Move branch…';
+  var initial=document.createElement('option'); initial.value=''; initial.textContent='Move…'; move.appendChild(initial);
+  var rootOption=document.createElement('option'); rootOption.value='__root__'; rootOption.textContent='Root level'; move.appendChild(rootOption);
+  var noteApi=window.KyanbasuNotes;
+  if(noteApi){
+    var labelMap=noteApi.noteLabels ? noteApi.noteLabels() : {};
+    noteApi.notes().forEach(function(candidate){
+      if(candidate.id===item.id) return;
+      var option=document.createElement('option'); option.value=candidate.id;
+      option.textContent=(labelMap[candidate.id] ? labelMap[candidate.id]+' · ' : '')+String(candidate.content||'').slice(0,44);
+      move.appendChild(option);
+    });
+  }
+  move.addEventListener('click',function(ev){ev.stopPropagation();});
+  move.addEventListener('change',function(ev){
+    ev.stopPropagation();
+    if(!move.value) return;
+    var result=noteApi && noteApi.moveBranch(item.id,move.value==='__root__'?null:move.value,999);
+    if(result && !result.ok && typeof window.showToast==='function') window.showToast(result.reason||'Could not move branch.');
+    move.value='';
+    if(typeof renderViewer==='function') renderViewer();
+  });
+  structure.appendChild(move);
+  [['↵','Split at cursor',function(){var result=noteApi.splitAtSelection(item.id,textEl);if(result&&!result.ok&&typeof window.showToast==='function')window.showToast(result.reason||'Could not split note.');return result;}],
+   ['⧉','Duplicate branch. External links and task references stay with the original.',function(){var result=noteApi.duplicateBranch(item.id);if(result&&!result.ok&&typeof window.showToast==='function')window.showToast(result.reason||'Could not duplicate branch.');return result;}],
+   ['▦','Compact branch',function(){return noteApi.compactScope({branchId:item.id});}],
+   ['↑','Move up (Alt+Up)',function(){return noteApi.moveToSiblingIndex(item.id,-1);}],
+   ['↓','Move down (Alt+Down)',function(){return noteApi.moveToSiblingIndex(item.id,1);}],
+   ['←','Outdent (Alt+Left)',function(){return noteApi.outdentBranch(item.id);}],
+   ['→','Indent (Alt+Right)',function(){return noteApi.indentBranch(item.id);}]].forEach(function(spec){
+    var button=document.createElement('button');button.type='button';button.textContent=spec[0];button.title=spec[1];button.setAttribute('aria-label',spec[1]);
+    button.addEventListener('click',function(ev){ev.preventDefault();ev.stopPropagation();if(noteApi){var result=spec[2]();if(result&&!result.ok&&typeof window.showToast==='function')window.showToast(result.reason||'Could not update branch.');if(typeof renderViewer==='function')renderViewer();}});
+    structure.appendChild(button);
+  });
+  row.appendChild(structure);
   row.querySelector('.viewerNoteCode').textContent=item.label || '';
   var textEl = row.querySelector('.viewerNoteText');
   textEl.textContent=item.content || 'New note';
@@ -4217,6 +4253,7 @@ function appendViewerNote(outlineEl, item){
     if (window.KyanbasuNotes && typeof window.KyanbasuNotes.setContent === 'function') window.KyanbasuNotes.setContent(item.id, textEl.textContent);
   });
   textEl.addEventListener('keydown', function(ev){
+    if (ev.isComposing || ev.keyCode === 229) return;
     if (ev.key === 'Escape'){
       ev.preventDefault();
       textEl.blur();
@@ -4624,18 +4661,18 @@ projectAreas = new Map(); tagAreas = new Map(); // EMPTY canvas
               });
               resolveProjectOverlaps();
               drawLinks();
-            } catch(e){ console.log('[auto-place] relayout error', e); }
+            } catch(e){ console.error('[auto-place] relayout error', e); }
           };
           requestAnimationFrame(function(){ requestAnimationFrame(doRelayout); });
         }
       }
-    } catch(e){ console.log('[auto-place] error', e); }
+    } catch(e){ console.error('[auto-place] error', e); }
 
 
 
     updateConsole();
     queueInspectorRender(0);
-  } catch (e) { console.log('[Kyanbasu] initFromDATA error', e); }
+  } catch (e) { console.error('[Kyanbasu] initFromDATA error', e); }
 }
 document.addEventListener('twdata', function(){ initFromDATA(); }, { once:true });
 window.addEventListener('load', function(){ if (window.DATA_READY) initFromDATA(); }, { once:true });

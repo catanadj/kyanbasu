@@ -51,12 +51,15 @@
   function workbenchById(id){
     return load().workbenches.filter(function(w){ return w && w.id === id; })[0] || null;
   }
+  function announceWorkbenchChange(wb){
+    if(wb) document.dispatchEvent(new CustomEvent('kyanbasu-workbench-switched',{detail:{id:wb.id}}));
+  }
   function cleanName(name){
     name = String(name || '').replace(/\s+/g, ' ').trim();
     return name ? name.slice(0, 36) : '';
   }
   function captureWorkbench(){
-    var layout = null, notes = null;
+    var layout = null, notes = null, viewState = null;
     try{
       if (window.KyanbasuLayoutPersist && typeof window.KyanbasuLayoutPersist.captureState === 'function'){
         layout = window.KyanbasuLayoutPersist.captureState();
@@ -64,10 +67,12 @@
     }catch(_){}
     try{
       if (window.KyanbasuNotes && typeof window.KyanbasuNotes.exportData === 'function'){
+        if (typeof window.KyanbasuNotes.save === 'function') window.KyanbasuNotes.save();
         notes = window.KyanbasuNotes.exportData();
+        if (typeof window.KyanbasuNotes.captureViewState === 'function') viewState = window.KyanbasuNotes.captureViewState();
       }
     }catch(_){}
-    return {layout: layout, notes: notes};
+    return {layout: layout, notes: notes, viewState:viewState};
   }
   function captureActive(){
     var wb = activeWorkbench();
@@ -75,13 +80,14 @@
     var snap = captureWorkbench();
     wb.layout = snap.layout;
     wb.notes = snap.notes;
+    wb.viewState = snap.viewState;
     wb.savedAt = Date.now();
   }
   function emptyLayout(){
     return {version:1, zoom:100, drawer_collapsed:true, nodes:{}, projects:[], tags:[]};
   }
   function emptyNotes(){
-    return {kind:'kyanbasu.notes', version:9, notes:[], links:[], buckets:{}};
+    return {kind:'kyanbasu.notes', version:10, notes:[], links:[], buckets:{}};
   }
   function workbenchCounts(w){
     var layout = w && w.layout;
@@ -132,7 +138,8 @@
           tasks: counts.tasks,
           notesCount: counts.notes,
           layout: cloneData(w.layout, emptyLayout()),
-          notes: normalizeNotesData(w.notes)
+          notes: normalizeNotesData(w.notes),
+          viewState: cloneData(w.viewState, null)
         };
       })
     };
@@ -168,6 +175,7 @@
         name: cleanName(w.name) || (i === 0 ? 'Main' : ('Workbench ' + (i + 1))),
         layout: cloneData(w.layout, emptyLayout()),
         notes: normalizeNotesData(w.notes),
+        viewState: cloneData(w.viewState, null),
         savedAt: w.savedAt || Date.now()
       };
     });
@@ -181,6 +189,7 @@
     saveNow();
     applyWorkbench(activeWorkbench());
     renderTabs();
+    announceWorkbenchChange(activeWorkbench());
     return {workbenches:state.workbenches.length, activeId:state.activeId};
   }
   function importJSON(text){
@@ -197,6 +206,11 @@
       if (window.KyanbasuNotes && typeof window.KyanbasuNotes.importData === 'function'){
         window.KyanbasuNotes.importData(notes);
       }
+      setTimeout(function(){
+        if (window.KyanbasuNotes && typeof window.KyanbasuNotes.restoreViewState === 'function'){
+          window.KyanbasuNotes.restoreViewState(wb && wb.viewState ? wb.viewState : {});
+        }
+      }, 30);
       try{ if (typeof drawLinks === 'function') drawLinks(); }catch(_){}
       try{ if (typeof renderViewer === 'function') renderViewer(); }catch(_){}
       try{ if (window.KyanbasuNavigator && typeof window.KyanbasuNavigator.render === 'function') window.KyanbasuNavigator.render(); }catch(_){}
@@ -214,6 +228,7 @@
     saveNow();
     try{ applyWorkbench(next); }catch(_){}
     renderTabs();
+    announceWorkbenchChange(next);
   }
   function createWorkbench(){
     var s = load();
@@ -225,6 +240,7 @@
     saveNow();
     applyWorkbench(wb);
     renderTabs();
+    announceWorkbenchChange(wb);
     return wb.id;
   }
   function duplicateWorkbench(id){
@@ -237,6 +253,7 @@
       name: cleanName(source.name + ' copy') || ('Workbench ' + s.nextIndex),
       layout: source.layout ? JSON.parse(JSON.stringify(source.layout)) : emptyLayout(),
       notes: source.notes ? JSON.parse(JSON.stringify(source.notes)) : emptyNotes(),
+      viewState: cloneData(source.viewState, null),
       savedAt: Date.now()
     };
     s.nextIndex += 1;
@@ -245,6 +262,7 @@
     saveNow();
     applyWorkbench(copy);
     renderTabs();
+    announceWorkbenchChange(copy);
     return copy.id;
   }
   function renameWorkbench(id, nextName){
@@ -279,6 +297,7 @@
       s.activeId = next.id;
       saveNow();
       applyWorkbench(next);
+      announceWorkbenchChange(next);
     } else {
       saveNow();
     }
@@ -415,7 +434,7 @@
     load();
     renderTabs();
     var wb = activeWorkbench();
-    if (wb && (wb.layout || wb.notes)) setTimeout(function(){ applyWorkbench(wb); renderTabs(); }, 80);
+    if (wb && (wb.layout || wb.notes || wb.viewState)) setTimeout(function(){ applyWorkbench(wb); renderTabs(); }, 80);
     document.addEventListener('mouseup', saveSoon, true);
     document.addEventListener('touchend', saveSoon, true);
     window.addEventListener('beforeunload', function(){ captureActive(); saveNow(); });

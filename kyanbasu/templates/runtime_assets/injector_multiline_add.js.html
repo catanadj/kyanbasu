@@ -120,7 +120,7 @@
       if (i && i%25===0) await new Promise(r=>setTimeout(r,0)); // yield on large batches
     }
     fireGlobalRebind(); // ensure DnD/hover binders include new nodes
-    console.log('[ml-add] added', lines.length, 'tasks to', project, '/', tag);
+    if (window.KYANBASU_DEBUG) console.log('[ml-add] added', lines.length, 'tasks to', project, '/', tag);
   }, true);
 
   // -------- 2) Intercept FAB (#fabAddNew) --------
@@ -187,9 +187,9 @@
       try{ if (typeof updateConsole==='function') updateConsole(); }catch(_){}
       fireGlobalRebind();
 
-      console.log('[ml-add] added', lines.length, 'new task(s) to project', project);
+      if (window.KYANBASU_DEBUG) console.log('[ml-add] added', lines.length, 'new task(s) to project', project);
     }, true);
   })();
 
-  console.log('[ml-add] multiline add enabled (new-uuid + 8hex short + rebind)');
+  if (window.KYANBASU_DEBUG) console.log('[ml-add] multiline add enabled (new-uuid + 8hex short + rebind)');
 })();</script>

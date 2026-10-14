@@ -120,7 +120,10 @@
 
   // Click wiring (capture) with container-based detection
   const links = document.getElementById('builderLinks') || document.querySelector('svg');
-  if (!links || links.__rmV61) { console.log('[FixPack V6.1] already bound'); return; }
+  if (!links || links.__rmV61) {
+    if (window.KYANBASU_DEBUG) console.log('[FixPack V6.1] already bound');
+    return;
+  }
   links.__rmV61 = true;
 
   function isPreviewNode(node){
@@ -156,7 +159,7 @@
     try{ window.renderStagedOverlay && window.renderStagedOverlay(); }catch{}
     try{ window.drawLinks && window.drawLinks(); }catch{}
     try{ window.updateConsole && window.updateConsole(); }catch{}
-    console.log('[dep-preview-cancel] removed');
+    if (window.KYANBASU_DEBUG) console.log('[dep-preview-cancel] removed');
   }
 
   links.addEventListener('click', (e)=>{
@@ -183,7 +186,7 @@
 
       window.__depExtraCmds.push(cmd);
       try{ window.updateConsole && window.updateConsole(); }catch{}
-      console.log('[dep-remove]', cmd);
+      if (window.KYANBASU_DEBUG) console.log('[dep-remove]', cmd);
       if (typeof toastMsg==='function') toastMsg('Removed: '+fromShort+' !depends '+toShort);
       return;
     }

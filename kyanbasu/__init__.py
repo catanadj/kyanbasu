@@ -1,6 +1,6 @@
 """Kyanbasu visual planning workspace."""
 
-__version__ = "0.3.0"
+from kyanbasu.version import __version__
 
 from kyanbasu.app import kyanbasu_main as main
 

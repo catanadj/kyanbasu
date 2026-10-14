@@ -65,7 +65,7 @@ class TestBrowserE2E(unittest.TestCase):
     def test_build_commands_shell_quotes_new_task_description_and_modifiers(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_COMMAND_HARNESS">
@@ -105,7 +105,7 @@ window.addEventListener('load', function(){
     def test_kyanbasu_commands_core_normalizes_command_matrix(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_COMMAND_CORE_HARNESS">
@@ -151,7 +151,7 @@ window.addEventListener('load', function(){
     def test_runtime_diagnostics_reports_perf_hot_paths(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_PERF_DIAG_HARNESS">
@@ -208,7 +208,7 @@ window.addEventListener('load', function(){
     def test_console_utility_runtimes_wire_toast_normalize_and_copy(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CONSOLE_UTILITIES_HARNESS">
@@ -280,7 +280,7 @@ window.addEventListener('load', function(){
                 "init_projects": ["Work"],
             }
         )
-        html = build_runtime_html(base_html, payload, 1, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 1)
 
         harness = """
 <script id="E2E_FOCUS_ADD_TAG_HARNESS">
@@ -363,7 +363,7 @@ window.addEventListener('load', function(){
                 "init_projects": ["Work"],
             }
         )
-        html = build_runtime_html(base_html, payload, 2, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 2)
 
         harness = """
 <script id="E2E_REVIEW_CHANGES_HARNESS">
@@ -524,7 +524,7 @@ window.addEventListener('load', function(){
                 "init_projects": ["Work"],
             }
         )
-        html = build_runtime_html(base_html, payload, 1, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 1)
 
         harness = """
 <script id="E2E_REVIEW_PREFLIGHT_HARNESS">
@@ -620,7 +620,7 @@ window.addEventListener('load', function(){
                 "init_projects": ["Work"],
             }
         )
-        html = build_runtime_html(base_html, payload, 1, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 1)
 
         harness = """
 <script id="E2E_DONE_DELETE_DUP_HARNESS">
@@ -683,7 +683,7 @@ window.addEventListener('load', function(){
                 "init_projects": ["Work"],
             }
         )
-        html = build_runtime_html(base_html, payload, 1, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 1)
 
         harness = """
 <script id="E2E_HOVER_BUTTON_DRAG_HARNESS">
@@ -739,7 +739,7 @@ window.addEventListener('load', function(){
                 "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
             }
         )
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_STORAGE_HARNESS">
@@ -795,7 +795,7 @@ window.addEventListener('load', function(){
                 "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
             }
         )
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
         prelude = """
 <script id="E2E_KYANBASU_STORAGE_PRELUDE">
 localStorage.setItem('kyanbasu:workspace:v1:storage-canonical:probe', JSON.stringify({value:41}));
@@ -845,7 +845,7 @@ window.addEventListener('load', function(){
     def test_kyanbasu_browser_apis_are_available(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
         harness = """
 <script id="E2E_KYANBASU_API_ALIAS_HARNESS">
 window.addEventListener('load', function(){
@@ -881,7 +881,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_runtime_creates_links_and_stays_out_of_commands(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_HARNESS">
@@ -971,10 +971,849 @@ window.addEventListener('load', function(){
         self.assertTrue(result["storageKey"].startswith("kyanbasu:workspace:v1:"))
         self.assertGreaterEqual(result["snapshotCount"], 1)
 
+    def test_notes_undo_redo_without_tasks(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0)
+        harness = """
+<script id="E2E_NOTES_UNDO_HARNESS">
+window.addEventListener('load', function(){ setTimeout(function(){
+  try{
+    window.STAGED_CMDS = ['task keep modify +staged'];
+    var baselineCount = KyanbasuNotes.notes().length;
+    var ids = [];
+    KyanbasuHistory.transaction('capture thought', function(){
+      var a = KyanbasuNotes.createNote(210, 230, 'Question', 'Initial thought');
+      var b = KyanbasuNotes.createNote(480, 260, 'Evidence', 'Source');
+      ids = [a.id, b.id];
+      KyanbasuNotes.linkNotes(a.id, b.id);
+      KyanbasuNotes.setBucket(b.id, 'Research');
+      KyanbasuNotes.save();
+      return ids;
+    });
+    setTimeout(function(){
+      var undo = undoCanvasChange();
+      var undone = KyanbasuNotes.exportData();
+      var redo = redoCanvasChange();
+      var restored = KyanbasuNotes.exportData();
+      var out = {
+        undo:undo, redo:redo,
+        baselineCount:baselineCount,
+        undoneNotes:undone.notes.length,
+        restored:restored.notes.map(function(n){ return [n.id,n.content,n.bucket,n.x,n.y]; }),
+        links:restored.links.map(function(l){ return [l.from,l.to,l.type]; }),
+        staged:window.STAGED_CMDS
+      };
+      var pre = document.createElement('pre'); pre.id='e2e-out'; pre.textContent=JSON.stringify(out); document.body.appendChild(pre);
+    }, 400);
+  }catch(e){ var pre=document.createElement('pre'); pre.id='e2e-out'; pre.textContent='ERR:'+e.message; document.body.appendChild(pre); }
+}, 1000); });
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["undo"], msg=json.dumps(result))
+        self.assertEqual(result["undoneNotes"], result["baselineCount"], msg=json.dumps(result))
+        self.assertTrue(result["redo"], msg=json.dumps(result))
+        self.assertEqual(len(result["restored"]), 2, msg=json.dumps(result))
+        self.assertEqual(result["restored"][0][1:], ["Question\nInitial thought", "(no bucket)", 210, 230], msg=json.dumps(result))
+        self.assertEqual(len(result["links"]), 1, msg=json.dumps(result))
+        self.assertEqual(result["staged"], ["task keep modify +staged"], msg=json.dumps(result))
+
+    def test_notes_history_transaction_is_atomic(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0)
+        harness = """
+<script id="E2E_NOTES_HISTORY_TRANSACTION_HARNESS">
+window.addEventListener('load', function(){ setTimeout(function(){
+  try{
+    var api = window.KyanbasuHistory;
+    var before = KyanbasuNotes.exportData();
+    var failed = api && api.transaction('rollback probe', function(){
+      KyanbasuNotes.createNote(200, 220, 'Temporary', 'discard me');
+      return {ok:false};
+    });
+    var after = KyanbasuNotes.exportData();
+    var success = api && api.transaction('one note', function(){
+      return KyanbasuNotes.createNote(330, 250, 'Saved', 'keep this');
+    });
+    var undo = window.undoCanvasChange();
+    var out = {hasApi:!!api, failed:failed, before:before.notes.length, afterFailure:after.notes.length,
+      success:!!success, undo:undo, afterUndo:KyanbasuNotes.notes().length};
+    var pre=document.createElement('pre'); pre.id='e2e-out'; pre.textContent=JSON.stringify(out); document.body.appendChild(pre);
+  }catch(e){ var pre=document.createElement('pre'); pre.id='e2e-out'; pre.textContent='ERR:'+e.message; document.body.appendChild(pre); }
+}, 1000); });
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["hasApi"], msg=json.dumps(result))
+        self.assertFalse(result["failed"], msg=json.dumps(result))
+        self.assertEqual(result["afterFailure"], result["before"], msg=json.dumps(result))
+        self.assertTrue(result["success"], msg=json.dumps(result))
+        self.assertTrue(result["undo"], msg=json.dumps(result))
+        self.assertEqual(result["afterUndo"], result["before"], msg=json.dumps(result))
+
+    def test_notes_quick_capture_keyboard_and_cancel(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0)
+        harness = """
+<script id="E2E_NOTES_QUICK_CAPTURE_HARNESS">
+window.addEventListener('load', function(){ setTimeout(function(){ try{
+  var before=KyanbasuNotes.notes().length;
+  var opener=document.createElement('input'); document.body.appendChild(opener); opener.focus();
+  opener.dispatchEvent(new KeyboardEvent('keydown',{key:'n',altKey:true,bubbles:true}));
+  var ignored=!document.getElementById('kyanbasuNoteCapture');
+  window.KyanbasuNotesWorkflow.openCapture();
+  var dialog=document.getElementById('kyanbasuNoteCapture');
+  var area=dialog.querySelector('textarea'); area.value='A captured thought';
+  var enter=new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}); area.dispatchEvent(enter);
+  var newline=!enter.defaultPrevented;
+  area.value='A captured thought';
+  area.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true}));
+  var saved=KyanbasuNotes.notes().length;
+  window.KyanbasuNotesWorkflow.openCapture();
+  var second=document.getElementById('kyanbasuNoteCapture');
+  second.querySelector('textarea').value='';
+  second.querySelector('textarea').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+  var out={button:!!document.getElementById('quickCaptureBtn'),ignoredUnrelated:ignored,newline:newline,
+    delta:saved-before,afterCancel:KyanbasuNotes.notes().length,focused:!!KyanbasuNotes.selectedNotes().length,
+    bucket:KyanbasuNotes.notes()[0]&&KyanbasuNotes.notes()[0].bucket, staged:window.STAGED_CMDS||[]};
+  var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent=JSON.stringify(out);document.body.appendChild(pre);
+ }catch(e){var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent='ERR:'+e.message;document.body.appendChild(pre);}},800);});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["button"], msg=json.dumps(result))
+        self.assertTrue(result["ignoredUnrelated"], msg=json.dumps(result))
+        self.assertTrue(result["newline"], msg=json.dumps(result))
+        self.assertEqual(result["delta"], 1, msg=json.dumps(result))
+        self.assertEqual(result["afterCancel"], result["delta"], msg=json.dumps(result))
+        self.assertEqual(result["bucket"], "Inbox", msg=json.dumps(result))
+        self.assertEqual(result["staged"], [], msg=json.dumps(result))
+
+    def test_notes_editing_keys_preserve_multiline_and_composition(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0)
+        harness = """
+<script id="E2E_NOTES_EDITING_KEYS_HARNESS">
+window.addEventListener('load', function(){ setTimeout(function(){ try{
+  var note=KyanbasuNotes.createNote(220,220,'Original','');
+  var editor=document.querySelector('.tcNoteNode[data-note-id="'+note.id+'"] .tcNoteText');
+  editor.focus(); editor.textContent='first'; editor.dispatchEvent(new InputEvent('input',{bubbles:true}));
+  var ev=new KeyboardEvent('keydown',{key:'Enter',shiftKey:true,bubbles:true,cancelable:true}); editor.dispatchEvent(ev);
+  var preserved=editor.textContent==='first';
+  var composing=new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true});
+  Object.defineProperty(composing,'isComposing',{value:true}); editor.dispatchEvent(composing);
+  var countDuring=KyanbasuNotes.notes().length;
+  editor.textContent='first\\nsecond'; editor.dispatchEvent(new InputEvent('input',{bubbles:true}));
+  var saved=KyanbasuNotes.notes().filter(function(n){return n.id===note.id;})[0].content;
+  var out={siblingKey:KyanbasuNotes.notes().length===countDuring,composition:countDuring===1,
+    shiftEnterNotPrevented:!ev.defaultPrevented,content:saved};
+  var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent=JSON.stringify(out);document.body.appendChild(pre);
+ }catch(e){var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent='ERR:'+e.message;document.body.appendChild(pre);}},800);});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["composition"], msg=json.dumps(result))
+        self.assertTrue(result["siblingKey"], msg=json.dumps(result))
+        self.assertTrue(result["shiftEnterNotPrevented"], msg=json.dumps(result))
+        self.assertEqual(result["content"], "first\nsecond", msg=json.dumps(result))
+
+    def test_notes_bulk_capture_order_and_undo(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0)
+        harness = """
+<script id="E2E_NOTES_BULK_CAPTURE_HARNESS">
+window.addEventListener('load',function(){setTimeout(function(){try{
+  var first=KyanbasuNotes.captureNotes('Keep this thought',{bucket:'Inbox'});
+  var before=KyanbasuNotes.notes().map(function(n){return n.id;});
+  window.STAGED_CMDS=['task keep modify +staged'];
+  var text='  • First\\r\\n\\r\\n task add Still a note\\nΩmega!  ';
+  var preview=KyanbasuNotesWorkflow.previewLines(text);
+  var batch=KyanbasuNotes.captureNotes(text,{mode:'lines',bucket:'Inbox'});
+  var after=KyanbasuNotes.notes().map(function(n){return n.content;});
+  var undo=undoCanvasChange();
+  var remaining=KyanbasuNotes.notes().map(function(n){return n.id;});
+  var out={first:first.ok,preview:preview,ok:batch.ok,batch:batch.ids.length,after:after,undo:undo,
+    before:before,remaining:remaining,staged:window.STAGED_CMDS};
+  var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent=JSON.stringify(out);document.body.appendChild(pre);
+}catch(e){var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent='ERR:'+e.message;document.body.appendChild(pre);}},900);});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["first"], msg=json.dumps(result))
+        self.assertEqual(result["preview"], ["• First", "task add Still a note", "Ωmega!"], msg=json.dumps(result))
+        self.assertTrue(result["ok"], msg=json.dumps(result))
+        self.assertEqual(result["batch"], 3, msg=json.dumps(result))
+        self.assertEqual(result["after"][1:], result["preview"], msg=json.dumps(result))
+        self.assertTrue(result["undo"], msg=json.dumps(result))
+        self.assertEqual(result["remaining"], result["before"], msg=json.dumps(result))
+        self.assertEqual(result["staged"], ["task keep modify +staged"], msg=json.dumps(result))
+
+    def test_notes_move_branch_preserves_graph_and_rejects_cycles(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0)
+        data = {"kind":"kyanbasu.notes","version":9,"notes":[
+          {"id":"x","x":100,"y":180,"content":"Old parent","bucket":"Plan"},
+          {"id":"a","x":160,"y":180,"content":"Branch A","bucket":"Plan"},
+          {"id":"a1","x":460,"y":180,"content":"A child","bucket":"Plan","taskRefs":[{"uuid":"task-1"}]},
+          {"id":"b","x":760,"y":180,"content":"Branch B","bucket":"Later"},
+          {"id":"b1","x":1060,"y":180,"content":"B child","bucket":"Later"}],
+          "links":[{"from":"x","to":"a","type":"child","annotation":{"kind":"note","text":"keep parent reason"}},
+            {"from":"a","to":"a1","type":"child"},
+            {"from":"b","to":"b1","type":"child"},{"from":"a1","to":"b1","type":"supports","annotation":{"kind":"evidence","text":"semantic"}}],"buckets":{}}
+        harness = """
+<script id="E2E_NOTES_MOVE_BRANCH_HARNESS">
+window.addEventListener('load',function(){setTimeout(function(){try{
+  KyanbasuNotes.importData(DATA_FIXTURE);
+  setTimeout(function(){
+    var moved=KyanbasuNotes.moveBranch('a','b',0);
+    var after=KyanbasuNotes.exportData();
+    var parent=after.links.filter(function(l){return l.to==='a'&&l.type==='child';})[0];
+    var desc=after.notes.filter(function(n){return n.id==='a1';})[0];
+    var semantic=after.links.filter(function(l){return l.from==='a1'&&l.to==='b1';})[0];
+    var beforeReject=JSON.stringify(after);
+    var rejected=KyanbasuNotes.moveBranch('b','b1',0);
+    var unchanged=JSON.stringify(KyanbasuNotes.exportData())===beforeReject;
+    var undo=undoCanvasChange();
+    var restored=KyanbasuNotes.exportData();
+    var out={hasMove:typeof KyanbasuNotes.moveBranch==='function',moved:moved,parent:parent,
+      descendant:desc,semantic:semantic,rejected:rejected,unchanged:unchanged,undo:undo,
+      originalParent:restored.links.filter(function(l){return l.to==='a'&&l.type==='child';})[0]};
+    var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent=JSON.stringify(out);document.body.appendChild(pre);
+  },450);
+}catch(e){var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent='ERR:'+e.message;document.body.appendChild(pre);}},500);});
+</script>
+"""
+        html = html.replace("</body>", "<script>var DATA_FIXTURE=" + json.dumps(data) + ";</script>\n" + harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["hasMove"], msg=json.dumps(result))
+        self.assertTrue(result["moved"]["ok"], msg=json.dumps(result))
+        self.assertEqual(result["parent"]["from"], "b", msg=json.dumps(result))
+        self.assertEqual(result["parent"]["annotation"]["text"], "keep parent reason", msg=json.dumps(result))
+        self.assertEqual(result["descendant"]["taskRefs"][0]["uuid"], "task-1", msg=json.dumps(result))
+        self.assertEqual(result["semantic"]["annotation"]["text"], "semantic", msg=json.dumps(result))
+        self.assertFalse(result["rejected"]["ok"], msg=json.dumps(result))
+        self.assertTrue(result["unchanged"], msg=json.dumps(result))
+        self.assertTrue(result["undo"], msg=json.dumps(result))
+        self.assertEqual(result["originalParent"]["from"], "x", msg=json.dumps(result))
+
+    def test_notes_outline_reorder_round_trip(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0)
+        data = {"kind":"kyanbasu.notes","version":9,"notes":[
+          {"id":"root","x":100,"y":100,"content":"Root"},
+          {"id":"first","x":400,"y":400,"content":"First by position"},
+          {"id":"second","x":400,"y":200,"content":"Second by position"}],
+          "links":[{"from":"root","to":"first","type":"child"},{"from":"root","to":"second","type":"child"}],"buckets":{}}
+        harness = """
+<script id="E2E_NOTES_OUTLINE_ORDER_HARNESS">
+window.addEventListener('load',function(){setTimeout(function(){try{
+  KyanbasuNotes.importData(DATA_FIXTURE);
+  var legacy=KyanbasuNotes.outline()[0].children.map(function(n){return n.id;});
+  var moved=KyanbasuNotes.reorderBranch('second',1);
+  var exported=KyanbasuNotes.exportData();
+  KyanbasuNotes.importData(exported);
+  var roundTrip=KyanbasuNotes.outline()[0].children.map(function(n){return n.id;});
+  var out={legacy:legacy,moved:moved,version:exported.version,orders:exported.notes.map(function(n){return [n.id,n.outlineOrder];}),roundTrip:roundTrip};
+  var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent=JSON.stringify(out);document.body.appendChild(pre);
+}catch(e){var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent='ERR:'+e.message;document.body.appendChild(pre);}},600);});
+</script>
+"""
+        html = html.replace("</body>", "<script>var DATA_FIXTURE=" + json.dumps(data) + ";</script>\n" + harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["legacy"], ["second", "first"], msg=json.dumps(result))
+        self.assertTrue(result["moved"]["ok"], msg=json.dumps(result))
+        self.assertEqual(result["version"], 10, msg=json.dumps(result))
+        self.assertEqual(result["roundTrip"], ["first", "second"], msg=json.dumps(result))
+
+    def test_notes_workbench_restores_context_and_pending_edit(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0)
+        harness = """
+<script id="E2E_NOTES_WORKBENCH_CONTEXT_HARNESS">
+window.addEventListener('load',function(){setTimeout(function(){try{
+  var first=KyanbasuNotes.createNote(180,220,'Question one','initial','Research',{skipAutoLayout:true,kind:'question'});
+  var second=KyanbasuNotes.createNote(480,220,'Question two','second','Research',{skipAutoLayout:true,kind:'question'});
+  KyanbasuNotes.setBucket(first.id,'Research'); KyanbasuNotes.setBucket(second.id,'Research');
+  KyanbasuNotes.focusBucket('Research'); KyanbasuNotes.applyLens('open-questions'); KyanbasuNotes.selectNote(second.id);
+  KyanbasuNotes.startReview(); KyanbasuNotes.nextReview();
+  var editor=document.querySelector('.tcNoteNode[data-note-id="'+second.id+'"] .tcNoteText');
+  editor.textContent='Final text before switching'; editor.dispatchEvent(new InputEvent('input',{bubbles:true}));
+  var canvas=document.querySelector('#builderWrap .canvas'); canvas.scrollLeft=440; canvas.scrollTop=310;
+  var other=KyanbasuWorkbenches.create();
+  KyanbasuWorkbenches.switchTo('main');
+  setTimeout(function(){
+    var view=KyanbasuNotes.captureViewState(); var layout=KyanbasuLayoutPersist.captureState();
+    var exported=KyanbasuWorkbenches.exportData().workbenches.filter(function(w){return w.id==='main';})[0];
+    var saved=KyanbasuNotes.notes().filter(function(n){return n.id===second.id;})[0];
+    var restoredCanvas=document.querySelector('#builderWrap .canvas');
+    var out={other:!!other,content:saved&&saved.content,selected:view.selectedIds,primary:view.primaryId,
+      focus:view.focus,lens:view.lens,review:view.review,scroll:layout.canvas_scroll,
+      actualScroll:[restoredCanvas.scrollLeft,restoredCanvas.scrollTop],exportHasView:!!(exported&&exported.viewState)};
+    var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent=JSON.stringify(out);document.body.appendChild(pre);
+  },180);
+}catch(e){var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent='ERR:'+e.message;document.body.appendChild(pre);}},900);});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["content"], "Final text before switching", msg=json.dumps(result))
+        self.assertEqual(result["selected"], [result["primary"]], msg=json.dumps(result))
+        self.assertEqual(result["focus"]["kind"], "bucket", msg=json.dumps(result))
+        self.assertEqual(result["focus"]["value"], "Research", msg=json.dumps(result))
+        self.assertEqual(result["lens"]["id"], "open-questions", msg=json.dumps(result))
+        self.assertEqual(result["review"]["currentId"], result["primary"], msg=json.dumps(result))
+        self.assertEqual(result["scroll"], {"left":440,"top":310}, msg=json.dumps(result))
+        self.assertEqual(result["actualScroll"], [440,310], msg=json.dumps(result))
+        self.assertTrue(result["exportHasView"], msg=json.dumps(result))
+
+    def test_notes_pins_and_scoped_compaction_round_trip(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0)
+        data = {"kind":"kyanbasu.notes","version":10,"notes":[
+          {"id":"pin","x":500,"y":500,"content":"Pinned","bucket":"Research","pinned":True},
+          {"id":"r1","x":1000,"y":1000,"content":"One","bucket":"Research"},
+          {"id":"r2","x":1300,"y":1000,"content":"Two","bucket":"Research"},
+          {"id":"outside","x":1650,"y":1000,"content":"Outside","bucket":"Other"}],"links":[],"buckets":{}}
+        harness = """
+<script id="E2E_NOTES_PIN_COMPACT_HARNESS">
+window.addEventListener('load',function(){setTimeout(function(){try{
+  KyanbasuNotes.importData(DATA_FIXTURE);
+  var before=KyanbasuNotes.notes().reduce(function(out,n){out[n.id]=[n.x,n.y];return out;},{});
+  var pinnedResult=KyanbasuNotes.makeSpaceForRects([{x:490,y:490,w:260,h:140}]);
+  var pinAfter=KyanbasuNotes.notes().filter(function(n){return n.id==='pin';})[0];
+  var saved=KyanbasuNotes.exportData();
+  setTimeout(function(){
+    var compactButton=document.querySelector('.tcNoteBucket[data-bucket="Research"] .tcNoteBucketCompact');
+    if(compactButton) compactButton.click();
+    var compact={ok:!!compactButton};
+    var after=KyanbasuNotes.notes().reduce(function(out,n){out[n.id]=[n.x,n.y];return out;},{});
+    compact.changed=JSON.stringify(before.r1)!==JSON.stringify(after.r1)||JSON.stringify(before.r2)!==JSON.stringify(after.r2);
+    var undo=undoCanvasChange();
+    var restored=KyanbasuNotes.notes().reduce(function(out,n){out[n.id]=[n.x,n.y];return out;},{});
+    var out={pin:pinAfter&&pinAfter.pinned,pinnedCoords:after.pin,before:before,after:after,restored:restored,
+      pinExport:saved.notes.filter(function(n){return n.id==='pin';})[0].pinned,compact:compact,undo:undo,
+      pinnedUnchanged:JSON.stringify(before.pin)===JSON.stringify(after.pin),
+      outsideUnchanged:JSON.stringify(before.outside)===JSON.stringify(after.outside),
+      undoRestores:JSON.stringify(before.r1)===JSON.stringify(restored.r1)&&JSON.stringify(before.r2)===JSON.stringify(restored.r2)};
+    var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent=JSON.stringify(out);document.body.appendChild(pre);
+  },450);
+}catch(e){var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent='ERR:'+e.message;document.body.appendChild(pre);}},700);});
+</script>
+"""
+        html = html.replace("</body>", "<script>var DATA_FIXTURE=" + json.dumps(data) + ";</script>\n" + harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["pin"], msg=json.dumps(result))
+        self.assertTrue(result["pinExport"], msg=json.dumps(result))
+        self.assertTrue(result["pinnedUnchanged"], msg=json.dumps(result))
+        self.assertTrue(result["outsideUnchanged"], msg=json.dumps(result))
+        self.assertTrue(result["compact"]["ok"], msg=json.dumps(result))
+        self.assertTrue(result["undo"], msg=json.dumps(result))
+        self.assertTrue(result["undoRestores"], msg=json.dumps(result))
+
+    def test_notes_branch_layout_uses_measured_sizes_and_outline_order(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0)
+        data = {"kind":"kyanbasu.notes","version":10,"notes":[
+          {"id":"root","x":180,"y":180,"content":"A root with enough extra text to wrap across multiple lines and make this card taller."},
+          {"id":"a","x":480,"y":150,"content":"Short child","outlineOrder":0},
+          {"id":"b","x":480,"y":300,"content":"Child with several lines\nthat must reserve enough vertical room\nfor its sibling branch.","outlineOrder":1},
+          {"id":"a1","x":780,"y":110,"content":"First grandchild","outlineOrder":0},
+          {"id":"a2","x":780,"y":220,"content":"Second grandchild with text\nthat wraps onto another line.","outlineOrder":1},
+          {"id":"b1","x":780,"y":330,"content":"Nested child","outlineOrder":0}],
+          "links":[{"from":"root","to":"a","type":"child"},{"from":"root","to":"b","type":"child"},
+          {"from":"a","to":"a1","type":"child"},{"from":"a","to":"a2","type":"child"},
+          {"from":"b","to":"b1","type":"child"}],"buckets":{}};
+        harness = """
+<script id="E2E_BRANCH_LAYOUT_HARNESS">
+window.addEventListener('load',function(){setTimeout(function(){try{
+  KyanbasuNotes.importData(DATA_FIXTURE);
+  var compact=KyanbasuNotes.compactScope({branchId:'root'});
+  var rects={};
+  KyanbasuNotes.notes().forEach(function(n){var el=document.querySelector('.tcNoteNode[data-note-id="'+n.id+'"]');if(el)rects[n.id]={x:n.x,y:n.y,w:el.offsetWidth,h:el.offsetHeight};});
+  var overlap=[];Object.keys(rects).forEach(function(a,i){Object.keys(rects).slice(i+1).forEach(function(b){var x=rects[a],y=rects[b];if(x.x<y.x+y.w&&x.x+x.w>y.x&&x.y<y.y+y.h&&x.y+x.h>y.y)overlap.push([a,b]);});});
+  var out={compact:compact,rects:rects,overlap:overlap};
+  var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent=JSON.stringify(out);document.body.appendChild(pre);
+}catch(e){var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent='ERR:'+e.message;document.body.appendChild(pre);}},700);});
+</script>
+"""
+        html = html.replace("</body>", "<script>var DATA_FIXTURE=" + json.dumps(data) + ";</script>\n" + harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["compact"]["ok"], msg=json.dumps(result))
+        rects = result["rects"]
+        self.assertLess(rects["a"]["y"], rects["b"]["y"], msg=json.dumps(result))
+        self.assertGreaterEqual(rects["b"]["y"], rects["a2"]["y"] + rects["a2"]["h"] + 16, msg=json.dumps(result))
+        self.assertEqual(result["overlap"], [], msg=json.dumps(result))
+        self.assertEqual(rects["root"]["x"], 180, msg=json.dumps(result))
+        self.assertEqual(rects["root"]["y"], 180, msg=json.dumps(result))
+        self.assertGreaterEqual(rects["a"]["x"], rects["root"]["x"] + rects["root"]["w"] + 24, msg=json.dumps(result))
+        childSpanTop = min(rects["a"]["y"], rects["a1"]["y"], rects["a2"]["y"])
+        childSpanBottom = max(rects["b"]["y"] + rects["b"]["h"], rects["b1"]["y"] + rects["b1"]["h"])
+        self.assertLessEqual(abs((rects["root"]["y"] + rects["root"]["h"] / 2) - ((childSpanTop + childSpanBottom) / 2)), 2, msg=json.dumps(result))
+        self.assertLessEqual(abs((rects["a"]["y"] + rects["a"]["h"] / 2) - ((rects["a1"]["y"] + rects["a2"]["y"] + rects["a2"]["h"]) / 2)), 2, msg=json.dumps(result))
+        self.assertGreaterEqual(rects["a2"]["y"], rects["a1"]["y"] + rects["a1"]["h"] + 16, msg=json.dumps(result))
+
+    def test_notes_new_child_uses_nearest_clear_branch_slot(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0)
+        data = {"kind":"kyanbasu.notes","version":10,"notes":[
+          {"id":"parent","x":180,"y":180,"content":"Parent"},
+          {"id":"blocker","x":436,"y":180,"content":"Occupies the preferred child slot"},
+          {"id":"outside","x":1100,"y":780,"content":"Unrelated branch"}],"links":[],"buckets":{}}
+        harness = """
+<script id="E2E_CHILD_PLACEMENT_HARNESS">
+window.addEventListener('load',function(){setTimeout(function(){try{
+  KyanbasuNotes.importData(DATA_FIXTURE);
+  var before=KyanbasuNotes.notes().reduce(function(out,n){out[n.id]=[n.x,n.y];return out;},{});
+  var created=KyanbasuNotes.createChildNote('parent','New thought','');
+  var notes=KyanbasuNotes.notes(),rects={};notes.forEach(function(n){var el=document.querySelector('.tcNoteNode[data-note-id="'+n.id+'"]');if(el)rects[n.id]={x:n.x,y:n.y,w:el.offsetWidth,h:el.offsetHeight};});
+  var child=created&&rects[created.id],parent=rects.parent,blocker=rects.blocker;
+  var overlaps=!!(child&&blocker&&child.x<blocker.x+blocker.w&&child.x+child.w>blocker.x&&child.y<blocker.y+blocker.h&&child.y+child.h>blocker.y);
+  var out={created:!!created,child:child,parent:parent,blocker:blocker,overlaps:overlaps,before:before,after:KyanbasuNotes.notes().reduce(function(o,n){o[n.id]=[n.x,n.y];return o;},{})};
+  var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent=JSON.stringify(out);document.body.appendChild(pre);
+}catch(e){var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent='ERR:'+e.message;document.body.appendChild(pre);}},700);});
+</script>
+"""
+        html = html.replace("</body>", "<script>var DATA_FIXTURE=" + json.dumps(data) + ";</script>\n" + harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["created"], msg=json.dumps(result))
+        self.assertFalse(result["overlaps"], msg=json.dumps(result))
+        self.assertGreaterEqual(result["child"]["x"], result["parent"]["x"] + result["parent"]["w"] + 24, msg=json.dumps(result))
+        self.assertEqual(result["after"]["parent"], result["before"]["parent"], msg=json.dumps(result))
+        self.assertEqual(result["after"]["blocker"], result["before"]["blocker"], msg=json.dumps(result))
+        self.assertEqual(result["after"]["outside"], result["before"]["outside"], msg=json.dumps(result))
+
+    def test_notes_blocked_child_placement_is_atomic(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0)
+        data = {"kind":"kyanbasu.notes","version":10,"notes":[{"id":"parent","x":180,"y":180,"content":"Parent"}],"links":[],"buckets":{}}
+        harness = """
+<script id="E2E_BLOCKED_CHILD_HARNESS">
+window.addEventListener('load',function(){setTimeout(function(){try{
+  KyanbasuNotes.importData(DATA_FIXTURE);
+  var stage=document.getElementById('builderStage'),wall=document.createElement('div');wall.className='projArea';wall.style.position='absolute';wall.style.left='420px';wall.style.top='20px';wall.style.width='1400px';wall.style.height='1800px';stage.appendChild(wall);
+  var before=JSON.stringify(KyanbasuNotes.exportData());
+  var created=KyanbasuNotes.createChildNote('parent','Blocked thought','');
+  var after=JSON.stringify(KyanbasuNotes.exportData());
+  var out={created:!!created,before:before,after:after,count:KyanbasuNotes.notes().length,links:KyanbasuNotes.links().length};
+  var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent=JSON.stringify(out);document.body.appendChild(pre);
+}catch(e){var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent='ERR:'+e.message;document.body.appendChild(pre);}},700);});
+</script>
+"""
+        html = html.replace("</body>", "<script>var DATA_FIXTURE=" + json.dumps(data) + ";</script>\n" + harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertFalse(result["created"], msg=json.dumps(result))
+        self.assertEqual(result["count"], 1, msg=json.dumps(result))
+        self.assertEqual(result["links"], 0, msg=json.dumps(result))
+        self.assertEqual(result["after"], result["before"], msg=json.dumps(result))
+
+    def test_notes_compact_branch_keeps_tree_tidy_and_respects_obstacles(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0)
+        data = {"kind":"kyanbasu.notes","version":10,"notes":[
+          {"id":"root","x":180,"y":180,"content":"Branch root"},
+          {"id":"first","x":500,"y":180,"content":"First child","outlineOrder":0},
+          {"id":"second","x":820,"y":440,"content":"Second child\nwith multiple lines","outlineOrder":1},
+          {"id":"grandchild","x":1120,"y":180,"content":"Grandchild","outlineOrder":0},
+          {"id":"outside","x":1500,"y":1200,"content":"Outside branch"},
+          {"id":"pin","x":1800,"y":1500,"content":"Pinned obstacle","pinned":True}],
+          "links":[{"from":"root","to":"first","type":"child"},{"from":"root","to":"second","type":"child"},{"from":"first","to":"grandchild","type":"child"}],"buckets":{}}
+        harness = """
+<script id="E2E_COMPACT_BRANCH_HARNESS">
+window.addEventListener('load',function(){setTimeout(function(){try{
+  KyanbasuNotes.importData(DATA_FIXTURE);
+  var before=KyanbasuNotes.notes().reduce(function(out,n){out[n.id]=[n.x,n.y];return out;},{});
+  var button=document.querySelector('.tcNoteNode[data-note-id="root"] [data-note-compact]');
+  if(button)button.click();
+  var compacted=KyanbasuNotes.notes().reduce(function(out,n){out[n.id]=[n.x,n.y];return out;},{});
+  var rects={};KyanbasuNotes.notes().forEach(function(n){var el=document.querySelector('.tcNoteNode[data-note-id="'+n.id+'"]');if(el)rects[n.id]={x:n.x,y:n.y,w:el.offsetWidth,h:el.offsetHeight};});
+  var branch=['root','first','second','grandchild'],overlap=[];branch.forEach(function(a,i){branch.slice(i+1).forEach(function(b){var x=rects[a],y=rects[b];if(x.x<y.x+y.w&&x.x+x.w>y.x&&x.y<y.y+y.h&&x.y+x.h>y.y)overlap.push([a,b]);});});
+  var undo=undoCanvasChange();var restored=KyanbasuNotes.notes().reduce(function(out,n){out[n.id]=[n.x,n.y];return out;},{});
+  var wall=document.createElement('div');wall.className='projArea';wall.style.position='absolute';wall.style.left='0px';wall.style.top='0px';wall.style.width='6000px';wall.style.height='5000px';document.getElementById('builderStage').appendChild(wall);
+  var beforeBlocked=JSON.stringify(KyanbasuNotes.exportData());var blocked=KyanbasuNotes.compactScope({branchId:'root'});var afterBlocked=JSON.stringify(KyanbasuNotes.exportData());
+  var out={button:!!button,before:before,compacted:compacted,rects:rects,overlap:overlap,undo:undo,restored:restored,blocked:blocked,beforeBlocked:beforeBlocked,afterBlocked:afterBlocked};
+  var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent=JSON.stringify(out);document.body.appendChild(pre);
+}catch(e){var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent='ERR:'+e.message;document.body.appendChild(pre);}},700);});
+</script>
+"""
+        html = html.replace("</body>", "<script>var DATA_FIXTURE=" + json.dumps(data) + ";</script>\n" + harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["button"], msg=json.dumps(result))
+        self.assertEqual(result["compacted"]["root"], result["before"]["root"], msg=json.dumps(result))
+        self.assertEqual(result["compacted"]["outside"], result["before"]["outside"], msg=json.dumps(result))
+        self.assertEqual(result["compacted"]["pin"], result["before"]["pin"], msg=json.dumps(result))
+        self.assertEqual(result["overlap"], [], msg=json.dumps(result))
+        self.assertLess(result["compacted"]["first"][1], result["compacted"]["second"][1], msg=json.dumps(result))
+        self.assertTrue(result["undo"], msg=json.dumps(result))
+        self.assertEqual(result["restored"], result["before"], msg=json.dumps(result))
+        self.assertFalse(result["blocked"]["ok"], msg=json.dumps(result))
+        self.assertEqual(result["afterBlocked"], result["beforeBlocked"], msg=json.dumps(result))
+
+    def test_notes_parent_child_links_use_clear_corridor(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0)
+        data = {"kind":"kyanbasu.notes","version":10,"notes":[
+          {"id":"root","x":180,"y":400,"content":"Parent"},
+          {"id":"upper","x":436,"y":340,"content":"Upper child","outlineOrder":0},
+          {"id":"lower","x":436,"y":460,"content":"Lower child","outlineOrder":1},
+          {"id":"related","x":1200,"y":900,"content":"Related note"}],
+          "links":[{"from":"root","to":"upper","type":"child"},{"from":"root","to":"lower","type":"child"},
+          {"from":"root","to":"related","type":"supports","annotation":{"kind":"note","text":"keep this link"}}],"buckets":{}}
+        harness = """
+<script id="E2E_CHILD_LINK_CORRIDOR_HARNESS">
+window.addEventListener('load',function(){setTimeout(function(){try{
+  KyanbasuNotes.importData(DATA_FIXTURE);
+  var area=document.createElement('div');area.className='projArea';area.style.position='absolute';area.style.left='410px';area.style.top='405px';area.style.width='16px';area.style.height='20px';document.getElementById('builderStage').appendChild(area);
+  KyanbasuNotes.compactScope({branchId:'root'});
+  var areaRect={x:410,y:405,w:16,h:20},crossings=[];
+  document.querySelectorAll('path.tcNoteLink[data-type="child"][data-from="root"]').forEach(function(path){var length=path.getTotalLength();for(var i=0;i<=40;i++){var p=path.getPointAtLength(length*i/40);if(p.x>=areaRect.x&&p.x<=areaRect.x+areaRect.w&&p.y>=areaRect.y&&p.y<=areaRect.y+areaRect.h){crossings.push(path.getAttribute('data-to'));break;}}});
+  var links=KyanbasuNotes.exportData().links,semantic=links.filter(function(link){return link.type==='supports';})[0];
+  var semanticPath=document.querySelector('path.tcNoteLink[data-type="supports"][data-from="root"][data-to="related"]');
+  var childPath=document.querySelector('path.tcNoteLink[data-type="child"][data-from="root"]'),samples=[];if(childPath){var total=childPath.getTotalLength();for(var s=0;s<=8;s++){var pt=childPath.getPointAtLength(total*s/8);samples.push([pt.x,pt.y]);}}
+  var out={crossings:crossings,area:{x:areaRect.x,y:areaRect.y},semantic:semantic,semanticPath:!!semanticPath,samples:samples,notes:KyanbasuNotes.notes().map(function(n){return [n.id,n.x,n.y];})};
+  var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent=JSON.stringify(out);document.body.appendChild(pre);
+}catch(e){var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent='ERR:'+e.message;document.body.appendChild(pre);}},700);});
+</script>
+"""
+        html = html.replace("</body>", "<script>var DATA_FIXTURE=" + json.dumps(data) + ";</script>\n" + harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["crossings"], [], msg=json.dumps(result))
+        self.assertTrue(result["semanticPath"], msg=json.dumps(result))
+        self.assertEqual(result["semantic"]["annotation"]["text"], "keep this link", msg=json.dumps(result))
+
+    def test_note_action_buttons_show_on_hover_selection_and_focus(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0)
+        harness = """
+<script id="E2E_NOTE_ACTION_VISIBILITY_HARNESS">
+window.addEventListener('load',function(){setTimeout(function(){try{
+  var note=KyanbasuNotes.createNote(180,240,'A thought','','Planning',{skipAutoLayout:true});
+  var card=document.querySelector('.tcNoteNode[data-note-id="'+note.id+'"]'),actions=card.querySelector('.tcNoteActions'),button=actions.querySelector('button');
+  card.classList.remove('selected');
+  var idle=getComputedStyle(actions),idleState={opacity:idle.opacity,position:idle.position};
+  card.classList.add('selected');var selectedOpacity=getComputedStyle(actions).opacity;
+  card.classList.remove('selected');button.focus();var focusedOpacity=getComputedStyle(actions).opacity;
+  var noteCss=document.getElementById('FEATURE_CANVAS_NOTES_V1_CSS').textContent;
+  var out={idle:idleState,selectedOpacity:selectedOpacity,focusedOpacity:focusedOpacity,buttonFocusable:document.activeElement===button,hoverRule:noteCss.indexOf('.tcNoteNode:hover .tcNoteActions')!==-1};
+  var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent=JSON.stringify(out);document.body.appendChild(pre);
+}catch(e){var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent='ERR:'+e.message;document.body.appendChild(pre);}},400);});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertEqual(result["idle"]["opacity"], "0", msg=json.dumps(result))
+        self.assertEqual(result["idle"]["position"], "absolute", msg=json.dumps(result))
+        self.assertEqual(result["selectedOpacity"], "1", msg=json.dumps(result))
+        self.assertEqual(result["focusedOpacity"], "1", msg=json.dumps(result))
+        self.assertTrue(result["buttonFocusable"], msg=json.dumps(result))
+        self.assertTrue(result["hoverRule"], msg=json.dumps(result))
+
+    def test_notes_compact_collapsed_branch_translates_hidden_descendants(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0)
+        data = {"kind":"kyanbasu.notes","version":10,"notes":[
+          {"id":"root","x":180,"y":400,"content":"Root","collapsed":True},
+          {"id":"child","x":460,"y":400,"content":"Hidden child"},
+          {"id":"grandchild","x":740,"y":400,"content":"Hidden grandchild"}],
+          "links":[{"from":"root","to":"child","type":"child"},{"from":"child","to":"grandchild","type":"child"}],"buckets":{}}
+        harness = """
+<script id="E2E_COLLAPSED_BRANCH_TRANSLATION_HARNESS">
+window.addEventListener('load',function(){setTimeout(function(){try{
+  KyanbasuNotes.importData(DATA_FIXTURE);
+  var before=KyanbasuNotes.notes().map(function(n){return [n.id,n.x,n.y];});
+  var area=document.createElement('div');area.className='projArea';area.style.position='absolute';area.style.left='180px';area.style.top='400px';area.style.width='220px';area.style.height='92px';document.getElementById('builderStage').appendChild(area);
+  var compact=KyanbasuNotes.compactScope({branchId:'root'}),after=KyanbasuNotes.notes().map(function(n){return [n.id,n.x,n.y];});
+  var deltas={};before.forEach(function(row){var moved=after.filter(function(item){return item[0]===row[0];})[0];deltas[row[0]]=[moved[1]-row[1],moved[2]-row[2]];});
+  var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent=JSON.stringify({ok:compact.ok,deltas:deltas});document.body.appendChild(pre);
+}catch(e){var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent='ERR:'+e.message;document.body.appendChild(pre);}},700);});
+</script>
+"""
+        html = html.replace("</body>", "<script>var DATA_FIXTURE=" + json.dumps(data) + ";</script>\n" + harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["ok"], msg=json.dumps(result))
+        self.assertEqual(result["deltas"]["root"], result["deltas"]["child"], msg=json.dumps(result))
+        self.assertEqual(result["deltas"]["root"], result["deltas"]["grandchild"], msg=json.dumps(result))
+
+    def test_notes_split_preserves_original_links_and_undo(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0)
+        data = {"kind":"kyanbasu.notes","version":10,"notes":[
+          {"id":"parent","x":100,"y":120,"content":"Parent"},
+          {"id":"source","x":400,"y":120,"content":"First paragraph.\nSecond paragraph.","bucket":"Research","kind":"question","color":"#5b8def","taskRefs":[{"uuid":"task-1"}],"createdAt":11,"updatedAt":22,"reviewedAt":33},
+          {"id":"child","x":700,"y":120,"content":"Child"},
+          {"id":"related","x":1000,"y":120,"content":"Related"},
+          {"id":"unicode","x":1300,"y":120,"content":"A😀B"}],
+          "links":[{"from":"parent","to":"source","type":"child"},{"from":"source","to":"child","type":"child"},{"from":"source","to":"related","type":"supports","annotation":{"kind":"note","text":"related context"}}],"buckets":{}}
+        harness = """
+<script id="E2E_NOTES_SPLIT_HARNESS">
+window.addEventListener('load',function(){setTimeout(function(){try{
+  KyanbasuNotes.importData(DATA_FIXTURE);
+  setTimeout(function(){
+    var surrogate=KyanbasuNotes.splitNote('unicode',2);
+    var empty=KyanbasuNotes.splitNote('source',0);
+    var split=KyanbasuNotes.splitNote('source',16);
+    var outData=KyanbasuNotes.exportData();
+    var original=outData.notes.filter(function(n){return n.id==='source';})[0];
+    var created=outData.notes.filter(function(n){return n.id===split.createdId;})[0];
+    var links=outData.links;
+    var undo=undoCanvasChange();
+    var undone=KyanbasuNotes.exportData();
+    var out={split:split,surrogate:surrogate,empty:empty,original:original,created:created,links:links,undo:undo,undoNotes:undone.notes.length,
+      restored:undone.notes.filter(function(n){return n.id==='source';})[0]};
+    var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent=JSON.stringify(out);document.body.appendChild(pre);
+  },400);
+}catch(e){var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent='ERR:'+e.message;document.body.appendChild(pre);}},500);});
+</script>
+"""
+        html = html.replace("</body>", "<script>var DATA_FIXTURE=" + json.dumps(data) + ";</script>\n" + harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["split"]["ok"], msg=json.dumps(result))
+        self.assertFalse(result["surrogate"]["ok"], msg=json.dumps(result))
+        self.assertFalse(result["empty"]["ok"], msg=json.dumps(result))
+        self.assertEqual(result["original"]["content"], "First paragraph.", msg=json.dumps(result))
+        self.assertEqual(result["created"]["content"], "\nSecond paragraph.", msg=json.dumps(result))
+        self.assertEqual(result["created"]["kind"], "question", msg=json.dumps(result))
+        self.assertEqual(result["created"]["color"], "#5b8def", msg=json.dumps(result))
+        self.assertEqual(result["created"]["status"], "open", msg=json.dumps(result))
+        self.assertEqual(len(result["created"]["taskRefs"]), 0, msg=json.dumps(result))
+        self.assertTrue(any(link["from"]=="source" and link["to"]=="child" for link in result["links"]), msg=json.dumps(result))
+        self.assertTrue(any(link["from"]=="source" and link["to"]=="related" for link in result["links"]), msg=json.dumps(result))
+        self.assertTrue(result["undo"], msg=json.dumps(result))
+        self.assertEqual(result["undoNotes"], 5, msg=json.dumps(result))
+        self.assertEqual(result["restored"]["content"], "First paragraph.\nSecond paragraph.", msg=json.dumps(result))
+
+    def test_notes_duplicate_branch_remaps_internal_links(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0)
+        data = {"kind":"kyanbasu.notes","version":10,"notes":[
+          {"id":"parent","x":100,"y":100,"content":"Parent"},
+          {"id":"root","x":400,"y":100,"content":"Root","bucket":"Research","color":"#5b8def","collapsed":True,"taskRefs":[{"uuid":"root-task"}]},
+          {"id":"child","x":700,"y":100,"content":"Child","bucket":"Evidence","kind":"question","status":"resolved","taskRefs":[{"uuid":"child-task"}]},
+          {"id":"outside","x":1100,"y":100,"content":"External"}],
+          "links":[{"from":"parent","to":"root","type":"child"},{"from":"root","to":"child","type":"child"},
+            {"from":"child","to":"root","type":"supports","annotation":{"kind":"question","text":"internal reason"}},
+            {"from":"child","to":"outside","type":"supports","annotation":{"kind":"note","text":"external reason"}}],"buckets":{}}
+        harness = """
+<script id="E2E_NOTES_DUPLICATE_BRANCH_HARNESS">
+window.addEventListener('load',function(){setTimeout(function(){try{
+  KyanbasuNotes.importData(DATA_FIXTURE);
+  setTimeout(function(){
+    var before=KyanbasuNotes.exportData();
+    var copied=KyanbasuNotes.duplicateBranch('root');
+    var after=KyanbasuNotes.exportData();
+    var cloneRoot=after.notes.filter(function(n){return n.id===copied.rootId;})[0];
+    var childId=copied.idMap.child;
+    var links=after.links.filter(function(l){return l.from===copied.rootId||l.to===copied.rootId||l.from===childId||l.to===childId;});
+    var undo=undoCanvasChange();
+    var undone=KyanbasuNotes.exportData();
+    var out={hasApi:typeof KyanbasuNotes.duplicateBranch==='function',copied:copied,cloneRoot:cloneRoot,
+      cloneChild:after.notes.filter(function(n){return n.id===childId;})[0],links:links,
+      afterCount:after.notes.length,beforeCount:before.notes.length,undo:undo,undoCount:undone.notes.length,
+      original:undone.notes.filter(function(n){return n.id==='child';})[0]};
+    var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent=JSON.stringify(out);document.body.appendChild(pre);
+  },450);
+}catch(e){var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent='ERR:'+e.message;document.body.appendChild(pre);}},500);});
+</script>
+"""
+        html = html.replace("</body>", "<script>var DATA_FIXTURE=" + json.dumps(data) + ";</script>\n" + harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["hasApi"], msg=json.dumps(result))
+        self.assertTrue(result["copied"]["ok"], msg=json.dumps(result))
+        self.assertNotEqual(result["copied"]["rootId"], "root", msg=json.dumps(result))
+        self.assertEqual(result["cloneRoot"]["taskRefs"], [], msg=json.dumps(result))
+        self.assertFalse(result["cloneRoot"]["pinned"], msg=json.dumps(result))
+        self.assertEqual(result["cloneChild"]["taskRefs"], [], msg=json.dumps(result))
+        self.assertEqual(result["cloneChild"]["status"], "resolved", msg=json.dumps(result))
+        self.assertTrue(any(link["from"]==result["copied"]["rootId"] and link["to"]==result["copied"]["idMap"]["child"] for link in result["links"]), msg=json.dumps(result))
+        self.assertTrue(any(link.get("annotation",{}).get("text")=="internal reason" for link in result["links"]), msg=json.dumps(result))
+        self.assertFalse(any(link.get("annotation",{}).get("text")=="external reason" for link in result["links"]), msg=json.dumps(result))
+        self.assertEqual(result["afterCount"], result["beforeCount"]+2, msg=json.dumps(result))
+        self.assertTrue(result["undo"], msg=json.dumps(result))
+        self.assertEqual(result["undoCount"], result["beforeCount"], msg=json.dumps(result))
+        self.assertEqual(result["original"]["taskRefs"][0]["uuid"], "child-task", msg=json.dumps(result))
+
+    def test_notes_merge_preserves_metadata_and_is_atomic(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0)
+        def fixture(conflict):
+            second_text='Different reason' if conflict else 'Shared reason'
+            return {"kind":"kyanbasu.notes","version":10,"notes":[
+              {"id":"parent","x":100,"y":100,"content":"Parent"},
+              {"id":"a","x":400,"y":100,"content":"Alpha","bucket":"Research","kind":"question","status":"resolved","color":"#5b8def","createdAt":10,"taskRefs":[{"uuid":"same"},{"short":"unique-a"}]},
+              {"id":"a-child","x":700,"y":100,"content":"A child"},
+              {"id":"b","x":400,"y":280,"content":"Beta","bucket":"Research","kind":"question","status":"open","taskRefs":[{"uuid":"same"},{"short":"unique-b"}]},
+              {"id":"b-child","x":700,"y":280,"content":"B child"},
+              {"id":"outside","x":1100,"y":100,"content":"Outside"}],
+              "links":[{"from":"parent","to":"a","type":"child"},{"from":"parent","to":"b","type":"child"},
+                {"from":"a","to":"a-child","type":"child"},{"from":"b","to":"b-child","type":"child"},
+                {"from":"a","to":"outside","type":"supports","annotation":{"kind":"note","text":"Shared reason"}},
+                {"from":"b","to":"outside","type":"supports","annotation":{"kind":"note","text":second_text}}],"buckets":{}}
+        conflict_json=json.dumps(fixture(True)); valid_json=json.dumps(fixture(False))
+        harness = """
+<script id="E2E_NOTES_MERGE_HARNESS">
+window.addEventListener('load',function(){setTimeout(function(){try{
+  KyanbasuNotes.importData(CONFLICT_FIXTURE);
+  setTimeout(function(){
+    var before=KyanbasuNotes.exportData();
+    var conflict=KyanbasuNotes.mergeNotes(['a','b'],'a');
+    var afterConflict=KyanbasuNotes.exportData();
+    var unchanged=JSON.stringify(before.notes)===JSON.stringify(afterConflict.notes)&&JSON.stringify(before.links)===JSON.stringify(afterConflict.links);
+    KyanbasuNotes.importData(VALID_FIXTURE);
+    setTimeout(function(){
+      var merged=KyanbasuNotes.mergeNotes(['a','b'],'a');
+      var after=KyanbasuNotes.exportData();
+      var survivor=after.notes.filter(function(n){return n.id==='a';})[0];
+      var links=after.links;
+      var undo=undoCanvasChange(); var restored=KyanbasuNotes.exportData();
+      var out={conflict:conflict,unchanged:unchanged,merged:merged,survivor:survivor,links:links,
+        afterCount:after.notes.length,undo:undo,undoCount:restored.notes.length,
+        undoneChildren:restored.links.filter(function(l){return l.type==='child'&&l.from==='a'||l.type==='child'&&l.from==='b';}).length};
+      var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent=JSON.stringify(out);document.body.appendChild(pre);
+    },420);
+  },420);
+}catch(e){var pre=document.createElement('pre');pre.id='e2e-out';pre.textContent='ERR:'+e.message;document.body.appendChild(pre);}},500);});
+</script>
+"""
+        html = html.replace("</body>", "<script>var CONFLICT_FIXTURE=" + conflict_json + ";var VALID_FIXTURE=" + valid_json + ";</script>\n" + harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertFalse(result["conflict"]["ok"], msg=json.dumps(result))
+        self.assertIn("annotation", result["conflict"]["reason"].lower(), msg=json.dumps(result))
+        self.assertTrue(result["unchanged"], msg=json.dumps(result))
+        self.assertTrue(result["merged"]["ok"], msg=json.dumps(result))
+        self.assertEqual(result["afterCount"], 5, msg=json.dumps(result))
+        self.assertEqual(result["survivor"]["id"], "a", msg=json.dumps(result))
+        self.assertEqual(result["survivor"]["content"], "Alpha\n\nBeta", msg=json.dumps(result))
+        self.assertEqual(result["survivor"]["status"], "resolved", msg=json.dumps(result))
+        self.assertEqual(result["survivor"]["color"], "#5b8def", msg=json.dumps(result))
+        self.assertEqual({ref.get("uuid") or ref.get("short") for ref in result["survivor"]["taskRefs"]}, {"same","unique-a","unique-b"}, msg=json.dumps(result))
+        self.assertTrue(any(link["from"]=="a" and link["to"]=="a-child" for link in result["links"]), msg=json.dumps(result))
+        self.assertTrue(any(link["from"]=="a" and link["to"]=="b-child" for link in result["links"]), msg=json.dumps(result))
+        self.assertEqual(sum(1 for link in result["links"] if link["from"]=="a" and link["to"]=="outside"),1,msg=json.dumps(result))
+        self.assertTrue(result["undo"], msg=json.dumps(result))
+        self.assertEqual(result["undoCount"], 6, msg=json.dumps(result))
+        self.assertEqual(result["undoneChildren"], 2, msg=json.dumps(result))
+
+    def test_canvas_notes_global_mutations_honor_authorization_policy(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
+        html = build_runtime_html(base_html, payload, 0)
+
+        harness = """
+<script id="E2E_CANVAS_NOTES_AUTHORIZATION_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      var first = window.KyanbasuNotes.createNote(260, 220, 'First', 'Allowed');
+      var second = window.KyanbasuNotes.createNote(560, 250, 'Second', 'Allowed');
+      window.KyanbasuNotes.save();
+      var before = {
+        data:window.KyanbasuNotes.exportJSON(),
+        snapshots:window.KyanbasuStorage.snapshots('notes').length
+      };
+      window.KyanbasuNotePolicy = {authorize:function(){ return false; }};
+      window.KyanbasuNotes.setContent(first.id, 'Denied edit');
+      window.KyanbasuNotes.linkNotes(first.id, second.id);
+      window.KyanbasuNotes.selectNote(first.id);
+      window.KyanbasuNotes.deleteSelectedNotes();
+      window.KyanbasuNotes.save();
+      var after = {
+        data:window.KyanbasuNotes.exportJSON(),
+        snapshots:window.KyanbasuStorage.snapshots('notes').length
+      };
+      var out = {
+        unchanged:before.data === after.data && before.snapshots === after.snapshots,
+        notes:window.KyanbasuNotes.notes().length,
+        links:window.KyanbasuNotes.links().length,
+        snapshots:after.snapshots
+      };
+      var pre = document.createElement('pre');
+      pre.id = 'e2e-out';
+      pre.textContent = JSON.stringify(out);
+      document.body.appendChild(pre);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["unchanged"])
+        self.assertEqual(result["notes"], 2)
+        self.assertEqual(result["links"], 0)
+        self.assertGreaterEqual(result["snapshots"], 1)
+
     def test_canvas_notes_roles_and_statuses_render_edit_search_and_export(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTE_SEMANTICS_HARNESS">
@@ -1051,7 +1890,7 @@ window.addEventListener('load', function(){
     def test_canvas_triage_engine_exhausts_all_243_profiles(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_TRIAGE_ENGINE_HARNESS">
@@ -1164,7 +2003,7 @@ window.addEventListener('load', function(){
     def test_canvas_decision_process_v9_normalizes_and_round_trips(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_DECISION_PROCESS_V9_HARNESS">
@@ -1271,7 +2110,7 @@ window.addEventListener('load', function(){
     def test_canvas_analysis_notes_never_stage_taskwarrior_commands(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_ANALYSIS_STAGING_GUARD_HARNESS">
@@ -1333,7 +2172,7 @@ window.addEventListener('load', function(){
     def test_canvas_analysis_descendants_are_never_staged_and_declined_modules_are_read_only(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
         harness = """
 <script id="E2E_CANVAS_ANALYSIS_DESCENDANT_GUARD_HARNESS">
 window.addEventListener('load', function(){
@@ -1399,7 +2238,7 @@ window.addEventListener('load', function(){
     def test_canvas_triage_panel_survives_core_render_and_import(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_TRIAGE_RERENDER_HARNESS">
@@ -1450,7 +2289,7 @@ window.addEventListener('load', function(){
     def test_canvas_triage_module_toggle_preserves_keyboard_focus(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_TRIAGE_MODULE_FOCUS_HARNESS">
@@ -1499,7 +2338,7 @@ window.addEventListener('load', function(){
     def test_canvas_triage_note_is_accessible_overridable_and_collapsible(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_TRIAGE_UI_HARNESS">
@@ -1721,7 +2560,7 @@ window.addEventListener('load', function(){
     def test_canvas_marquee_does_not_intercept_triage_controls(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
         harness = """
 <script id="E2E_TRIAGE_CLICK_HARNESS">
 window.addEventListener('load', function(){
@@ -1760,7 +2599,7 @@ window.addEventListener('load', function(){
     def test_canvas_decision_guidance_matrix_is_deterministic(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_DECISION_GUIDANCE_HARNESS">
@@ -1850,7 +2689,7 @@ window.addEventListener('load', function(){
     def test_canvas_decision_action_adapter_advances_real_branches(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_DECISION_ACTION_ADAPTER_HARNESS">
@@ -2005,7 +2844,7 @@ window.addEventListener('load', function(){
     def test_canvas_contextual_toolbar_and_menu_share_actions(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_CONTEXTUAL_ACTIONS_HARNESS">
@@ -2151,7 +2990,7 @@ window.addEventListener('load', function(){
     def test_canvas_normative_soft_skip_explains_and_continues(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NORMATIVE_SOFT_SKIP_HARNESS">
@@ -2270,7 +3109,7 @@ window.addEventListener('load', function(){
     def test_canvas_normative_skip_modal_traps_tab_focus(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
         harness = """
 <script id="E2E_CANVAS_SKIP_FOCUS_HARNESS">
 window.addEventListener('load', function(){
@@ -2305,7 +3144,7 @@ window.addEventListener('load', function(){
     def test_canvas_normative_commit_preserves_triage_profile_and_unresolved_steps(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NORMATIVE_COMMIT_HARNESS">
@@ -2413,7 +3252,7 @@ window.addEventListener('load', function(){
     def test_canvas_decision_review_soft_gate_round_trips_unresolved_checks(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_DECISION_REVIEW_HARNESS">
@@ -2574,7 +3413,7 @@ window.addEventListener('load', function(){
     def test_canvas_guided_decision_workflow_never_requires_inspector(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_GUIDED_WORKFLOW_HARNESS">
@@ -2980,7 +3819,7 @@ window.addEventListener('load', function(){
     def test_canvas_decision_maps_commit_immutable_history_and_round_trip(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_DECISION_MAP_HARNESS">
@@ -3107,7 +3946,7 @@ window.addEventListener('load', function(){
     def test_canvas_inversion_analysis_builds_safeguards_and_survives_snapshots(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_INVERSION_HARNESS">
@@ -3249,7 +4088,7 @@ window.addEventListener('load', function(){
     def test_canvas_consequence_analysis_branches_three_orders_and_round_trips(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_CONSEQUENCES_HARNESS">
@@ -3372,7 +4211,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_selects_and_unlinks_canvas_link(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_UNLINK_HARNESS">
@@ -3432,7 +4271,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_drag_handle_creates_link(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_DRAG_LINK_HARNESS">
@@ -3508,7 +4347,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_relinks_selected_link_endpoint(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_RELINK_HARNESS">
@@ -3587,7 +4426,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_creates_edits_searches_and_exports_semantic_links(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_SEMANTIC_LINK_HARNESS">
@@ -3674,7 +4513,7 @@ window.addEventListener('load', function(){
     def test_canvas_note_link_mouse_sequence_opens_selection_inspector(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTE_LINK_MOUSE_SELECTION_HARNESS">
@@ -3722,7 +4561,7 @@ window.addEventListener('load', function(){
     def test_canvas_note_link_annotations_render_edit_round_trip_and_clear(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTE_LINK_ANNOTATION_HARNESS">
@@ -3810,7 +4649,7 @@ window.addEventListener('load', function(){
     def test_canvas_note_link_inline_annotation_interactions(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTE_LINK_INLINE_ANNOTATION_HARNESS">
@@ -3907,7 +4746,7 @@ window.addEventListener('load', function(){
     def test_canvas_note_link_annotations_are_zoom_aware_and_searchable(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTE_LINK_ANNOTATION_DISCOVERY_HARNESS">
@@ -4017,7 +4856,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_link_inspector_manages_selected_note_links(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_LINK_INSPECTOR_HARNESS">
@@ -4089,7 +4928,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_link_inspector_links_two_selected_notes(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_LINK_SELECTED_HARNESS">
@@ -4161,7 +5000,7 @@ window.addEventListener('load', function(){
     def test_canvas_note_mode_click_places_note_at_clicked_position(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_CLICK_PLACEMENT_HARNESS">
@@ -4216,7 +5055,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_imports_taskcanvas_export_and_reexports_as_kyanbasu(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_IMPORT_EXPORT_HARNESS">
@@ -4297,7 +5136,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_groups_visible_notes_by_bucket(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_BUCKETS_HARNESS">
@@ -4352,7 +5191,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_separates_overlapping_bucket_areas(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_BUCKET_SEPARATION_HARNESS">
@@ -4412,7 +5251,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_repel_away_from_bucket_boxes_when_created(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_BUCKET_REPEL_HARNESS">
@@ -4460,7 +5299,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_dragging_note_into_bucket_reassigns_it(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_BUCKET_DRAG_HARNESS">
@@ -4520,7 +5359,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_renames_bucket_from_header(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_BUCKET_RENAME_HARNESS">
@@ -4565,7 +5404,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_collapses_and_expands_bucket(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_BUCKET_COLLAPSE_HARNESS">
@@ -4622,7 +5461,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_drag_bucket_moves_all_notes_in_bucket(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_BUCKET_MOVE_HARNESS">
@@ -4699,7 +5538,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_dragged_bucket_holds_drop_position_and_displaces_neighbors(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_BUCKET_PRIORITY_HARNESS">
@@ -4775,7 +5614,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_moves_bucket_without_moving_notes_and_round_trips_layout(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_BUCKET_LAYOUT_HARNESS">
@@ -4869,7 +5708,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_follow_toggle_moves_notes_with_bucket_and_persists(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_BUCKET_FOLLOW_HARNESS">
@@ -4949,7 +5788,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_colours_bucket_and_notes_and_persists_them(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_BUCKET_COLOR_HARNESS">
@@ -5016,7 +5855,7 @@ window.addEventListener('load', function(){
             ],
             "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}
         })
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_DRAWER_REPEL_HARNESS">
@@ -5077,7 +5916,7 @@ window.addEventListener('load', function(){
             ],
             "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}
         })
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_PROJECT_DRAG_PUSHES_NOTES_HARNESS">
@@ -5138,7 +5977,7 @@ window.addEventListener('load', function(){
             ],
             "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}
         })
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_NOTE_PLACEMENT_PUSHES_PROJECT_HARNESS">
@@ -5197,7 +6036,7 @@ window.addEventListener('load', function(){
             ],
             "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}
         })
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_NOTE_BUCKET_PUSHES_PROJECT_HARNESS">
@@ -5251,7 +6090,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_focuses_branch_and_bucket_across_builder_and_viewer(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTE_FOCUS_HARNESS">
@@ -5336,7 +6175,7 @@ window.addEventListener('load', function(){
     def test_viewer_note_outliner_edits_and_creates_siblings_and_children(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_EDITABLE_NOTE_OUTLINER_HARNESS">
@@ -5416,7 +6255,7 @@ window.addEventListener('load', function(){
             ],
             "graph": {"edges": [{"from": "A", "to": "B"}, {"from": "A", "to": "C"}], "parent_current_deps": {"B": ["A"], "C": ["A"]}, "child_to_parents": {"B": ["A"], "C": ["A"]}}
         })
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_VIEWER_NOTES_OUTLINE_HARNESS">
@@ -5493,7 +6332,7 @@ window.addEventListener('load', function(){
     def test_viewer_note_outline_sorts_roots_by_bucket(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_VIEWER_NOTES_SORT_HARNESS">
@@ -5544,7 +6383,7 @@ window.addEventListener('load', function(){
     def test_project_nearest_open_slot_prefers_close_diagonal_position(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_PROJECT_SLOT_HARNESS">
@@ -5584,7 +6423,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_rejects_overlapping_notes(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_OVERLAP_HARNESS">
@@ -5632,7 +6471,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_create_tasks_stages_selected_note_commands(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_CREATE_TASKS_HARNESS">
@@ -5688,7 +6527,7 @@ window.addEventListener('load', function(){
     def test_shell_uses_kyanbasu_brand_wordmark(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_KYANBASU_BRAND_HARNESS">
@@ -5744,7 +6583,7 @@ window.addEventListener('load', function(){
     def test_top_toolbar_groups_note_and_command_actions(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_TOP_TOOLBAR_GROUPS_HARNESS">
@@ -5825,7 +6664,7 @@ window.addEventListener('load', function(){
     def test_top_toolbar_can_collapse_restore_and_persist(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_TOP_TOOLBAR_COLLAPSE_HARNESS">
@@ -5908,7 +6747,7 @@ window.addEventListener('load', function(){
     def test_context_selection_bar_handles_note_and_link_actions(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CONTEXT_SELECTION_NOTES_HARNESS">
@@ -5995,7 +6834,7 @@ window.addEventListener('load', function(){
                 "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
             }
         )
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CONTEXT_SELECTION_TASKS_HARNESS">
@@ -6066,7 +6905,7 @@ window.addEventListener('load', function(){
                 "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
             }
         )
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_WORKBENCHES_HARNESS">
@@ -6189,7 +7028,7 @@ window.addEventListener('load', function(){
                 "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
             }
         )
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_WORKBENCH_DUPLICATE_REOPEN_HARNESS">
@@ -6275,7 +7114,7 @@ window.addEventListener('load', function(){
                 "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
             }
         )
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_WORKBENCH_EXPORT_ALL_HARNESS">
@@ -6337,7 +7176,7 @@ window.addEventListener('load', function(){
     def test_canvas_workbench_imports_taskcanvas_export_and_normalizes_kinds(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_WORKBENCH_IMPORT_ALL_HARNESS">
@@ -6426,7 +7265,7 @@ window.addEventListener('load', function(){
     def test_canvas_navigator_renders_and_jumps_viewport(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NAVIGATOR_HARNESS">
@@ -6515,7 +7354,7 @@ window.addEventListener('load', function(){
     def test_canvas_navigator_can_be_dragged_and_restores_position(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NAVIGATOR_DRAG_HARNESS">
@@ -6592,7 +7431,7 @@ window.addEventListener('load', function(){
     def test_canvas_navigator_keeps_stable_bounds_when_branch_collapses(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NAVIGATOR_COLLAPSE_HARNESS">
@@ -6647,7 +7486,7 @@ window.addEventListener('load', function(){
     def test_canvas_task_cards_render_polished_metadata(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_TASK_CARD_VISUALS_HARNESS">
@@ -6721,7 +7560,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_create_linked_tasks_stages_and_links_generated_refs(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_CREATE_LINKED_TASKS_HARNESS">
@@ -6793,7 +7632,7 @@ window.addEventListener('load', function(){
     def test_console_editor_edits_and_removes_commands_across_updates(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CONSOLE_EDITOR_HARNESS">
@@ -6888,7 +7727,7 @@ window.addEventListener('load', function(){
                 "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
             }
         )
-        html = build_runtime_html(base_html, payload, 1, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 1)
 
         harness = """
 <script id="E2E_CONSOLE_SHORT_ID_HARNESS">
@@ -6935,7 +7774,7 @@ window.addEventListener('load', function(){
     def test_console_editor_mounts_empty_state_without_commands(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CONSOLE_EDITOR_EMPTY_HARNESS">
@@ -6984,7 +7823,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_runtime_creates_child_branches_and_reflows_map(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_MINDMAP_HARNESS">
@@ -7048,7 +7887,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_rejects_invalid_child_graph_mutations(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_BRANCH_GUARDS_HARNESS">
@@ -7105,7 +7944,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_import_repairs_invalid_child_graph(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_BRANCH_IMPORT_GUARDS_HARNESS">
@@ -7170,7 +8009,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_load_repairs_and_persists_invalid_child_graph(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"workspace_id": "branch-storage-guards", "tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_BRANCH_STORAGE_GUARDS_HARNESS">
@@ -7229,7 +8068,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_shows_saving_and_saved_status(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_SAVE_STATUS_HARNESS">
@@ -7276,7 +8115,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_compact_map_packs_bucket_groups(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_COMPACT_MAP_HARNESS">
@@ -7361,7 +8200,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_compact_map_avoids_task_project_space(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_COMPACT_AVOIDS_TASKS_HARNESS">
@@ -7434,7 +8273,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_keyboard_creates_sibling_and_child_notes(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_KEYBOARD_HARNESS">
@@ -7511,7 +8350,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_dynamic_reference_labels_follow_mind_map(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_LABELS_HARNESS">
@@ -7581,7 +8420,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_search_matches_label_text_and_bucket(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_SEARCH_HARNESS">
@@ -7649,7 +8488,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_structured_queries_and_thinking_lenses(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_LENS_HARNESS">
@@ -7733,7 +8572,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_saved_custom_lenses_lifecycle(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_SAVED_LENS_HARNESS">
@@ -7802,7 +8641,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_review_metadata_queries_and_export(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_REVIEW_METADATA_HARNESS">
@@ -7882,7 +8721,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_review_session_tracks_active_lens_and_actions(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_REVIEW_HARNESS">
@@ -7983,7 +8822,7 @@ window.addEventListener('load', function(){
             ],
             "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
         })
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_TASK_LINK_HARNESS">
@@ -8065,7 +8904,7 @@ window.addEventListener('load', function(){
     def test_canvas_inspector_renders_note_selection_and_actions(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_NOTE_INSPECTOR_HARNESS">
@@ -8154,10 +8993,10 @@ window.addEventListener('load', function(){
         self.assertEqual(result["selectedContent"], "New branch", msg=json.dumps(result))
         self.assertEqual(result["after"]["title"], "A1-1 selected", msg=json.dumps(result))
 
-    def test_canvas_notes_tab_places_child_right_and_pushes_blocker(self):
+    def test_canvas_notes_tab_places_child_in_clear_slot_without_moving_blocker(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_TAB_PLACEMENT_HARNESS">
@@ -8182,9 +9021,9 @@ window.addEventListener('load', function(){
           childY: child && child.y,
           sourceX: root.x,
           sourceY: root.y,
-          childRightNear: !!(child && Math.abs(child.x - (root.x + 300)) < 16),
-          childSameRow: !!(child && Math.abs(child.y - root.y) < 16),
-          pushedBlockerRight: !!(blockerAfter && blockerAfter.x > blockerStartX + 80),
+          childRight: !!(child && child.x >= root.x + 220 + 36),
+          blockerStable: !!(blockerAfter && blockerAfter.x === blockerStartX && blockerAfter.y === root.y),
+          childClearOfBlocker: !!(child && blockerAfter && (child.x + 220 <= blockerAfter.x || blockerAfter.x + 220 <= child.x || child.y + 92 <= blockerAfter.y || blockerAfter.y + 92 <= child.y)),
           sameBucket: !!(child && child.bucket === 'Planning')
         };
         var pre = document.createElement('pre');
@@ -8206,15 +9045,15 @@ window.addEventListener('load', function(){
         raw = self._run_html_harness(html)
         self.assertNotIn("ERR:", raw)
         result = json.loads(raw)
-        self.assertTrue(result["childRightNear"], msg=json.dumps(result))
-        self.assertTrue(result["childSameRow"], msg=json.dumps(result))
-        self.assertTrue(result["pushedBlockerRight"], msg=json.dumps(result))
+        self.assertTrue(result["childRight"], msg=json.dumps(result))
+        self.assertTrue(result["blockerStable"], msg=json.dumps(result))
+        self.assertTrue(result["childClearOfBlocker"], msg=json.dumps(result))
         self.assertTrue(result["sameBucket"], msg=json.dumps(result))
 
     def test_canvas_notes_enter_places_sibling_below_not_far_right(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_SIBLING_PLACEMENT_HARNESS">
@@ -8277,7 +9116,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_multiselect_deletes_selected_notes_and_links(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_MULTISELECT_HARNESS">
@@ -8334,7 +9173,7 @@ window.addEventListener('load', function(){
     def test_canvas_inspector_moves_multiple_notes_to_bucket(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_MULTI_BUCKET_INSPECTOR_HARNESS">
@@ -8471,7 +9310,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_shift_click_multiselects_notes(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_SHIFT_CLICK_HARNESS">
@@ -8523,7 +9362,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_drag_lasso_multiselects_notes(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_LASSO_HARNESS">
@@ -8580,7 +9419,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_drag_moves_selected_note_group(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_GROUP_DRAG_HARNESS">
@@ -8642,7 +9481,7 @@ window.addEventListener('load', function(){
     def test_canvas_notes_collapse_hides_descendants_and_restores_them(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_CANVAS_NOTES_COLLAPSE_HARNESS">
@@ -8702,7 +9541,7 @@ window.addEventListener('load', function(){
     def test_kyanbasu_commands_core_includes_dependency_commands(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_DEP_COMMAND_CORE_HARNESS">
@@ -8736,7 +9575,7 @@ window.addEventListener('load', function(){
     def test_kyanbasu_commands_core_handles_new_task_fold_states(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_NEW_TASK_CORE_HARNESS">
@@ -8780,7 +9619,7 @@ window.addEventListener('load', function(){
     def test_new_task_sync_reconciles_staged_new_task_modifiers_via_command_core(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_NEW_TASK_SYNC_HARNESS">
@@ -8824,7 +9663,7 @@ window.addEventListener('load', function(){
     def test_kyanbasu_commands_core_handles_existing_task_ops(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
 
         harness = """
 <script id="E2E_EXISTING_TASK_CORE_HARNESS">
@@ -8885,7 +9724,7 @@ window.addEventListener('load', function(){
                 "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
             }
         )
-        html = build_runtime_html(base_html, payload, 1, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 1)
 
         harness = """
 <script id="E2E_EXISTING_OPS_RUNTIME_HARNESS">
@@ -8941,7 +9780,7 @@ window.addEventListener('load', function(){
                 "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
             }
         )
-        html = build_runtime_html(base_html, payload, 2, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 2)
         self.assertNotIn("buildCommands monkey patch to include staged depends", html)
         self.assertNotIn("__buildCommandsPatched", html)
 
@@ -9002,7 +9841,7 @@ window.addEventListener('load', function(){
                 "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
             }
         )
-        html = build_runtime_html(base_html, payload, 3, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 3)
 
         harness = """
 <script id="E2E_DEP_OVERLAY_PARITY_HARNESS">
@@ -9071,7 +9910,7 @@ window.addEventListener('load', function(){
                 "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
             }
         )
-        html = build_runtime_html(base_html, payload, 2, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 2)
         self.assertIn('id="FEATURE_DEPENDENCY_INTERACTIONS_V1"', html)
         self.assertNotIn("Minimal dep handle", html)
         self.assertNotIn("Dependency system (v0.7.7 strict)", html)
@@ -9184,7 +10023,7 @@ window.addEventListener('load', function(){
                 },
             }
         )
-        html = build_runtime_html(base_html, payload, 3, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 3)
         self.assertIn('id="FEATURE_DEPENDENCY_EDGES_V1"', html)
         self.assertNotIn("dep pulses: animate energy", html)
         self.assertNotIn("draw solid existing edges with robust anchors", html)
@@ -9335,7 +10174,7 @@ window.addEventListener('load', function(){
                 "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}},
             }
         )
-        html = build_runtime_html(base_html, payload, 2, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 2)
         self.assertIn('id="PROJECT_PICKER_V2_CSS"', html)
         self.assertIn('id="PROJECT_PICKER_V2_JS"', html)
         self.assertNotIn("<!-- PROJECT_PICKER_V2_CSS -->", html)
@@ -9380,7 +10219,7 @@ window.addEventListener('load', function(){
     def test_quickfix_add_render_runtime_exposes_parser_and_optimistic_add(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({"tasks": [], "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}})
-        html = build_runtime_html(base_html, payload, 0, lambda *_: None)
+        html = build_runtime_html(base_html, payload, 0)
         self.assertIn('id="FEATURE_QUICKFIX_ADD_RENDER_V1"', html)
         self.assertNotIn('<script id="FEATURE_QUICKFIX_ADD_RENDER_V1">(function(){\n  if (window.__FEATURE_QUICKFIX_ADD_RENDER_V1__)', base_html)
 

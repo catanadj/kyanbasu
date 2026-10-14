@@ -309,10 +309,13 @@
     note.color = String(note.color || '').trim();
     if (!note.color || (options.isValidColor && !options.isValidColor(note.color))) delete note.color;
     note.collapsed = !!note.collapsed;
+    note.pinned = !!note.pinned;
     note.taskRefs = Array.isArray(note.taskRefs) ? note.taskRefs.map(normalizeTaskRef).filter(Boolean) : [];
     note.createdAt = timestamp(note.createdAt, now);
     note.updatedAt = timestamp(note.updatedAt, note.createdAt);
     note.reviewedAt = timestamp(note.reviewedAt, 0);
+    if (typeof note.outlineOrder === 'number' && isFinite(note.outlineOrder) && Math.floor(note.outlineOrder) === note.outlineOrder) note.outlineOrder = Math.max(0, note.outlineOrder);
+    else delete note.outlineOrder;
     var analysis = normalizeAnalysis(note.analysis);
     if (analysis) note.analysis = analysis;
     else delete note.analysis;
@@ -405,6 +408,7 @@
 
   function sortRoots(items){
     return items.slice().sort(function(a, b){
+      if (typeof a.outlineOrder === 'number' && typeof b.outlineOrder === 'number' && a.outlineOrder !== b.outlineOrder) return a.outlineOrder - b.outlineOrder;
       var ax = toInt(a.x, 160), bx = toInt(b.x, 160);
       if (ax !== bx) return ax - bx;
       var ay = toInt(a.y, 160), by = toInt(b.y, 160);
@@ -415,6 +419,7 @@
 
   function sortChildren(items){
     return items.slice().sort(function(a, b){
+      if (typeof a.outlineOrder === 'number' && typeof b.outlineOrder === 'number' && a.outlineOrder !== b.outlineOrder) return a.outlineOrder - b.outlineOrder;
       var ay = toInt(a.y, 160), by = toInt(b.y, 160);
       if (ay !== by) return ay - by;
       var ax = toInt(a.x, 160), bx = toInt(b.x, 160);

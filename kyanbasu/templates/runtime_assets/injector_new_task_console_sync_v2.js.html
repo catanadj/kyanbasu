@@ -81,5 +81,5 @@
 
   try{ reconcileNewStaged(); }catch(_){}
   try{ setTimeout(function(){ if (typeof updateConsole === 'function') updateConsole(); }, 0); }catch(_){}
-  console.log('[new-task-console-sync] v2.3 active');
+  if (window.KYANBASU_DEBUG) console.log('[new-task-console-sync] v2.3 active');
 })();</script>

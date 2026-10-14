@@ -45,6 +45,7 @@
     var out = {
       version: 1,
       saved_at: Date.now(),
+      canvas_scroll: {left:0,top:0},
       zoom: 100,
       drawer_collapsed: !!(document.body && document.body.classList && document.body.classList.contains("drawer-collapsed")),
       nodes: {},
@@ -56,6 +57,11 @@
       var z = document.getElementById("zoom");
       var zv = z ? toInt(z.value, 100) : toInt((window.ZSCALE || 1) * 100, 100);
       out.zoom = Math.max(50, Math.min(200, zv));
+    }catch(_){}
+
+    try{
+      var canvas=document.querySelector('#builderWrap .canvas');
+      if(canvas) out.canvas_scroll={left:toInt(canvas.scrollLeft,0),top:toInt(canvas.scrollTop,0)};
     }catch(_){}
 
     try{
@@ -179,6 +185,13 @@
     try{ if (typeof drawLinks === "function") drawLinks(); }catch(_){}
     try{ if (typeof refreshDepHandleLetters === "function") refreshDepHandleLetters(); }catch(_){}
     try{ if (typeof updateConsole === "function") updateConsole(); }catch(_){}
+    try{
+      var scroll=state && state.canvas_scroll || {};
+      requestAnimationFrame(function(){
+        var canvas=document.querySelector('#builderWrap .canvas');
+        if(canvas){ canvas.scrollLeft=Math.max(0,toInt(scroll.left,0)); canvas.scrollTop=Math.max(0,toInt(scroll.top,0)); }
+      });
+    }catch(_){}
     scheduleSave(180);
     return touched;
   }

@@ -62,7 +62,7 @@
     return prefix + ':unknown';
   }
 
-  if (!originals.setTimeout && window.setTimeout){
+  if (window.KYANBASU_DEBUG && !originals.setTimeout && window.setTimeout){
     originals.setTimeout = window.setTimeout.bind(window);
     originals.clearTimeout = window.clearTimeout ? window.clearTimeout.bind(window) : null;
     window.setTimeout = function(fn, delay){
@@ -77,7 +77,7 @@
     };
   }
 
-  if (!originals.setInterval && window.setInterval){
+  if (window.KYANBASU_DEBUG && !originals.setInterval && window.setInterval){
     originals.setInterval = window.setInterval.bind(window);
     originals.clearInterval = window.clearInterval ? window.clearInterval.bind(window) : null;
     window.setInterval = function(fn, delay){
@@ -92,7 +92,7 @@
     };
   }
 
-  if (!originals.requestAnimationFrame && window.requestAnimationFrame){
+  if (window.KYANBASU_DEBUG && !originals.requestAnimationFrame && window.requestAnimationFrame){
     originals.requestAnimationFrame = window.requestAnimationFrame.bind(window);
     originals.cancelAnimationFrame = window.cancelAnimationFrame ? window.cancelAnimationFrame.bind(window) : null;
     window.requestAnimationFrame = function(fn){
@@ -115,7 +115,7 @@
     };
   }
 
-  if (!originals.MutationObserver && window.MutationObserver){
+  if (window.KYANBASU_DEBUG && !originals.MutationObserver && window.MutationObserver){
     originals.MutationObserver = window.MutationObserver;
     var NativeMutationObserver = window.MutationObserver;
     window.MutationObserver = function(callback){
@@ -223,7 +223,7 @@
     }
     diag.events.push(entry);
     if (diag.events.length > 50) diag.events.shift();
-    try{ console.warn('[Kyanbasu][diag]', entry.kind + ':', entry.msg, entry); }catch(_){}
+    try{ if (window.KYANBASU_DEBUG) console.warn('[Kyanbasu][diag]', entry.kind + ':', entry.msg, entry); }catch(_){}
   }
 
   window.addEventListener('error', function(ev){
@@ -280,11 +280,13 @@
   };
 
   wrapKnownHotPaths();
-  (originals.setTimeout || setTimeout)(wrapKnownHotPaths, 0);
-  (originals.setTimeout || setTimeout)(wrapKnownHotPaths, 120);
-  (originals.setTimeout || setTimeout)(wrapKnownHotPaths, 600);
-  (originals.setTimeout || setTimeout)(wrapKnownHotPaths, 1600);
-  window.addEventListener('load', function(){ (originals.setTimeout || setTimeout)(wrapKnownHotPaths, 0); });
-  document.addEventListener('twdata', function(){ (originals.setTimeout || setTimeout)(wrapKnownHotPaths, 0); });
+  if (window.KYANBASU_DEBUG){
+    (originals.setTimeout || setTimeout)(wrapKnownHotPaths, 0);
+    (originals.setTimeout || setTimeout)(wrapKnownHotPaths, 120);
+    (originals.setTimeout || setTimeout)(wrapKnownHotPaths, 600);
+    (originals.setTimeout || setTimeout)(wrapKnownHotPaths, 1600);
+    window.addEventListener('load', function(){ (originals.setTimeout || setTimeout)(wrapKnownHotPaths, 0); });
+    document.addEventListener('twdata', function(){ (originals.setTimeout || setTimeout)(wrapKnownHotPaths, 0); });
+  }
 })();
 </script>

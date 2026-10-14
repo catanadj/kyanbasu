@@ -1,18 +1,49 @@
 import json
 import subprocess
 import unittest
+from typing import get_type_hints
 from unittest.mock import patch
 
+import kyanbasu.task_io as task_io
 from kyanbasu.task_io import (
     _assign_unique_shorts,
+    _build_export_command,
+    _normalize_export_tasks,
     _normalize_task_row,
     _parse_task_export,
     fetch_tasks,
     run_quiet,
 )
+from kyanbasu.task_types import TaskRecord
 
 
 class TestTaskIO(unittest.TestCase):
+    def test_task_io_boundaries_have_explicit_contracts(self):
+        self.assertEqual(get_type_hints(task_io.run_quiet)["return"], tuple[int, str, str])
+        self.assertEqual(get_type_hints(task_io.fetch_tasks)["return"], list[TaskRecord])
+        self.assertEqual(get_type_hints(task_io._split_filter)["return"], list[str])
+
+    def test_export_command_builder_preserves_scope_and_runtime_flags(self):
+        self.assertEqual(
+            _build_export_command("project:Work", include_runtime_settings=True)[-2:],
+            ["project:Work", "export"],
+        )
+        self.assertEqual(
+            _build_export_command(None, include_runtime_settings=False),
+            ["task", "status:pending", "export"],
+        )
+
+    def test_export_task_normalization_assigns_unique_short_ids(self):
+        rows = [
+            {"uuid": "aaaaaaaa-1111", "description": "One"},
+            {"uuid": "aaaaaaaa-2222", "description": "Two"},
+        ]
+
+        tasks, widened = _normalize_export_tasks(rows)
+
+        self.assertEqual(len({task["short"] for task in tasks}), 2)
+        self.assertEqual(widened, 2)
+
     @patch("kyanbasu.task_io.subprocess.run")
     def test_run_quiet_returns_error_on_timeout(self, mock_run):
         mock_run.side_effect = subprocess.TimeoutExpired(cmd=["task"], timeout=30)
@@ -29,6 +60,12 @@ class TestTaskIO(unittest.TestCase):
         shorts = [out[u] for u in uuids]
         self.assertEqual(len(set(shorts)), len(uuids))
         self.assertTrue(all(s.startswith("abcdef") for s in shorts))
+
+    def test_assign_unique_shorts_handles_identical_normalized_values(self):
+        self.assertEqual(
+            _assign_unique_shorts(["same-id", "same.id"], min_len=4),
+            {"same-id": "aed", "same.id": "aed1"},
+        )
 
     def test_normalize_task_row_coerces_supported_shapes(self):
         row = {
@@ -57,12 +94,48 @@ class TestTaskIO(unittest.TestCase):
         rows = _parse_task_export(raw)
         self.assertEqual(rows, [{"uuid": "u1", "description": "Task 1"}])
 
+    def test_parse_task_export_ignores_non_object_array_members(self):
+        raw = json.dumps(
+            [
+                {"uuid": "u1", "description": "Task 1"},
+                None,
+                "malformed row",
+                17,
+                ["nested", "array"],
+            ]
+        )
+
+        rows = _parse_task_export(raw)
+
+        self.assertEqual(rows, [{"uuid": "u1", "description": "Task 1"}])
+
+    def test_parse_task_export_supports_data_and_rows_envelopes(self):
+        expected = [{"uuid": "u1"}]
+        self.assertEqual(_parse_task_export(json.dumps({"data": expected})), expected)
+        self.assertEqual(_parse_task_export(json.dumps({"rows": expected})), expected)
+
+    def test_normalize_task_row_coerces_string_and_scalar_collections(self):
+        normalized = _normalize_task_row(
+            {"uuid": "u1", "tags": "one, two three", "depends": 42}
+        )
+
+        self.assertEqual(normalized["tags"], ["one", "two", "three"])
+        self.assertEqual(normalized["depends"], ["42"])
+
     def test_parse_task_export_line_json(self):
         raw = '{"uuid":"u1","description":"One"}\n{"uuid":"u2","description":"Two"}\nnoise'
         rows = _parse_task_export(raw)
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[0]["uuid"], "u1")
         self.assertEqual(rows[1]["uuid"], "u2")
+
+    def test_parse_task_export_distinguishes_unrecognized_output(self):
+        self.assertIsNone(_parse_task_export("Taskwarrior is unavailable"))
+
+    def test_parse_task_export_keeps_empty_export_as_empty_rows(self):
+        self.assertEqual(_parse_task_export(""), [])
+        self.assertEqual(_parse_task_export("[]"), [])
+        self.assertEqual(_parse_task_export('{"data":[]}'), [])
 
     def test_fetch_tasks_raises_on_invalid_filter_syntax(self):
         with self.assertRaisesRegex(ValueError, "Invalid --filter expression"):
@@ -175,21 +248,74 @@ class TestTaskIO(unittest.TestCase):
         ]
         logs = []
 
-        tasks = fetch_tasks("project:Work", log_fn=logs.append)
+        with self.assertRaisesRegex(RuntimeError, "Taskwarrior export failed"):
+            fetch_tasks("project:Work", log_fn=logs.append)
 
-        self.assertEqual(tasks, [])
         self.assertTrue(any("task export failed" in m for m in logs))
         self.assertTrue(any("fallback task export failed" in m.lower() for m in logs))
         self.assertTrue(all("[Kyanbasu]" not in m for m in logs))
 
     @patch("kyanbasu.task_io.run_quiet")
-    def test_fetch_tasks_raises_when_strict_and_both_exports_fail(self, mock_run_quiet):
+    def test_fetch_tasks_returns_empty_for_successful_empty_exports(self, mock_run_quiet):
+        mock_run_quiet.side_effect = [(0, "[]", ""), (0, '{"data":[]}', "")]
+
+        self.assertEqual(fetch_tasks("project:Work"), [])
+        self.assertEqual(mock_run_quiet.call_count, 2)
+
+    @patch("kyanbasu.task_io.run_quiet")
+    def test_fetch_tasks_preserves_primary_empty_when_fallback_is_unrecognized(
+        self, mock_run_quiet
+    ):
         mock_run_quiet.side_effect = [
-            (1, "", "primary failed"),
-            (1, "", "fallback failed"),
+            (0, "[]", ""),
+            (0, "Taskwarrior emitted a warning instead of JSON", ""),
         ]
-        with self.assertRaisesRegex(RuntimeError, "Taskwarrior export failed"):
-            fetch_tasks("project:Work", strict_errors=True)
+
+        self.assertEqual(fetch_tasks("project:Work"), [])
+
+    @patch("kyanbasu.task_io.run_quiet")
+    def test_fetch_tasks_rejects_unrecognized_output_after_fallback(self, mock_run_quiet):
+        mock_run_quiet.side_effect = [
+            (0, "Taskwarrior is unavailable", ""),
+            (0, "still not JSON", ""),
+        ]
+
+        with self.assertRaisesRegex(
+            RuntimeError, "(?i)unrecognized Taskwarrior export output.*primary.*fallback"
+        ):
+            fetch_tasks("project:Work")
+
+    @patch("kyanbasu.task_io.run_quiet")
+    def test_fetch_tasks_accepts_valid_empty_fallback_after_invalid_primary(
+        self, mock_run_quiet
+    ):
+        mock_run_quiet.side_effect = [
+            (0, "Taskwarrior emitted a warning instead of JSON", ""),
+            (0, "[]", ""),
+        ]
+
+        self.assertEqual(fetch_tasks("project:Work"), [])
+
+    @patch("kyanbasu.task_io.run_quiet")
+    def test_fetch_tasks_default_error_preserves_both_bounded_failure_details(
+        self, mock_run_quiet
+    ):
+        mock_run_quiet.side_effect = [
+            (17, "", "primary failed" + "x" * 300),
+            (23, "", "fallback failed"),
+        ]
+
+        with self.assertRaises(RuntimeError) as raised:
+            fetch_tasks("project:Work")
+
+        message = str(raised.exception)
+        self.assertIn("primary", message)
+        self.assertIn("rc=17", message)
+        self.assertIn("primary failed", message)
+        self.assertNotIn("x" * 221, message)
+        self.assertIn("fallback", message)
+        self.assertIn("rc=23", message)
+        self.assertIn("fallback failed", message)
 
 
 if __name__ == "__main__":

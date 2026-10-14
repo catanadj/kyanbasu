@@ -8,6 +8,8 @@
   var suppress = false;
   var ready = false;
   var saveTimer = 0;
+  var ignoreMutationUntil = 0;
+  var activeWorkbenchId = null;
 
   function clone(v){
     try{ return JSON.parse(JSON.stringify(v)); }catch(_){ return v; }
@@ -37,6 +39,7 @@
   }
   function hasCanvasData(){
     try{
+      if (window.KyanbasuNotes && typeof window.KyanbasuNotes.exportData === "function") return true;
       if (window.TASKS && Array.isArray(TASKS) && TASKS.length) return true;
       if (window.DATA_READY && window.DATA && Array.isArray(window.DATA.tasks) && window.DATA.tasks.length) return true;
       var nodes = document.querySelectorAll("#builderStage .node");
@@ -48,10 +51,10 @@
     if (ready) return;
     ready = true;
     pushSnapshot("baseline:" + String(reason || "auto"), true);
-    setTimeout(function(){ pushSnapshot("baseline-late:" + String(reason || "auto"), true); }, 260);
   }
   function maybeArmReady(reason){
     if (ready) return;
+    if (!window.KyanbasuNotes || typeof window.KyanbasuNotes.exportData !== "function") return;
     if (hasCanvasData()) armReady(reason);
   }
 
@@ -119,6 +122,16 @@
       zoomValue = z ? toInt(z.value, 100) : toInt((window.ZSCALE || 1) * 100, 100);
     }catch(_){}
     var areas = captureAreas();
+    var noteData = null, noteSelection = {ids:[], primary:null}, workbenchId = null;
+    try{
+      if (window.KyanbasuNotes && typeof window.KyanbasuNotes.exportData === "function"){
+        noteData = window.KyanbasuNotes.exportData();
+        if (noteData && typeof noteData === "object") delete noteData.exportedAt;
+        noteSelection.ids = window.KyanbasuNotes.selectedNotes() || [];
+        noteSelection.primary = window.KyanbasuNotes.primaryNote();
+      }
+    }catch(_){}
+    try{ workbenchId = window.KyanbasuWorkbenches && window.KyanbasuWorkbenches.active ? (window.KyanbasuWorkbenches.active() || {}).id : null; }catch(_){}
     return {
       version: 1,
       tasks: clone(window.TASKS || []),
@@ -133,7 +146,10 @@
       zoom: Math.max(50, Math.min(200, zoomValue)),
       projects: areas.projects,
       tags: areas.tags,
-      nodes: captureNodes()
+      nodes: captureNodes(),
+      notes: clone(noteData),
+      note_selection: clone(noteSelection),
+      workbench_id: workbenchId
     };
   }
 
@@ -144,6 +160,13 @@
   function pushSnapshot(reason, force){
     if (suppress || !ready) return;
     var snap = captureSnapshot();
+    if (activeWorkbenchId !== null && snap.workbench_id !== activeWorkbenchId){
+      history = [];
+      index = -1;
+      force = true;
+      reason = "workbench-baseline";
+    }
+    activeWorkbenchId = snap.workbench_id;
     var fp = fingerprint(snap);
     if (!fp) return;
     if (!force && index >= 0 && history[index] && history[index].fp === fp) return;
@@ -328,6 +351,13 @@
       }catch(_){}
       restoreNodes(snapshot);
 
+      if (snapshot.notes && window.KyanbasuNotes && typeof window.KyanbasuNotes.importData === "function"){
+        window.KyanbasuNotes.importData(clone(snapshot.notes));
+        var selected = snapshot.note_selection || {};
+        var selectedIds = Array.isArray(selected.ids) ? selected.ids : [];
+        if (typeof window.KyanbasuNotes.restoreSelection === "function") window.KyanbasuNotes.restoreSelection(selectedIds, selected.primary);
+      }
+
       try{
         var z = document.getElementById("zoom");
         if (z) z.value = String(Math.max(50, Math.min(200, toInt(snapshot.zoom, 100))));
@@ -337,6 +367,8 @@
       try{ if (typeof drawLinks === "function") drawLinks(); }catch(_){}
       try{ if (typeof refreshDepHandleLetters === "function") refreshDepHandleLetters(); }catch(_){}
       try{ if (typeof updateConsole === "function") updateConsole(); }catch(_){}
+      try{ if (typeof renderViewer === "function") renderViewer(); }catch(_){}
+      try{ if (window.KyanbasuNavigator && typeof window.KyanbasuNavigator.render === "function") window.KyanbasuNavigator.render(); }catch(_){}
       return true;
     }catch(_){
       return false;
@@ -375,6 +407,34 @@
   window.undoCanvasChange = undoCanvasChange;
   window.redoCanvasChange = redoCanvasChange;
 
+  function historyTransaction(label, mutate){
+    if (typeof mutate !== "function") return false;
+    if (!ready){ ready = true; pushSnapshot("baseline:transaction", true); }
+    flushPendingSnapshot("transaction-before:" + String(label || "change"));
+    var before = captureSnapshot();
+    var result;
+    suppress = true;
+    try{
+      result = mutate();
+      ignoreMutationUntil = Date.now() + 500;
+      if (result && result.ok === false){
+        suppress = false;
+        applySnapshot(before);
+        return false;
+      }
+    }catch(err){
+      suppress = false;
+      applySnapshot(before);
+      return false;
+    }finally{ suppress = false; }
+    pushSnapshot("transaction:" + String(label || "change"), false);
+    return result;
+  }
+  window.KyanbasuHistory = {
+    transaction: historyTransaction,
+    snapshot: function(reason){ flushPendingSnapshot(reason || "api"); return history.length; }
+  };
+
   function wrapForCapture(name){
     var fn = window[name];
     if (typeof fn !== "function" || fn.__undoRedoWrap) return;
@@ -387,6 +447,33 @@
     window[name].__undoRedoWrap = true;
   }
 
+  function wrapNoteForCapture(name){
+    var api = window.KyanbasuNotes;
+    var fn = api && api[name];
+    if (!api || typeof fn !== "function" || fn.__undoRedoWrap) return;
+    api[name] = function(){
+      var rv = fn.apply(this, arguments);
+      if (rv !== false && rv !== null) scheduleSnapshot("note:" + name, 220);
+      return rv;
+    };
+    api[name].__undoRedoWrap = true;
+  }
+  function installNoteCapture(){
+    if (!window.KyanbasuNotes) return false;
+    ["createNote", "createDecisionMap", "createDecisionChild", "createDecisionTriage",
+     "setDecisionTriageAnswer", "setDecisionTriageModules", "confirmDecisionTriage",
+     "runInversion", "createInversionFailure", "createInversionSafeguard", "runConsequences",
+     "createFirstConsequence", "createParallelConsequence", "createNextConsequence",
+     "createChildNote", "createSiblingNote", "deleteSelectedNotes", "importData",
+     "stageSelectedNotesAsTasks", "createLinkedTasksFromSelectedNotes", "linkNotes",
+     "linkSelectedNotes", "deleteSelectedLink", "setLinkType", "setLinkAnnotation",
+     "setBucket", "setBucketColor", "setNoteColor", "setNoteKind", "setNoteStatus",
+     "setContent", "toggleCollapse", "reflowMindMap", "compactMindMap", "markReviewed",
+     "commitDecision", "executeDecisionAction", "linkNoteToTask", "unlinkNoteTask"]
+      .forEach(wrapNoteForCapture);
+    return true;
+  }
+
   function install(){
     if (window.__undoRedoInstalled) return;
     window.__undoRedoInstalled = true;
@@ -397,7 +484,7 @@
     try{
       var stage = document.getElementById("builderStage") || document.body;
       var mo = new MutationObserver(function(muts){
-        if (suppress) return;
+        if (suppress || Date.now() < ignoreMutationUntil) return;
         if (!ready) maybeArmReady("mutation");
         if (!ready) return;
         for (var i=0; i<muts.length; i++){
@@ -448,21 +535,27 @@
       setTimeout(function(){ maybeArmReady("twdata"); }, 40);
       setTimeout(function(){ maybeArmReady("twdata-late"); }, 320);
     });
-    document.addEventListener("DOMContentLoaded", function(){ setTimeout(function(){ maybeArmReady("domcontentloaded"); }, 120); });
-    window.addEventListener("load", function(){ setTimeout(function(){ maybeArmReady("load"); }, 140); });
+    document.addEventListener("DOMContentLoaded", function(){ setTimeout(function(){ maybeArmReady("domcontentloaded"); }, 400); });
+    window.addEventListener("load", function(){ setTimeout(function(){ maybeArmReady("load"); }, 400); });
 
     (function bootstrapProbe(){
       var tries = 0;
       var t = setInterval(function(){
         tries += 1;
-        maybeArmReady("probe-" + tries);
+        if (hasCanvasData()) maybeArmReady("probe-" + tries);
         if (ready || tries >= 20) clearInterval(t);
       }, 150);
     })();
+    var noteCaptureTries = 0;
+    var noteCaptureTimer = setInterval(function(){
+      noteCaptureTries += 1;
+      if (installNoteCapture() || noteCaptureTries >= 40) clearInterval(noteCaptureTimer);
+    }, 100);
 
-    setTimeout(function(){
-      if (ready) pushSnapshot("boot", true);
-    }, 2000);
+    document.addEventListener("kyanbasu-workbench-switched", function(){
+      history = []; index = -1; activeWorkbenchId = null;
+      ready = true; pushSnapshot("workbench-baseline", true);
+    });
   }
 
   install();

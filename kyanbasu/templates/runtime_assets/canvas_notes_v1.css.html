@@ -146,6 +146,9 @@
     outline: 2px solid var(--note-accent, rgba(242,177,74,.72));
     box-shadow: 0 0 0 5px var(--note-accent-soft, rgba(242,177,74,.15)), 0 14px 34px rgba(0,0,0,.28);
   }
+  .tcNoteNode.pinned{box-shadow:0 0 0 1px rgba(97,208,255,.62),0 14px 34px rgba(0,0,0,.28)}
+  .tcNotePinned{font-size:8px;font-weight:800;letter-spacing:.06em;color:#9ce7ff;border:1px solid rgba(97,208,255,.5);border-radius:4px;padding:1px 3px}
+  .tcNoteActions [data-note-pin].active{color:#8fe2ff;border-color:rgba(97,208,255,.5)}
   .tcNoteLinkHandle {
     position: absolute;
     right: -10px;
@@ -347,6 +350,7 @@
     font-size: 12px;
   }
   .tcNoteHead {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -469,6 +473,23 @@
   .tcNoteActions {
     display: flex;
     gap: 4px;
+    position: absolute;
+    top: 50%;
+    right: 7px;
+    z-index: 1;
+    padding: 2px;
+    transform: translateY(-50%);
+    border: 1px solid var(--note-accent, rgba(242,177,74,.25));
+    border-radius: 8px;
+    background: rgba(27,24,17,.97);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .tcNoteNode:hover .tcNoteActions,
+  .tcNoteNode.selected .tcNoteActions,
+  .tcNoteNode:focus-within .tcNoteActions {
+    opacity: 1;
+    pointer-events: auto;
   }
   .tcNoteActions button {
     width: 22px;

@@ -1,7 +1,11 @@
+import importlib
 import tempfile
 import unittest
 from pathlib import Path
+from typing import get_type_hints
+from unittest.mock import patch
 
+import kyanbasu.injectors as injectors
 from kyanbasu.injectors import (
     _append_remove_mode,
     _find_bg_file,
@@ -19,12 +23,40 @@ from kyanbasu.injectors import (
 
 
 class TestInjectors(unittest.TestCase):
+    def test_hover_console_feature_public_types(self):
+        self.assertEqual(
+            get_type_hints(inject_hover_console_features),
+            {"html": str, "log": bool, "return": str},
+        )
+
+    def test_import_does_not_load_runtime_assets(self):
+        with patch("kyanbasu.runtime_support.load_runtime_asset") as loader:
+            importlib.reload(injectors)
+            loader.assert_not_called()
+        importlib.reload(injectors)
+
     def test_append_remove_mode_idempotent(self):
         html = "<html><body><main>ok</main></body></html>"
         once = _append_remove_mode(html)
         twice = _append_remove_mode(once)
         self.assertIn("__FIXPACK_V61__", once)
         self.assertEqual(twice.count("__FIXPACK_V61__"), 1)
+
+    def test_append_remove_mode_reports_failures_through_logger(self):
+        with patch("kyanbasu.injectors.inject_body", side_effect=RuntimeError("broken")), patch(
+            "kyanbasu.injectors.GENERATOR_LOGGER"
+        ) as logger:
+            result = _append_remove_mode("<html><body></body></html>")
+
+        self.assertIn("<html>", result)
+        logger.warning.assert_called_once()
+        self.assertEqual(logger.warning.call_args.args[0], "Failed to inject working JS for remove mode: %s")
+        self.assertEqual(str(logger.warning.call_args.args[1]), "broken")
+
+    def test_append_remove_mode_does_not_hide_programming_errors(self):
+        with patch("kyanbasu.injectors.inject_body", side_effect=TypeError("invalid value")):
+            with self.assertRaisesRegex(TypeError, "invalid value"):
+                _append_remove_mode("<html><body></body></html>")
 
     def test_inject_wire_deps_as_main_idempotent(self):
         html = "<html><head></head><body></body></html>"
@@ -175,6 +207,51 @@ class TestInjectors(unittest.TestCase):
             self.assertIn("FEATURE_CUSTOM_BG_V1", out)
             self.assertIn("opacity:0.33", out)
             self.assertTrue(any("Copied background" in line for line in logs))
+
+    def test_inject_custom_background_fails_closed_when_copy_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            src = root / "src.jpg"
+            src.write_bytes(b"fake-image")
+            out_html = root / "dist" / "Kyanbasu.html"
+            out_html.parent.mkdir(parents=True, exist_ok=True)
+            html = "<html><head></head><body></body></html>"
+            logs = []
+
+            with patch("shutil.copyfile", side_effect=OSError("copy failed")):
+                out = inject_custom_background(html, src, out_html, logs.append)
+
+            self.assertEqual(out, html)
+            self.assertTrue(any("Background copy failed" in line for line in logs))
+
+    def test_inject_custom_background_reports_failure_without_optional_logger(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            src = root / "src.jpg"
+            src.write_bytes(b"fake-image")
+            out_html = root / "dist" / "Kyanbasu.html"
+            html = "<html><head></head><body></body></html>"
+
+            with patch("shutil.copyfile", side_effect=OSError("copy failed")):
+                with patch("kyanbasu.injectors.GENERATOR_LOGGER") as logger:
+                    out = inject_custom_background(html, src, out_html)
+
+        self.assertEqual(out, html)
+        logger.warning.assert_called_once()
+        self.assertIn("Background copy failed", logger.warning.call_args.args[0])
+
+    def test_inject_custom_background_does_not_hide_programming_errors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            image = root / "background.jpg"
+            image.write_bytes(b"image")
+            html = "<html><head></head><body></body></html>"
+
+            with patch(
+                "kyanbasu.injectors.inject_head", side_effect=TypeError("invalid html")
+            ):
+                with self.assertRaisesRegex(TypeError, "invalid html"):
+                    inject_custom_background(html, image, root / "Kyanbasu.html")
 
 
 if __name__ == "__main__":

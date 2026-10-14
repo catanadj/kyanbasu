@@ -2,7 +2,7 @@
 set -euo pipefail
 
 echo "[release-check] Running compile checks..."
-python3 -m compileall -q Kyanbasu.py kyanbasu tests
+python3 -m compileall -q kyanbasu tests
 
 echo "[release-check] Running unit tests..."
 python3 -m unittest discover -s tests -v
@@ -30,6 +30,6 @@ if ! command -v task >/dev/null 2>&1; then
 fi
 
 echo "[release-check] Running Taskwarrior integration tests..."
-KYANBASU_RUN_INTEGRATION=1 python3 -m unittest tests.test_task_io_integration -v
+python3 -m unittest tests.test_task_io_integration -v
 
 echo "[release-check] OK"

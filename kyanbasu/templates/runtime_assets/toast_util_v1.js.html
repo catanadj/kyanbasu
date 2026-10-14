@@ -17,7 +17,7 @@
       clearTimeout(el.__hide);
       el.__hide = setTimeout(function(){ el.classList.remove('show'); }, 1600);
     }catch(_){
-      try{ console.log(msg); }catch(__){}
+      try{ if (window.KYANBASU_DEBUG) console.log(msg); }catch(__){}
     }
   };
 })();</script>
