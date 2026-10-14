@@ -5,6 +5,8 @@ versioning from the `0.2.0` release onward.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-14
+
 ### Added
 
 - Guided decision maps with factor, option, and outcome notes; contextual branch
@@ -65,5 +67,6 @@ versioning from the `0.2.0` release onward.
   `taskwarrior-canvas` identifier during the compatibility period.
 - Legacy browser storage and TaskCanvas note/workbench exports remain readable.
 
-[Unreleased]: https://github.com/catanadj/kyanbasu/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/catanadj/kyanbasu/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/catanadj/kyanbasu/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/catanadj/kyanbasu/releases/tag/v0.2.0
