@@ -2986,16 +2986,17 @@
       var bucket = bucketDrag.bucket;
       var follow = bucketFollowsNotes(bucketDrag.bucket);
       if (follow){
-        separateBucketLayouts(bucket);
         requestCanvasSpaceForNotes();
-        renderBuckets();
-        renderLinks();
       } else {
         settleBucketAgainstNotes(bucket);
         requestCanvasSpaceForNotes();
-        renderBuckets();
       }
       bucketDrag = null;
+      // Settle after canvas-space adjustments and after clearing the transient
+      // drag state, preserving the user's drop location as the anchor.
+      separateBucketLayouts(bucket);
+      renderBuckets();
+      renderLinks();
       saveSoon();
     });
   }

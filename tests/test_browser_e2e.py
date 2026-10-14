@@ -5569,6 +5569,10 @@ window.addEventListener('load', function(){
       fire(head, 'mousedown', headRect.left + 12, headRect.top + 10);
       fire(document, 'mousemove', headRect.left + 12 + deltaX, headRect.top + 10);
       fire(document, 'mouseup', headRect.left + 12 + deltaX, headRect.top + 10);
+      // A normal note update triggers renderAll after the drag handler clears
+      // its transient drag state. Bucket separation must still preserve the
+      // user's drop location during that subsequent layout pass.
+      window.KyanbasuNotes.setBucket(draggedNote.id, "Dragged bucket");
       setTimeout(function(){
         var leftAfter = document.querySelector('.tcNoteBucket[data-bucket="Left bucket"]').getBoundingClientRect();
         var rightAfter = document.querySelector('.tcNoteBucket[data-bucket="Right bucket"]').getBoundingClientRect();
