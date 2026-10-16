@@ -15,6 +15,7 @@
   var linkDrag = null;
   var linkAnnotationEditorKey = null;
   var bucketDrag = null;
+  var bucketLayoutAnchor = null;
   var noteDragActive = false;
   var bucketUiState = Object.create(null);
   var bucketLayoutState = Object.create(null);
@@ -3037,9 +3038,8 @@
         requestCanvasSpaceForNotes();
       }
       bucketDrag = null;
-      // Settle after canvas-space adjustments and after clearing the transient
-      // drag state, preserving the user's drop location as the anchor.
-      separateBucketLayouts(bucket);
+      // Keep the user's most recent bucket drop fixed during later render passes.
+      bucketLayoutAnchor = bucket;
       renderBuckets();
       renderLinks();
       saveSoon();
@@ -3995,7 +3995,7 @@
     installBucketDragging();
     layer.innerHTML = '';
     if (noteLens || (noteFocus && noteFocus.kind === 'branch')) return;
-    if (!noteFocus && !bucketDrag && !noteDragActive) separateBucketLayouts();
+    if (!noteFocus && !bucketDrag && !noteDragActive) separateBucketLayouts(bucketLayoutAnchor);
     bucketNames().forEach(function(bucket){
       if (noteFocus && noteFocus.kind === 'bucket' && bucketText(bucket) !== noteFocus.value) return;
       var rect = bucketVisualRect(bucket);
