@@ -1270,6 +1270,16 @@
     while(stack.length){ var next=stack.pop(); if(seen[next]) continue; seen[next]=true; result.push(next); childLinksFrom(next).forEach(function(link){stack.push(link.to);}); }
     return result;
   }
+  function branchRootId(id){
+    var current=id, seen=Object.create(null);
+    while(current && !seen[current]){
+      seen[current]=true;
+      var parent=parentLinkFor(current);
+      if(!parent) break;
+      current=parent.from;
+    }
+    return current;
+  }
   function moveBranch(id,parentId,index){
     id=String(id||''); parentId=parentId==null || parentId==='' ? null : String(parentId);
     var note=noteById(id);
@@ -2686,24 +2696,59 @@
         var rect = noteRect(n);
         return rect ? {note:n, rect:rect} : null;
       }).filter(Boolean);
+      var handled = Object.create(null);
       for (var i = 0; i < visible.length; i++){
         var item = visible[i];
-        if(item.note.pinned) continue;
+        if(handled[item.note.id]) continue;
         if (!overlapsAnyRect(item.rect, rects)) continue;
-        var otherNotes = visible.filter(function(other){ return other.note.id !== item.note.id; }).map(function(other){ return other.rect; });
-        var move = findNearestOpenNoteMove(item.rect, rects.concat(otherNotes), {preferVertical:true});
-        if (!move) move = chooseDirectionalNudge(item.rect, rects, false);
-        if (!move) continue;
-        moveNoteTo(item.note, item.rect.x + move.dx, item.rect.y + move.dy);
+        var rootId=branchRootId(item.note.id);
+        var groupIds=branchSubtreeIds(rootId);
+        var groupSet=Object.create(null);
+        var groupNotes=[];
+        groupIds.forEach(function(id){
+          var note=noteById(id);
+          if(!note) return;
+          groupSet[id]=true;
+          groupNotes.push(note);
+          handled[id]=true;
+        });
+        if(!groupNotes.length || groupNotes.some(function(note){return !!note.pinned;})) continue;
+        var groupItems=visible.filter(function(other){return !!groupSet[other.note.id];});
+        if(!groupItems.length) continue;
+        var groupBounds={x:Infinity,y:Infinity,right:-Infinity,bottom:-Infinity};
+        groupNotes.forEach(function(note){
+          var el=document.querySelector('.tcNoteNode[data-note-id="'+escAttr(note.id)+'"]');
+          var rect={
+            x:toInt(note.x,160),
+            y:toInt(note.y,160),
+            w:el && el.offsetWidth ? el.offsetWidth : 220,
+            h:el && el.offsetHeight ? el.offsetHeight : 92
+          };
+          groupBounds.x=Math.min(groupBounds.x,rect.x);
+          groupBounds.y=Math.min(groupBounds.y,rect.y);
+          groupBounds.right=Math.max(groupBounds.right,rect.x+rect.w);
+          groupBounds.bottom=Math.max(groupBounds.bottom,rect.y+rect.h);
+        });
+        groupBounds.w=groupBounds.right-groupBounds.x;
+        groupBounds.h=groupBounds.bottom-groupBounds.y;
+        delete groupBounds.right;
+        delete groupBounds.bottom;
+        var otherNotes=visible.filter(function(other){return !groupSet[other.note.id];}).map(function(other){return other.rect;});
+        var move=findNearestOpenNoteMove(groupBounds,rects.concat(otherNotes),{preferVertical:true});
+        if(!move) continue;
+        groupNotes.forEach(function(note){
+          moveNoteTo(note,toInt(note.x,160)+move.dx,toInt(note.y,160)+move.dy);
+        });
         moved = true;
         changed = true;
+        break;
       }
       if (!moved) break;
       safety++;
     }
     if (changed){
-      resolveNoteOverlaps();
-      renderAll();
+      renderBuckets();
+      renderLinks();
       saveSoon();
     }
     return changed;

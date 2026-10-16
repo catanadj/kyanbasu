@@ -5973,6 +5973,139 @@ window.addEventListener('load', function(){
         self.assertTrue(result["noteMoved"], msg=json.dumps(result))
         self.assertTrue(result["clear"], msg=json.dumps(result))
 
+    def test_project_drag_pushes_note_branch_together(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({
+            "tasks": [
+                {"uuid": "task-1", "short": "task-1", "desc": "Alpha task", "project": "Alpha", "tags": ["Planning"], "has_depends": False}
+            ],
+            "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}
+        })
+        html = build_runtime_html(base_html, payload, 0)
+
+        harness = """
+<script id="E2E_PROJECT_DRAG_PUSHES_NOTE_BRANCH_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      addToBuilder(TASKS[0], null, null);
+      setTimeout(function(){
+        var root = window.KyanbasuNotes.createNote(520, 300, "Branch root", "", "Planning");
+        var child = window.KyanbasuNotes.createNote(820, 300, "Branch child", "", "Planning");
+        var grandchild = window.KyanbasuNotes.createNote(820, 500, "Branch grandchild", "", "Planning");
+        window.KyanbasuNotes.linkNotes(root.id, child.id, "child");
+        window.KyanbasuNotes.linkNotes(child.id, grandchild.id, "child");
+        function snapshot(){
+          var out={};
+          [root, child, grandchild].forEach(function(note){out[note.id]={x:note.x,y:note.y};});
+          return out;
+        }
+        function delta(before, after, note){
+          return {x:after[note.id].x-before[note.id].x,y:after[note.id].y-before[note.id].y};
+        }
+        var before = snapshot();
+        moveWholeProject("Alpha", 500, 280);
+        settleCanvasAgainstNotes();
+        setTimeout(function(){
+          var afterFirst=snapshot();
+          var firstRootDelta=delta(before,afterFirst,root);
+          var firstChildDelta=delta(before,afterFirst,child);
+          var firstGrandchildDelta=delta(before,afterFirst,grandchild);
+          var project=document.querySelector('.projArea[data-proj="Alpha"]');
+          var firstProjectKeptDrop=Math.abs(parseFloat(project.style.left||'0')-520)<1 && Math.abs(parseFloat(project.style.top||'0')-300)<1;
+          moveWholeProject("Alpha",child.x-parseFloat(project.style.left||'0'),child.y-parseFloat(project.style.top||'0'));
+          settleCanvasAgainstNotes();
+          setTimeout(function(){
+            var afterSecond=snapshot();
+            var secondRootDelta=delta(afterFirst,afterSecond,root);
+            var secondChildDelta=delta(afterFirst,afterSecond,child);
+            var secondGrandchildDelta=delta(afterFirst,afterSecond,grandchild);
+            var out = {
+              firstPushMoved: firstRootDelta.x !== 0 || firstRootDelta.y !== 0,
+              firstPushTogether: JSON.stringify(firstRootDelta)===JSON.stringify(firstChildDelta) && JSON.stringify(firstRootDelta)===JSON.stringify(firstGrandchildDelta),
+              secondPushMoved: secondRootDelta.x !== 0 || secondRootDelta.y !== 0,
+              secondPushTogether: JSON.stringify(secondRootDelta)===JSON.stringify(secondChildDelta) && JSON.stringify(secondRootDelta)===JSON.stringify(secondGrandchildDelta),
+              projectKeptFirstDrop:firstProjectKeptDrop
+            };
+            var pre=document.createElement('pre');
+            pre.id='e2e-out';
+            pre.textContent=JSON.stringify(out);
+            document.body.appendChild(pre);
+          },160);
+        }, 180);
+      }, 180);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["firstPushMoved"], msg=json.dumps(result))
+        self.assertTrue(result["firstPushTogether"], msg=json.dumps(result))
+        self.assertTrue(result["secondPushMoved"], msg=json.dumps(result))
+        self.assertTrue(result["secondPushTogether"], msg=json.dumps(result))
+        self.assertTrue(result["projectKeptFirstDrop"], msg=json.dumps(result))
+
+    def test_project_drag_keeps_branch_with_pinned_descendant_in_place(self):
+        base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
+        payload = json.dumps({
+            "tasks": [
+                {"uuid": "task-1", "short": "task-1", "desc": "Alpha task", "project": "Alpha", "tags": ["Planning"], "has_depends": False}
+            ],
+            "graph": {"edges": [], "parent_current_deps": {}, "child_to_parents": {}}
+        })
+        html = build_runtime_html(base_html, payload, 0)
+
+        harness = """
+<script id="E2E_PROJECT_DRAG_PRESERVES_PINNED_NOTE_BRANCH_HARNESS">
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    try{
+      addToBuilder(TASKS[0], null, null);
+      setTimeout(function(){
+        var root = window.KyanbasuNotes.createNote(520, 300, "Branch root", "", "Planning");
+        var child = window.KyanbasuNotes.createNote(820, 300, "Pinned child", "", "Planning");
+        window.KyanbasuNotes.linkNotes(root.id, child.id, "child");
+        window.KyanbasuNotes.setPinned([child.id], true);
+        var before = {root:{x:root.x,y:root.y}, child:{x:child.x,y:child.y}};
+        moveWholeProject("Alpha", 500, 280);
+        settleCanvasAgainstNotes();
+        setTimeout(function(){
+          var out = {
+            rootStayed: root.x === before.root.x && root.y === before.root.y,
+            childStayed: child.x === before.child.x && child.y === before.child.y
+          };
+          var pre = document.createElement('pre');
+          pre.id = 'e2e-out';
+          pre.textContent = JSON.stringify(out);
+          document.body.appendChild(pre);
+        }, 180);
+      }, 180);
+    }catch(e){
+      var pre2 = document.createElement('pre');
+      pre2.id = 'e2e-out';
+      pre2.textContent = 'ERR:' + (e && e.message ? e.message : String(e));
+      document.body.appendChild(pre2);
+    }
+  }, 700);
+});
+</script>
+"""
+        html = html.replace("</body>", harness + "\n</body>")
+        raw = self._run_html_harness(html)
+        self.assertNotIn("ERR:", raw)
+        result = json.loads(raw)
+        self.assertTrue(result["rootStayed"], msg=json.dumps(result))
+        self.assertTrue(result["childStayed"], msg=json.dumps(result))
+
     def test_note_placement_in_project_area_pushes_project_aside(self):
         base_html = Path("kyanbasu/templates/kyanbasu.base.html").read_text(encoding="utf-8")
         payload = json.dumps({
